@@ -9,6 +9,8 @@ import { InputBar } from '@/components/InputBar'
 import { FileEditor } from '@/components/FileEditor'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { TerminalView } from '@/components/TerminalView'
+import { CommitDetail } from '@/components/CommitDetail'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings } from '@/schemas'
@@ -277,6 +279,7 @@ export default function App(): React.ReactElement {
             onDeleteSession={handleDeleteSession}
             fileNodes={store.fileNodes}
             workspacePath={store.workspacePath}
+            selectedFilePath={store.activeTabId}
             onOpenFile={store.openFileTab}
             onOpenFolder={handleOpenFolder}
             onFsCreateFile={handleFsCreateFile}
@@ -300,6 +303,8 @@ export default function App(): React.ReactElement {
           <div className="flex flex-1 flex-col overflow-hidden min-h-0">
             {store.activeView === 'settings' ? (
               <SettingsPanel settings={store.settings} onSave={handleSaveSettings} />
+            ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (
+              <ErrorBoundary key="commit-detail"><CommitDetail /></ErrorBoundary>
             ) : activeTab?.type === 'file' ? (
               <FileEditor
                 path={activeTab.path}
@@ -331,7 +336,7 @@ export default function App(): React.ReactElement {
           </div>
 
           {store.terminalOpen && (
-            <div className="h-56 shrink-0 border-t border-border overflow-hidden">
+            <div className="h-56 shrink-0 border-t border-border">
               <TerminalView
                 cwd={store.workspacePath}
                 onClose={store.toggleTerminal}

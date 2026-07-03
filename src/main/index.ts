@@ -12,7 +12,8 @@ import {
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
   discardFile, commit, push, pull,
-  getBranches, checkoutBranch, createBranch, getFileDiff, initRepo
+  getBranches, checkoutBranch, createBranch, getFileDiff,
+  getLog, initRepo,
 } from './git'
 
 const ptyProcesses = new Map<string, NodePty.IPty>()
@@ -158,6 +159,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:checkout',       (_, cwd: string, branch: string) => checkoutBranch(cwd, branch))
   ipcMain.handle('git:createBranch',   (_, cwd: string, branch: string) => createBranch(cwd, branch))
   ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => getFileDiff(cwd, p, staged))
+  ipcMain.handle('git:log',            (_, cwd: string, limit?: number) => getLog(cwd, limit))
   ipcMain.handle('git:init',           (_, cwd: string) => initRepo(cwd))
 
   // Terminal

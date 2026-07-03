@@ -70,6 +70,15 @@ export interface GitStatus {
   untracked: GitFile[]
 }
 
+export interface GitCommit {
+  hash: string
+  shortHash: string
+  parents: string[]
+  author: string
+  date: string
+  message: string
+}
+
 export interface GitBranches {
   local: string[]
   current: string

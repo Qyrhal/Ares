@@ -6,6 +6,7 @@ import { Session, FileNode, ActivityView } from '@/types'
 import { Button } from '@/components/ui/button'
 import { FileTree, FileTreeProps } from './FileTree'
 import { GitPane } from './GitPane'
+import { ErrorBoundary } from './ErrorBoundary'
 
 interface SidebarProps {
   mode: ActivityView
@@ -18,6 +19,7 @@ interface SidebarProps {
   // explorer
   fileNodes: FileNode[]
   workspacePath: string | null
+  selectedFilePath?: string
   onOpenFile: (node: FileNode) => void
   onOpenFolder: () => void
   onFsCreateFile: FileTreeProps['onCreateFile']
@@ -29,7 +31,7 @@ interface SidebarProps {
 export function Sidebar({
   mode,
   sessions, activeSessionId, onNewSession, onSelectSession, onDeleteSession,
-  fileNodes, workspacePath, onOpenFile, onOpenFolder,
+  fileNodes, workspacePath, selectedFilePath, onOpenFile, onOpenFolder,
   onFsCreateFile, onFsCreateFolder, onFsRename, onFsDelete,
 }: SidebarProps): React.ReactElement {
   return (
@@ -47,6 +49,7 @@ export function Sidebar({
         <FileTree
           nodes={fileNodes}
           workspacePath={workspacePath}
+          selectedPath={selectedFilePath}
           onOpenFile={onOpenFile}
           onOpenFolder={onOpenFolder}
           onCreateFile={onFsCreateFile}
@@ -56,7 +59,7 @@ export function Sidebar({
         />
       )}
       {mode === 'git' && (
-        <GitPane workspacePath={workspacePath} />
+        <ErrorBoundary key="git-pane"><GitPane workspacePath={workspacePath} /></ErrorBoundary>
       )}
     </aside>
   )

@@ -104,10 +104,12 @@ function InlineInput({
 function TreeNode({
   node,
   depth,
+  selectedPath,
   onOpenFile,
 }: {
   node: FileNode
   depth: number
+  selectedPath?: string
   onOpenFile: (n: FileNode) => void
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(depth < 1)
@@ -141,7 +143,7 @@ function TreeNode({
           onCancel={() => setRenaming(null)}
         />
         {isDir && expanded && node.children?.map((child) => (
-          <TreeNode key={child.path} node={child} depth={depth + 1} onOpenFile={onOpenFile} />
+          <TreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onOpenFile={onOpenFile} />
         ))}
       </div>
     )
@@ -154,13 +156,15 @@ function TreeNode({
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); showCtxMenu(e, node) }}
       >
         <button
+          data-path={node.path}
           onClick={() => { if (isDir) setExpanded((v) => !v); else onOpenFile(node) }}
           style={{ paddingLeft: `${8 + depth * 12}px` }}
           className={cn(
             'flex flex-1 items-center gap-1.5 py-[3px] pr-1 text-left text-xs transition-colors',
             isDir
               ? 'text-muted-foreground hover:text-foreground'
-              : 'text-foreground/80 hover:bg-accent/50 hover:text-foreground rounded-sm'
+              : 'text-foreground/80 hover:bg-accent/50 hover:text-foreground rounded-sm',
+            !isDir && node.path === selectedPath && 'bg-accent/60 text-foreground'
           )}
         >
           {isDir
@@ -246,7 +250,7 @@ function TreeNode({
             />
           )}
           {node.children?.map((child) => (
-            <TreeNode key={child.path} node={child} depth={depth + 1} onOpenFile={onOpenFile} />
+            <TreeNode key={child.path} node={child} depth={depth + 1} selectedPath={selectedPath} onOpenFile={onOpenFile} />
           ))}
         </div>
       )}
@@ -259,6 +263,7 @@ function TreeNode({
 export interface FileTreeProps {
   nodes: FileNode[]
   workspacePath: string | null
+  selectedPath?: string
   onOpenFile: (node: FileNode) => void
   onOpenFolder: () => void
   onCreateFile: (parentPath: string, name: string) => Promise<void>
@@ -268,7 +273,7 @@ export interface FileTreeProps {
 }
 
 export function FileTree({
-  nodes, workspacePath, onOpenFile, onOpenFolder,
+  nodes, workspacePath, selectedPath, onOpenFile, onOpenFolder,
   onCreateFile, onCreateFolder, onRename, onDelete,
 }: FileTreeProps): React.ReactElement {
   const [creating, setCreating] = useState<CreateState | null>(null)
@@ -447,7 +452,7 @@ export function FileTree({
           {nodes.length === 0 && !isCreatingAtRoot
             ? <p className="px-4 py-4 text-xs text-muted-foreground">Empty folder</p>
             : nodes.map((n) => (
-                <TreeNode key={n.path} node={n} depth={0} onOpenFile={onOpenFile} />
+                <TreeNode key={n.path} node={n} depth={0} selectedPath={selectedPath} onOpenFile={onOpenFile} />
               ))
           }
         </div>
