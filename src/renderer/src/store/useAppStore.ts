@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Session, Message, AppSettings, FileNode, Tab, ActivityView } from '@/types'
+import type { Session, Message, AppSettings, FileNode, Tab, ActivityView, GitCommit } from '@/types'
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
@@ -25,6 +25,11 @@ interface AppStore {
   sessions: Session[]
   messages: Message[]
   isLoading: boolean
+
+  // ── Git ─────────────────────────────────────────────────────────────────────
+  commits: GitCommit[]
+  activeCommit: string | null
+  gitLoading: boolean
 
   // ── Workspace ───────────────────────────────────────────────────────────────
   workspacePath: string | null
@@ -61,6 +66,10 @@ interface AppStore {
   updateRunningTool: (patch: Partial<Message>) => void
   setLoading: (v: boolean) => void
 
+  setCommits: (commits: GitCommit[]) => void
+  setActiveCommit: (hash: string | null) => void
+  setGitLoading: (v: boolean) => void
+
   setWorkspace: (path: string | null, nodes: FileNode[]) => void
   setFileNodes: (nodes: FileNode[]) => void
 
@@ -78,6 +87,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
   sessions: [],
   messages: [],
   isLoading: false,
+
+  commits: [],
+  activeCommit: null,
+  gitLoading: false,
 
   workspacePath: null,
   fileNodes: [],
@@ -200,6 +213,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   }),
 
   setLoading: (v) => set({ isLoading: v }),
+
+  // ── Git actions ────────────────────────────────────────────────────────────────
+  setCommits: (commits) => set({ commits }),
+  setActiveCommit: (hash) => set({ activeCommit: hash }),
+  setGitLoading: (v) => set({ gitLoading: v }),
 
   // ── Workspace actions ────────────────────────────────────────────────────────
   setWorkspace: (path, nodes) => set({ workspacePath: path, fileNodes: nodes }),

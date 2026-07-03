@@ -6,8 +6,10 @@ import {
   GitMergeIcon, CheckIcon, XIcon
 } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
-import { GitFile, GitStatus, GitBranches } from '@/types'
+import { GitFile, GitStatus, GitBranches, GitCommit } from '@/types'
 import { Button } from '@/components/ui/button'
+import { GitHistory } from '@/components/GitHistory'
+import { useAppStore } from '@/store/useAppStore'
 
 const el = window.electron
 
@@ -220,6 +222,7 @@ function BranchPicker({
 export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [branches, setBranches] = useState<GitBranches>({ local: [], current: '' })
+  const [commits, setCommits] = useState<GitCommit[]>([])
   const [commitMsg, setCommitMsg] = useState('')
   const [opState, setOpState] = useState<OpState>('idle')
   const [opError, setOpError] = useState('')
@@ -227,15 +230,23 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   const [stagedOpen, setStagedOpen] = useState(true)
   const [changesOpen, setChangesOpen] = useState(true)
   const [untrackedOpen, setUntrackedOpen] = useState(true)
+  const [historyOpen, setHistoryOpen] = useState(true)
+
+  const setActiveCommit = useAppStore((s) => s.setActiveCommit)
+  const activeCommit = useAppStore((s) => s.activeCommit)
+  const setStoreCommits = useAppStore((s) => s.setCommits)
 
   const refresh = useCallback(async (cwd: string) => {
-    const [s, b] = await Promise.all([
+    const [s, b, log] = await Promise.all([
       el.git.status(cwd),
-      el.git.branches(cwd).catch(() => ({ local: [], current: '' }))
+      el.git.branches(cwd).catch(() => ({ local: [], current: '' })),
+      el.git.log(cwd, 50).catch(() => []),
     ])
     setStatus(s)
     setBranches(b)
-  }, [])
+    setCommits(log)
+    setStoreCommits(log)
+  }, [setStoreCommits])
 
   useEffect(() => {
     if (workspacePath) refresh(workspacePath)
@@ -462,6 +473,25 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
             <CheckIcon className="size-6 text-green-500/60" />
             <p className="text-xs text-muted-foreground">No changes</p>
           </div>
+        )}
+
+        {/* History */}
+        {status?.hasRepo && (
+          <>
+            <div className="border-t border-border" />
+            <Section
+              title="History"
+              count={commits.length}
+              expanded={historyOpen}
+              onToggle={() => setHistoryOpen((v) => !v)}
+            >
+              <GitHistory
+                commits={commits}
+                activeCommit={activeCommit}
+                onSelectCommit={(hash) => setActiveCommit(hash === activeCommit ? null : hash)}
+              />
+            </Section>
+          </>
         )}
       </div>
     </div>

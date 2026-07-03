@@ -28,6 +28,15 @@ export interface GitStatus {
   untracked: GitFile[]
 }
 
+export interface GitCommit {
+  hash: string
+  shortHash: string
+  parents: string[]
+  author: string
+  date: string
+  message: string
+}
+
 export interface GitBranches {
   local: string[]
   current: string
@@ -156,6 +165,29 @@ export async function pull(cwd: string): Promise<string> {
     const err = e as { stderr?: string; message?: string }
     throw new Error(err.stderr ?? err.message ?? 'Pull failed')
   }
+}
+
+// ── Log / History ─────────────────────────────────────────────────────────────
+
+export async function getLog(cwd: string, maxCount = 50): Promise<GitCommit[]> {
+  const raw = await git([
+    'log', '--all', `--max-count=${maxCount}`,
+    '--format=%H%n%h%n%P%n%an%n%aI%n%s%n---',
+  ], cwd)
+  const commits: GitCommit[] = []
+  for (const entry of raw.split('\n---\n')) {
+    const lines = entry.trim().split('\n')
+    if (lines.length < 6) continue
+    commits.push({
+      hash: lines[0],
+      shortHash: lines[1],
+      parents: lines[2] ? lines[2].split(' ') : [],
+      author: lines[3],
+      date: lines[4],
+      message: lines[5],
+    })
+  }
+  return commits
 }
 
 // ── Branches ──────────────────────────────────────────────────────────────────

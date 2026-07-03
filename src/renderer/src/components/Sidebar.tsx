@@ -6,6 +6,7 @@ import { Session, FileNode, ActivityView } from '@/types'
 import { Button } from '@/components/ui/button'
 import { FileTree, FileTreeProps } from './FileTree'
 import { GitPane } from './GitPane'
+import { ErrorBoundary } from './ErrorBoundary'
 
 interface SidebarProps {
   mode: ActivityView
@@ -56,7 +57,7 @@ export function Sidebar({
         />
       )}
       {mode === 'git' && (
-        <GitPane workspacePath={workspacePath} />
+        <ErrorBoundary key="git-pane"><GitPane workspacePath={workspacePath} /></ErrorBoundary>
       )}
     </aside>
   )

@@ -49,6 +49,7 @@ const nativeGit = {
   checkout:      (cwd: string, branch: string) => ipcRenderer.invoke('git:checkout', cwd, branch),
   createBranch:  (cwd: string, branch: string) => ipcRenderer.invoke('git:createBranch', cwd, branch),
   diff:          (cwd: string, p: string, staged: boolean) => ipcRenderer.invoke('git:diff', cwd, p, staged),
+  log:           (cwd: string, limit?: number) => ipcRenderer.invoke('git:log', cwd, limit),
   init:          (cwd: string) => ipcRenderer.invoke('git:init', cwd),
 }
 
