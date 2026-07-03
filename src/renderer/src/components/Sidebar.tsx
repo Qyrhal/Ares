@@ -19,6 +19,7 @@ interface SidebarProps {
   // explorer
   fileNodes: FileNode[]
   workspacePath: string | null
+  selectedFilePath?: string
   onOpenFile: (node: FileNode) => void
   onOpenFolder: () => void
   onFsCreateFile: FileTreeProps['onCreateFile']
@@ -30,7 +31,7 @@ interface SidebarProps {
 export function Sidebar({
   mode,
   sessions, activeSessionId, onNewSession, onSelectSession, onDeleteSession,
-  fileNodes, workspacePath, onOpenFile, onOpenFolder,
+  fileNodes, workspacePath, selectedFilePath, onOpenFile, onOpenFolder,
   onFsCreateFile, onFsCreateFolder, onFsRename, onFsDelete,
 }: SidebarProps): React.ReactElement {
   return (
@@ -48,6 +49,7 @@ export function Sidebar({
         <FileTree
           nodes={fileNodes}
           workspacePath={workspacePath}
+          selectedPath={selectedFilePath}
           onOpenFile={onOpenFile}
           onOpenFolder={onOpenFolder}
           onCreateFile={onFsCreateFile}

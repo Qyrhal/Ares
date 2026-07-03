@@ -129,6 +129,7 @@ export function GitHistory({ commits, activeCommit, onSelectCommit }: GitHistory
       {nodes.map((node, i) => (
         <div
           key={node.commit.hash}
+          title={node.commit.message}
           onClick={() => onSelectCommit(node.commit.hash)}
           className={cn(
             'flex cursor-pointer items-center gap-1 rounded-sm px-1 py-[1px] text-xs leading-tight hover:bg-accent/40',

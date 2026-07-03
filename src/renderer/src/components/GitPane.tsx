@@ -38,12 +38,13 @@ function statusChar(file: GitFile, area: 'staged' | 'unstaged'): string {
 // ── File Row ──────────────────────────────────────────────────────────────────
 
 function FileRow({
-  file, area, onAction, onDiscard
+  file, area, onAction, onDiscard, onOpenFile
 }: {
   file: GitFile
   area: 'staged' | 'unstaged' | 'untracked'
   onAction: (f: GitFile) => void
   onDiscard?: (f: GitFile) => void
+  onOpenFile?: (f: GitFile) => void
 }): React.ReactElement {
   const char = area === 'staged' ? file.index : (file.working === ' ' ? '?' : file.working)
   const color = STATUS_COLOR[char] ?? 'text-muted-foreground'
@@ -55,7 +56,11 @@ function FileRow({
       <span className={cn('w-3.5 shrink-0 font-mono font-bold', color)} title={STATUS_LABEL[char]}>
         {char}
       </span>
-      <span className="flex-1 truncate text-foreground/90" title={file.path}>
+      <span
+        className="flex-1 truncate text-foreground/90 cursor-pointer hover:text-primary transition-colors"
+        title={file.path}
+        onClick={() => onOpenFile?.(file)}
+      >
         {name}
         {dir && <span className="ml-1 text-muted-foreground/50">{dir}</span>}
       </span>
@@ -217,6 +222,54 @@ function BranchPicker({
   )
 }
 
+// ── Resize Handle ────────────────────────────────────────────────────────────
+
+function ResizeHandle({ onResize }: { onResize: (dy: number) => void }): React.ReactElement {
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    let startY = 0
+    let dragging = false
+
+    const onMouseDown = (e: MouseEvent) => {
+      dragging = true
+      startY = e.clientY
+      document.addEventListener('mousemove', onMouseMove)
+      document.addEventListener('mouseup', onMouseUp)
+      document.body.style.cursor = 'row-resize'
+      document.body.style.userSelect = 'none'
+    }
+    const onMouseMove = (e: MouseEvent) => {
+      if (!dragging) return
+      onResize(e.clientY - startY)
+      startY = e.clientY
+    }
+    const onMouseUp = () => {
+      dragging = false
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+
+    el.addEventListener('mousedown', onMouseDown)
+    return () => {
+      el.removeEventListener('mousedown', onMouseDown)
+      document.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseup', onMouseUp)
+    }
+  }, [onResize])
+
+  return (
+    <div
+      ref={ref}
+      className="h-[3px] shrink-0 cursor-row-resize hover:bg-primary/40 active:bg-primary/60 transition-colors"
+    />
+  )
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
@@ -231,10 +284,24 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   const [changesOpen, setChangesOpen] = useState(true)
   const [untrackedOpen, setUntrackedOpen] = useState(true)
   const [historyOpen, setHistoryOpen] = useState(true)
+  const [historyHeight, setHistoryHeight] = useState(200)
+  const handleResizeHistory = useCallback((dy: number) => {
+    setHistoryHeight((prev) => Math.max(80, Math.min(600, prev - dy)))
+  }, [])
 
   const setActiveCommit = useAppStore((s) => s.setActiveCommit)
   const activeCommit = useAppStore((s) => s.activeCommit)
   const setStoreCommits = useAppStore((s) => s.setCommits)
+  const openFileTab = useAppStore((s) => s.openFileTab)
+  const setActiveView = useAppStore((s) => s.setActiveView)
+
+  const handleOpenFile = useCallback((f: GitFile) => {
+    if (!workspacePath) return
+    const absPath = workspacePath + '/' + f.path
+    const name = f.path.split('/').pop() ?? f.path
+    openFileTab({ name, path: absPath, type: 'file' })
+    setActiveView('explorer')
+  }, [workspacePath, openFileTab, setActiveView])
 
   const refresh = useCallback(async (cwd: string) => {
     const [s, b, log] = await Promise.all([
@@ -318,178 +385,187 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
         </button>
       </div>
 
-      <div className="flex flex-1 flex-col overflow-y-auto">
-        {/* Branch row */}
-        <div className="flex items-center justify-between border-b border-border px-2 py-1.5">
-          <BranchPicker
-            current={status?.branch ?? branches.current}
-            branches={branches.local}
-            disabled={!status?.hasRepo}
-            onCheckout={(b) => run(`checkout ${b}`, () => el.git.checkout(workspacePath, b))}
-            onCreateBranch={(b) => run(`create ${b}`, () => el.git.createBranch(workspacePath, b))}
-          />
-          <div className="flex items-center gap-0.5 shrink-0">
-            {(status?.behind ?? 0) > 0 && (
-              <span className="flex items-center gap-0.5 text-muted-foreground">
-                <ArrowDown className="size-3" />{status!.behind}
-              </span>
-            )}
-            {(status?.ahead ?? 0) > 0 && (
-              <span className="flex items-center gap-0.5 text-muted-foreground">
-                <ArrowUp className="size-3" />{status!.ahead}
-              </span>
-            )}
-            <button
-              onClick={() => run('pull', () => el.git.pull(workspacePath))}
-              title="Pull"
-              disabled={opState === 'loading'}
-              className="ml-1 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-            >
-              <ArrowDown className="size-3.5" />
-            </button>
-            <button
-              onClick={() => run('push', () => el.git.push(workspacePath))}
-              title="Push"
-              disabled={opState === 'loading'}
-              className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
-            >
-              <ArrowUp className="size-3.5" />
-            </button>
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Upper area — scrollable */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Branch row */}
+          <div className="flex items-center justify-between border-b border-border px-2 py-1.5">
+            <BranchPicker
+              current={status?.branch ?? branches.current}
+              branches={branches.local}
+              disabled={!status?.hasRepo}
+              onCheckout={(b) => run(`checkout ${b}`, () => el.git.checkout(workspacePath, b))}
+              onCreateBranch={(b) => run(`create ${b}`, () => el.git.createBranch(workspacePath, b))}
+            />
+            <div className="flex items-center gap-0.5 shrink-0">
+              {(status?.behind ?? 0) > 0 && (
+                <span className="flex items-center gap-0.5 text-muted-foreground">
+                  <ArrowDown className="size-3" />{status!.behind}
+                </span>
+              )}
+              {(status?.ahead ?? 0) > 0 && (
+                <span className="flex items-center gap-0.5 text-muted-foreground">
+                  <ArrowUp className="size-3" />{status!.ahead}
+                </span>
+              )}
+              <button
+                onClick={() => run('pull', () => el.git.pull(workspacePath))}
+                title="Pull"
+                disabled={opState === 'loading'}
+                className="ml-1 rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+              >
+                <ArrowDown className="size-3.5" />
+              </button>
+              <button
+                onClick={() => run('push', () => el.git.push(workspacePath))}
+                title="Push"
+                disabled={opState === 'loading'}
+                className="rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-40"
+              >
+                <ArrowUp className="size-3.5" />
+              </button>
+            </div>
           </div>
+
+          {/* Op feedback */}
+          {opState === 'loading' && (
+            <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5">
+              <Loader2 className="size-3 animate-spin text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">{opLabel}…</span>
+            </div>
+          )}
+          {opState === 'error' && (
+            <div
+              className="flex items-start gap-2 border-b border-border bg-destructive/10 px-3 py-1.5 cursor-pointer"
+              onClick={() => setOpState('idle')}
+            >
+              <AlertCircle className="mt-0.5 size-3 shrink-0 text-destructive" />
+              <span className="text-xs text-destructive leading-snug">{opError}</span>
+            </div>
+          )}
+
+          {/* Commit box */}
+          <div className="border-b border-border p-2 space-y-2">
+            <textarea
+              value={commitMsg}
+              onChange={(e) => setCommitMsg(e.target.value)}
+              placeholder="Commit message (type(scope): desc)…"
+              rows={2}
+              className="w-full resize-none rounded-md border border-border bg-input px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
+            />
+            <div className="flex gap-1.5">
+              <button
+                onClick={() => {
+                  if (!commitMsg.trim()) return
+                  run('commit', async () => {
+                    if ((status?.staged.length ?? 0) === 0) await el.git.stageAll(workspacePath)
+                    await el.git.commit(workspacePath, commitMsg)
+                    setCommitMsg('')
+                  })
+                }}
+                disabled={!commitMsg.trim() || opState === 'loading'}
+                className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <GitCommitHorizontalIcon className="size-3.5" />
+                {(status?.staged.length ?? 0) > 0 ? 'Commit staged' : 'Commit all'}
+              </button>
+            </div>
+          </div>
+
+          {/* Staged */}
+          {(status?.staged.length ?? 0) > 0 && (
+            <Section
+              title="Staged"
+              count={status!.staged.length}
+              expanded={stagedOpen}
+              onToggle={() => setStagedOpen((v) => !v)}
+              onBulkAction={() => run('unstage all', () => el.git.unstageAll(workspacePath))}
+              bulkLabel="Unstage all"
+            >
+              {status!.staged.map((f) => (
+                <FileRow
+                  key={`staged-${f.path}`}
+                  file={f}
+                  area="staged"
+                  onAction={(f) => run(`unstage ${f.path}`, () => el.git.unstageFile(workspacePath, f.path))}
+                  onOpenFile={handleOpenFile}
+                />
+              ))}
+            </Section>
+          )}
+
+          {/* Unstaged changes */}
+          {(status?.unstaged.length ?? 0) > 0 && (
+            <Section
+              title="Changes"
+              count={status!.unstaged.length}
+              expanded={changesOpen}
+              onToggle={() => setChangesOpen((v) => !v)}
+              onBulkAction={() => run('stage all changes', () => el.git.stageAll(workspacePath))}
+              bulkLabel="Stage all"
+            >
+              {status!.unstaged.map((f) => (
+                <FileRow
+                  key={`unstaged-${f.path}`}
+                  file={f}
+                  area="unstaged"
+                  onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
+                  onDiscard={(f) => run(`discard ${f.path}`, () => el.git.discardFile(workspacePath, f.path))}
+                  onOpenFile={handleOpenFile}
+                />
+              ))}
+            </Section>
+          )}
+
+          {/* Untracked */}
+          {(status?.untracked.length ?? 0) > 0 && (
+            <Section
+              title="Untracked"
+              count={status!.untracked.length}
+              expanded={untrackedOpen}
+              onToggle={() => setUntrackedOpen((v) => !v)}
+              onBulkAction={() => run('stage all', () => el.git.stageAll(workspacePath))}
+              bulkLabel="Stage all"
+            >
+              {status!.untracked.map((f) => (
+                <FileRow
+                  key={`untracked-${f.path}`}
+                  file={f}
+                  area="untracked"
+                  onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
+                  onOpenFile={handleOpenFile}
+                />
+              ))}
+            </Section>
+          )}
+
+          {/* Empty state */}
+          {status?.hasRepo && totalChanges === 0 && (
+            <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
+              <CheckIcon className="size-6 text-green-500/60" />
+              <p className="text-xs text-muted-foreground">No changes</p>
+            </div>
+          )}
         </div>
 
-        {/* Op feedback */}
-        {opState === 'loading' && (
-          <div className="flex items-center gap-2 border-b border-border bg-muted/30 px-3 py-1.5">
-            <Loader2 className="size-3 animate-spin text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{opLabel}…</span>
-          </div>
-        )}
-        {opState === 'error' && (
-          <div
-            className="flex items-start gap-2 border-b border-border bg-destructive/10 px-3 py-1.5 cursor-pointer"
-            onClick={() => setOpState('idle')}
-          >
-            <AlertCircle className="mt-0.5 size-3 shrink-0 text-destructive" />
-            <span className="text-xs text-destructive leading-snug">{opError}</span>
-          </div>
-        )}
-
-        {/* Commit box */}
-        <div className="border-b border-border p-2 space-y-2">
-          <textarea
-            value={commitMsg}
-            onChange={(e) => setCommitMsg(e.target.value)}
-            placeholder="Commit message (type(scope): desc)…"
-            rows={2}
-            className="w-full resize-none rounded-md border border-border bg-input px-2 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/20"
-          />
-          <div className="flex gap-1.5">
-            <button
-              onClick={() => {
-                if (!commitMsg.trim()) return
-                run('commit', async () => {
-                  if ((status?.staged.length ?? 0) === 0) await el.git.stageAll(workspacePath)
-                  await el.git.commit(workspacePath, commitMsg)
-                  setCommitMsg('')
-                })
-              }}
-              disabled={!commitMsg.trim() || opState === 'loading'}
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <GitCommitHorizontalIcon className="size-3.5" />
-              {(status?.staged.length ?? 0) > 0 ? 'Commit staged' : 'Commit all'}
-            </button>
-          </div>
-        </div>
-
-        {/* Staged */}
-        {(status?.staged.length ?? 0) > 0 && (
-          <Section
-            title="Staged"
-            count={status!.staged.length}
-            expanded={stagedOpen}
-            onToggle={() => setStagedOpen((v) => !v)}
-            onBulkAction={() => run('unstage all', () => el.git.unstageAll(workspacePath))}
-            bulkLabel="Unstage all"
-          >
-            {status!.staged.map((f) => (
-              <FileRow
-                key={`staged-${f.path}`}
-                file={f}
-                area="staged"
-                onAction={(f) => run(`unstage ${f.path}`, () => el.git.unstageFile(workspacePath, f.path))}
-              />
-            ))}
-          </Section>
-        )}
-
-        {/* Unstaged changes */}
-        {(status?.unstaged.length ?? 0) > 0 && (
-          <Section
-            title="Changes"
-            count={status!.unstaged.length}
-            expanded={changesOpen}
-            onToggle={() => setChangesOpen((v) => !v)}
-            onBulkAction={() => run('stage all changes', () => el.git.stageAll(workspacePath))}
-            bulkLabel="Stage all"
-          >
-            {status!.unstaged.map((f) => (
-              <FileRow
-                key={`unstaged-${f.path}`}
-                file={f}
-                area="unstaged"
-                onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
-                onDiscard={(f) => run(`discard ${f.path}`, () => el.git.discardFile(workspacePath, f.path))}
-              />
-            ))}
-          </Section>
-        )}
-
-        {/* Untracked */}
-        {(status?.untracked.length ?? 0) > 0 && (
-          <Section
-            title="Untracked"
-            count={status!.untracked.length}
-            expanded={untrackedOpen}
-            onToggle={() => setUntrackedOpen((v) => !v)}
-            onBulkAction={() => run('stage all', () => el.git.stageAll(workspacePath))}
-            bulkLabel="Stage all"
-          >
-            {status!.untracked.map((f) => (
-              <FileRow
-                key={`untracked-${f.path}`}
-                file={f}
-                area="untracked"
-                onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
-              />
-            ))}
-          </Section>
-        )}
-
-        {/* Empty state */}
-        {status?.hasRepo && totalChanges === 0 && (
-          <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
-            <CheckIcon className="size-6 text-green-500/60" />
-            <p className="text-xs text-muted-foreground">No changes</p>
-          </div>
-        )}
-
-        {/* History */}
+        {/* History — resizable bottom pane */}
         {status?.hasRepo && (
           <>
-            <div className="border-t border-border" />
+            <ResizeHandle onResize={handleResizeHistory} />
+            <div className="border-t border-border shrink-0" />
             <Section
               title="History"
               count={commits.length}
               expanded={historyOpen}
               onToggle={() => setHistoryOpen((v) => !v)}
             >
-              <GitHistory
-                commits={commits}
-                activeCommit={activeCommit}
-                onSelectCommit={(hash) => setActiveCommit(hash === activeCommit ? null : hash)}
-              />
+              <div className="overflow-y-auto" style={{ height: historyHeight }}>
+                <GitHistory
+                  commits={commits}
+                  activeCommit={activeCommit}
+                  onSelectCommit={(hash) => setActiveCommit(hash === activeCommit ? null : hash)}
+                />
+              </div>
             </Section>
           </>
         )}

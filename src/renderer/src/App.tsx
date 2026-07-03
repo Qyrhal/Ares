@@ -279,6 +279,7 @@ export default function App(): React.ReactElement {
             onDeleteSession={handleDeleteSession}
             fileNodes={store.fileNodes}
             workspacePath={store.workspacePath}
+            selectedFilePath={store.activeTabId}
             onOpenFile={store.openFileTab}
             onOpenFolder={handleOpenFolder}
             onFsCreateFile={handleFsCreateFile}
