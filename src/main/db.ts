@@ -1,0 +1,165 @@
+import { app } from 'electron'
+import fs from 'fs'
+import path from 'path'
+import { v4 as uuidv4 } from 'uuid'
+
+export interface DbSession {
+  id: string
+  title: string
+  model: string
+  created_at: number
+  updated_at: number
+  message_count?: number
+}
+
+export interface DbMessage {
+  id: string
+  session_id: string
+  role: string
+  content: string
+  attachments: string | null
+  tool_name: string | null
+  tool_status: string | null
+  tool_input: string | null
+  tool_output: string | null
+  created_at: number
+}
+
+export interface DbSettings {
+  apiKey: string
+  apiBaseUrl: string
+  defaultModel: string
+}
+
+interface Store {
+  sessions: DbSession[]
+  messages: DbMessage[]
+  settings: DbSettings
+  workspacePath: string | null
+}
+
+const DEFAULT_SETTINGS: DbSettings = {
+  apiKey: '',
+  apiBaseUrl: 'https://api.openai.com/v1',
+  defaultModel: 'gpt-4o-mini'
+}
+
+function getStorePath(): string {
+  return path.join(app.getPath('userData'), 'ares-db.json')
+}
+
+function readStore(): Store {
+  try {
+    return JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
+  } catch {
+    return { sessions: [], messages: [], settings: DEFAULT_SETTINGS, workspacePath: null }
+  }
+}
+
+function writeStore(data: Store): void {
+  fs.writeFileSync(getStorePath(), JSON.stringify(data, null, 2), 'utf-8')
+}
+
+// ── Sessions ────────────────────────────────────────────────────────────────
+
+export function getSessions(): DbSession[] {
+  const { sessions, messages } = readStore()
+  return sessions
+    .map((s) => ({ ...s, message_count: messages.filter((m) => m.session_id === s.id).length }))
+    .sort((a, b) => b.updated_at - a.updated_at)
+}
+
+export function createSession(title: string, model = 'gpt-4o-mini'): DbSession {
+  const store = readStore()
+  const id = uuidv4()
+  const now = Date.now()
+  const session: DbSession = { id, title, model, created_at: now, updated_at: now }
+  store.sessions.unshift(session)
+  writeStore(store)
+  return session
+}
+
+export function updateSession(id: string, updates: Partial<Pick<DbSession, 'title' | 'model'>>): void {
+  const store = readStore()
+  store.sessions = store.sessions.map((s) =>
+    s.id === id ? { ...s, ...updates, updated_at: Date.now() } : s
+  )
+  writeStore(store)
+}
+
+export function deleteSession(id: string): void {
+  const store = readStore()
+  store.sessions = store.sessions.filter((s) => s.id !== id)
+  store.messages = store.messages.filter((m) => m.session_id !== id)
+  writeStore(store)
+}
+
+// ── Messages ─────────────────────────────────────────────────────────────────
+
+export function getMessages(sessionId: string): DbMessage[] {
+  return readStore().messages
+    .filter((m) => m.session_id === sessionId)
+    .sort((a, b) => a.created_at - b.created_at)
+}
+
+export function addMessage(
+  sessionId: string,
+  role: string,
+  content: string,
+  opts: {
+    attachments?: object[]
+    toolName?: string
+    toolStatus?: string
+    toolInput?: string
+    toolOutput?: string
+  } = {}
+): DbMessage {
+  const store = readStore()
+  const id = uuidv4()
+  const now = Date.now()
+  const msg: DbMessage = {
+    id, session_id: sessionId, role, content,
+    attachments: opts.attachments ? JSON.stringify(opts.attachments) : null,
+    tool_name: opts.toolName ?? null,
+    tool_status: opts.toolStatus ?? null,
+    tool_input: opts.toolInput ?? null,
+    tool_output: opts.toolOutput ?? null,
+    created_at: now
+  }
+  store.messages.push(msg)
+  store.sessions = store.sessions.map((s) =>
+    s.id === sessionId ? { ...s, updated_at: now } : s
+  )
+  writeStore(store)
+  return msg
+}
+
+export function deleteMessage(id: string): void {
+  const store = readStore()
+  store.messages = store.messages.filter((m) => m.id !== id)
+  writeStore(store)
+}
+
+// ── Settings ──────────────────────────────────────────────────────────────────
+
+export function getSettings(): DbSettings {
+  return { ...DEFAULT_SETTINGS, ...(readStore().settings ?? {}) }
+}
+
+export function setSettings(settings: DbSettings): void {
+  const store = readStore()
+  store.settings = settings
+  writeStore(store)
+}
+
+// ── Workspace ─────────────────────────────────────────────────────────────────
+
+export function getWorkspacePath(): string | null {
+  return readStore().workspacePath ?? null
+}
+
+export function setWorkspacePath(p: string | null): void {
+  const store = readStore()
+  store.workspacePath = p
+  writeStore(store)
+}

@@ -1,0 +1,41 @@
+import { contextBridge, ipcRenderer } from 'electron'
+
+const db = {
+  getSessions: () => ipcRenderer.invoke('db:getSessions'),
+  createSession: (title: string, model?: string) => ipcRenderer.invoke('db:createSession', title, model),
+  updateSession: (id: string, updates: object) => ipcRenderer.invoke('db:updateSession', id, updates),
+  deleteSession: (id: string) => ipcRenderer.invoke('db:deleteSession', id),
+  getMessages: (sessionId: string) => ipcRenderer.invoke('db:getMessages', sessionId),
+  addMessage: (sessionId: string, role: string, content: string, opts?: object) =>
+    ipcRenderer.invoke('db:addMessage', sessionId, role, content, opts ?? {}),
+  deleteMessage: (id: string) => ipcRenderer.invoke('db:deleteMessage', id)
+}
+
+const settings = {
+  get: () => ipcRenderer.invoke('settings:get'),
+  set: (s: object) => ipcRenderer.invoke('settings:set', s)
+}
+
+const workspace = {
+  getPath: () => ipcRenderer.invoke('workspace:getPath'),
+  setPath: (p: string | null) => ipcRenderer.invoke('workspace:setPath', p)
+}
+
+const nativeDialog = {
+  openFolder: () => ipcRenderer.invoke('dialog:openFolder')
+}
+
+const nativeFs = {
+  readDir: (p: string) => ipcRenderer.invoke('fs:readDir', p),
+  readFile: (p: string) => ipcRenderer.invoke('fs:readFile', p),
+  writeFile: (p: string, content: string) => ipcRenderer.invoke('fs:writeFile', p, content)
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs }
+
+if (process.contextIsolated) {
+  contextBridge.exposeInMainWorld('electron', api)
+} else {
+  // @ts-ignore
+  window.electron = api
+}
