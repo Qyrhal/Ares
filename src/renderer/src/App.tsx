@@ -96,16 +96,51 @@ export default function App(): React.ReactElement {
     el.db.getMessages(activeSessionTab.id).then((raw) => setMessages(raw.map(toMessage)))
   }, [activeSessionTab?.id])
 
-  // Keyboard shortcuts
+  // Keyboard shortcuts — re-registers when tabs/activeTabId change so
+  // tab-navigation always reads the latest list.
   useEffect(() => {
+    const tabId = (t: Tab): string => (t.type === 'session' ? t.id : t.path)
     const handler = (e: KeyboardEvent): void => {
       if (!(e.metaKey || e.ctrlKey)) return
-      if (e.key === 'n') { e.preventDefault(); handleNewSession() }
-      if (e.key === '`') { e.preventDefault(); setTerminalOpen((v) => !v) }
+      // New session: ⌘N  ⌘T
+      if (e.key === 'n' || e.key === 't') { e.preventDefault(); handleNewSession(); return }
+      // Close active tab: ⌘W
+      if (e.key === 'w') {
+        e.preventDefault()
+        if (activeTabId) handleCloseTab(activeTabId)
+        return
+      }
+      // Toggle terminal: ⌘`
+      if (e.key === '`') { e.preventDefault(); setTerminalOpen((v) => !v); return }
+      // Previous tab: ⌘[
+      if (e.key === '[') {
+        e.preventDefault()
+        if (tabs.length === 0) return
+        const idx = tabs.findIndex((t) => tabId(t) === activeTabId)
+        const prev = tabs[idx <= 0 ? tabs.length - 1 : idx - 1]
+        if (prev) setActiveTabId(tabId(prev))
+        return
+      }
+      // Next tab: ⌘]
+      if (e.key === ']') {
+        e.preventDefault()
+        if (tabs.length === 0) return
+        const idx = tabs.findIndex((t) => tabId(t) === activeTabId)
+        const next = tabs[idx >= tabs.length - 1 ? 0 : idx + 1]
+        if (next) setActiveTabId(tabId(next))
+        return
+      }
+      // Jump to tab by position: ⌘1-9
+      const num = parseInt(e.key, 10)
+      if (!isNaN(num) && num >= 1 && num <= 9) {
+        e.preventDefault()
+        const tab = tabs[num - 1]
+        if (tab) setActiveTabId(tabId(tab))
+      }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
+  }, [handleNewSession, activeTabId, tabs])
 
   // ── Tab helpers ────────────────────────────────────────────────────────────
   const openSessionTab = useCallback((session: Session): void => {
