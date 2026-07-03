@@ -11,6 +11,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 const SLASH_COMMANDS = [
   { name: 'model', description: 'Change the model for this session' },
+  { name: 'folder', description: 'Open or switch workspace folder' },
   { name: 'clear', description: 'Clear all messages in the current session' },
   { name: 'help', description: 'Show available slash commands' },
 ]
@@ -183,6 +184,10 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
         closeCommands()
         requestAnimationFrame(() => modelSearchRef.current?.focus())
         return
+      case 'folder':
+        closeCommands()
+        onRevealInExplorer?.()
+        return
       case 'clear':
         closeCommands()
         onCommand?.('clear', '')
@@ -192,7 +197,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
         onCommand?.('help', '')
         return
     }
-  }, [onCommand, fetchModels, closeCommands])
+  }, [onCommand, onRevealInExplorer, fetchModels, closeCommands])
 
   const handleModelSelect = useCallback((modelId: string) => {
     setShowModelPicker(false)
@@ -245,6 +250,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
       if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1)); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx((prev) => Math.max(prev - 1, 0)); return }
       if (e.key === 'Enter' && filtered[highlightIdx]) { e.preventDefault(); insertMention(filtered[highlightIdx].relPath); return }
+      if (e.key === 'Tab' && filtered[highlightIdx]) { e.preventDefault(); insertMention(filtered[highlightIdx].relPath); return }
       if (e.key === 'Escape') { e.preventDefault(); closeMentions(); return }
     }
 
@@ -252,6 +258,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
       if (e.key === 'ArrowDown') { e.preventDefault(); setCmdHighlight((prev) => Math.min(prev + 1, filteredCommands.length - 1)); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setCmdHighlight((prev) => Math.max(prev - 1, 0)); return }
       if (e.key === 'Enter' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight].name); return }
+      if (e.key === 'Tab' && filteredCommands[cmdHighlight]) { e.preventDefault(); insertCommand(filteredCommands[cmdHighlight].name); return }
       if (e.key === 'Escape') { e.preventDefault(); closeCommands(); return }
     }
 

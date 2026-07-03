@@ -161,6 +161,7 @@ export function useAI(settings: AppSettings) {
     onError?: ErrorCallback,
     permissionMode?: PermissionMode,
     onToolPermission?: ToolPermissionCallback,
+    workspacePath?: string | null,
   ): Promise<void> => {
     if (!client) {
       await noKeyFallback(onStream, onDone)
@@ -169,6 +170,7 @@ export function useAI(settings: AppSettings) {
 
     const apiMessages = messages.map(toApiMessage)
     const systemParts = [SKILL_PROMPT]
+    if (workspacePath) systemParts.push(`Current workspace: \`${workspacePath}\``)
     if (settings.systemPrompt?.trim()) systemParts.push(settings.systemPrompt.trim())
     const sysMsg: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
       role: 'system',
