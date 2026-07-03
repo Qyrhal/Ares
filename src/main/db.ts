@@ -40,6 +40,7 @@ interface Store {
   messages: DbMessage[]
   settings: DbSettings
   workspacePath: string | null
+  recentProjects: string[]
 }
 
 const DEFAULT_SETTINGS: DbSettings = {
@@ -59,7 +60,7 @@ function readStore(): Store {
   try {
     return JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
   } catch {
-    return { sessions: [], messages: [], settings: DEFAULT_SETTINGS, workspacePath: null }
+    return { sessions: [], messages: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [] }
   }
 }
 
@@ -172,5 +173,13 @@ export function getWorkspacePath(): string | null {
 export function setWorkspacePath(p: string | null): void {
   const store = readStore()
   store.workspacePath = p
+  if (p) {
+    const recents = store.recentProjects ?? []
+    store.recentProjects = [p, ...recents.filter((r) => r !== p)].slice(0, 5)
+  }
   writeStore(store)
+}
+
+export function getRecentProjects(): string[] {
+  return readStore().recentProjects ?? []
 }

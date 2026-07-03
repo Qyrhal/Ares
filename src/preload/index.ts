@@ -18,7 +18,8 @@ const settings = {
 
 const workspace = {
   getPath: () => ipcRenderer.invoke('workspace:getPath'),
-  setPath: (p: string | null) => ipcRenderer.invoke('workspace:setPath', p)
+  setPath: (p: string | null) => ipcRenderer.invoke('workspace:setPath', p),
+  getRecent: () => ipcRenderer.invoke('workspace:getRecent'),
 }
 
 const nativeDialog = {
