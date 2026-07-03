@@ -8,6 +8,8 @@ import {
   AttachmentDescription, AttachmentGroup
 } from '@/components/ui/attachment'
 import { Marker, MarkerIcon, MarkerContent } from '@/components/ui/marker'
+import ReactMarkdown from 'react-markdown'
+import rehypeHighlight from 'rehype-highlight'
 
 interface MessageItemProps {
   message: Message
@@ -35,7 +37,7 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
           <TerminalIcon className="size-3" />
           <span className="font-mono text-[11px]">{message.toolName}</span>
           {message.toolStatus === 'running' && (
-            <span className="shimmer text-muted-foreground text-[10px]">running…</span>
+            <span className="shimmer text-[10px]">running…</span>
           )}
         </MarkerContent>
         <span className="ml-auto">
@@ -81,10 +83,15 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
     <div className={cn('group flex gap-3 px-4 py-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
       {/* Avatar */}
       <div className={cn(
-        'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold',
-        isUser ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground border border-border'
+        'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full',
+        isUser ? 'bg-primary text-primary-foreground text-xs font-bold' : 'bg-muted text-muted-foreground border border-border'
       )}>
-        {isUser ? 'U' : 'A'}
+        {isUser ? 'U' : (
+          <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="10" cy="10" r="8" />
+            <rect x="5" y="5" width="10" height="10" rx="1" transform="rotate(45 10 10)" />
+          </svg>
+        )}
       </div>
 
       {/* Bubble */}
@@ -106,18 +113,23 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
 
         {/* Message text */}
         {message.content && (
-          <div className={cn(
-            'rounded-2xl px-4 py-2.5 text-sm leading-relaxed',
-            isUser
-              ? 'rounded-tr-sm bg-primary text-primary-foreground'
-              : 'rounded-tl-sm bg-card border border-border text-foreground'
-          )}>
-            {message.isStreaming ? (
-              <span className="shimmer shimmer-duration-1500">{message.content}</span>
-            ) : (
-              <MessageContent content={message.content} />
-            )}
-          </div>
+          isUser ? (
+            <div className="markdown-content rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed">
+              {message.isStreaming ? (
+                <span className="shimmer shimmer-duration-1500">{message.content}</span>
+              ) : (
+                <MessageContent content={message.content} />
+              )}
+            </div>
+          ) : (
+            <div className="markdown-content text-sm leading-relaxed text-foreground">
+              {message.isStreaming ? (
+                <span className="shimmer shimmer-duration-1500">{message.content}</span>
+              ) : (
+                <MessageContent content={message.content} />
+              )}
+            </div>
+          )
         )}
       </div>
     </div>
@@ -125,28 +137,9 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
 }
 
 function MessageContent({ content }: { content: string }): React.ReactElement {
-  // Simple markdown-like rendering: code blocks, inline code
-  const parts = content.split(/(```[\s\S]*?```|`[^`]+`)/g)
-
   return (
-    <>
-      {parts.map((part, i) => {
-        if (part.startsWith('```') && part.endsWith('```')) {
-          const lines = part.slice(3, -3).split('\n')
-          const lang = lines[0].trim()
-          const code = lines.slice(1).join('\n')
-          return (
-            <pre key={i} className="my-2 -mx-1">
-              {lang && <div className="mb-1 text-[10px] text-muted-foreground font-mono">{lang}</div>}
-              <code>{code}</code>
-            </pre>
-          )
-        }
-        if (part.startsWith('`') && part.endsWith('`')) {
-          return <code key={i}>{part.slice(1, -1)}</code>
-        }
-        return <span key={i}>{part}</span>
-      })}
-    </>
+    <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+      {content}
+    </ReactMarkdown>
   )
 }
