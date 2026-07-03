@@ -141,23 +141,6 @@ code:not(pre code) {
   margin: 0.5em 0;
 }
 
-/* Shimmer animation */
-.shimmer {
-  background: linear-gradient(90deg, #e8e8e8 25%, #dc2626 50%, #e8e8e8 75%);
-  background-size: 200% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: shimmer-move 2s linear infinite;
-}
-.shimmer-duration-1500 {
-  animation-duration: 1.5s;
-}
-@keyframes shimmer-move {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
-}
-
 /* Settings input fields */
 .input-field {
   width: 100%;

@@ -37,7 +37,7 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
           <TerminalIcon className="size-3" />
           <span className="font-mono text-[11px]">{message.toolName}</span>
           {message.toolStatus === 'running' && (
-            <span className="shimmer text-[10px]">running…</span>
+            <span className="shimmer shimmer-color-primary text-muted-foreground text-[10px]">running…</span>
           )}
         </MarkerContent>
         <span className="ml-auto">
@@ -116,7 +116,7 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
           isUser ? (
             <div className="markdown-content rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed">
               {message.isStreaming ? (
-                <span className="shimmer shimmer-duration-1500">{message.content}</span>
+                <span className="shimmer shimmer-color-primary shimmer-duration-1500 text-muted-foreground">{message.content}</span>
               ) : (
                 <MessageContent content={message.content} />
               )}
@@ -124,7 +124,7 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
           ) : (
             <div className="markdown-content text-sm leading-relaxed text-foreground">
               {message.isStreaming ? (
-                <span className="shimmer shimmer-duration-1500">{message.content}</span>
+                <span className="shimmer shimmer-color-primary shimmer-duration-1500 text-muted-foreground">{message.content}</span>
               ) : (
                 <MessageContent content={message.content} />
               )}

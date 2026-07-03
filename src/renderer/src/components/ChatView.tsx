@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { SparklesIcon } from '@animateicons/react/lucide'
 import { Message } from '@/types'
 import { MessageItem } from './MessageItem'
+import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 const SHIMMER_VERBS = [
@@ -94,18 +96,17 @@ export function ChatView({ messages, sessionTitle, isLoading }: ChatViewProps): 
           <MessageItem key={msg.id} message={msg} />
         ))}
         {isLoading && (
-          <div className="flex gap-3 px-4 py-3">
-            <div className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full bg-muted border border-border text-muted-foreground">
-              <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="10" cy="10" r="8" />
-                <rect x="5" y="5" width="10" height="10" rx="1" transform="rotate(45 10 10)" />
-              </svg>
-            </div>
-            <div className="flex items-center">
-              <span className="shimmer shimmer-duration-1500 text-sm">
-                {SHIMMER_VERBS[verbIdx]}…
-              </span>
-            </div>
+          <div className="px-4 py-2">
+            <Marker role="status">
+              <MarkerIcon>
+                <Loader2 className="size-3 animate-spin" />
+              </MarkerIcon>
+              <MarkerContent>
+                <span className="shimmer shimmer-color-primary shimmer-duration-1500 text-sm text-muted-foreground">
+                  {SHIMMER_VERBS[verbIdx]}…
+                </span>
+              </MarkerContent>
+            </Marker>
           </div>
         )}
         <div ref={bottomRef} />
