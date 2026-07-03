@@ -44,9 +44,10 @@ interface ChatViewProps {
   messages: Message[]
   sessionTitle: string
   isLoading: boolean
+  onSuggestion?: (text: string) => void
 }
 
-export function ChatView({ messages, sessionTitle, isLoading }: ChatViewProps): React.ReactElement {
+export function ChatView({ messages, sessionTitle, isLoading, onSuggestion }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const [verbIdx, setVerbIdx] = useState(() => Math.floor(Math.random() * SHIMMER_VERBS.length))
@@ -77,12 +78,13 @@ export function ChatView({ messages, sessionTitle, isLoading }: ChatViewProps): 
         </div>
         <div className="grid grid-cols-2 gap-2 w-full max-w-sm mt-2">
           {SUGGESTIONS.map((s) => (
-            <div
+            <button
               key={s}
-              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground cursor-default hover:border-primary/30 hover:bg-accent transition-colors"
+              onClick={() => onSuggestion?.(s)}
+              className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:bg-accent hover:text-foreground transition-colors text-left"
             >
               {s}
-            </div>
+            </button>
           ))}
         </div>
       </div>

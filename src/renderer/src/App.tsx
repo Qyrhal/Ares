@@ -416,6 +416,7 @@ export default function App(): React.ReactElement {
                   messages={store.messages}
                   sessionTitle={activeSession.title}
                   isLoading={store.isLoading}
+                  onSuggestion={(text) => handleSend(text, [])}
                 />
                 {pendingPerm && (
                   <PermissionPrompt
