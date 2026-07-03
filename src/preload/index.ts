@@ -54,11 +54,11 @@ const nativeGit = {
 
 const nativeTerminal = {
   create: (cwd: string) => ipcRenderer.invoke('terminal:create', cwd),
-  write:  (data: string) => ipcRenderer.send('terminal:input', data),
-  resize: (cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', cols, rows),
-  kill:   () => ipcRenderer.send('terminal:kill'),
-  onOutput: (cb: (data: string) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, data: string): void => cb(data)
+  write:  (id: string, data: string) => ipcRenderer.send('terminal:input', id, data),
+  resize: (id: string, cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', id, cols, rows),
+  kill:   (id: string) => ipcRenderer.send('terminal:kill', id),
+  onOutput: (cb: (id: string, data: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, id: string, data: string): void => cb(id, data)
     ipcRenderer.on('terminal:output', listener)
     return () => ipcRenderer.off('terminal:output', listener)
   }

@@ -1,16 +1,21 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { Plus, X } from 'lucide-react'
+import { PlusIcon, XIcon, ChevronDownIcon } from '@animateicons/react/lucide'
+import { cn } from '@/lib/utils'
+
+interface TerminalTab {
+  id: string
+  label: string
+}
 
 interface TerminalViewProps {
   cwd: string | null
   onClose: () => void
-  onNewTerminal: () => void
 }
 
-export function TerminalView({ cwd, onClose, onNewTerminal }: TerminalViewProps): React.ReactElement {
+function TerminalInstance({ id, cwd }: { id: string; cwd: string }): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -44,56 +49,119 @@ export function TerminalView({ cwd, onClose, onNewTerminal }: TerminalViewProps)
 
     if (containerRef.current) {
       term.open(containerRef.current)
-      // Give the DOM a tick to compute dimensions before fitting
       requestAnimationFrame(() => { try { fitAddon.fit() } catch (_) {} })
     }
 
-    window.electron.terminal.create(cwd || '/')
+    const outputCleanup = window.electron.terminal.onOutput((tid, data) => {
+      if (tid === id) term.write(data)
+    })
 
-    const cleanup = window.electron.terminal.onOutput((data) => { term.write(data) })
-
-    term.onData((data) => { window.electron.terminal.write(data) })
-    term.onResize(({ cols, rows }) => { window.electron.terminal.resize(cols, rows) })
+    term.onData((data) => window.electron.terminal.write(id, data))
+    term.onResize(({ cols, rows }) => window.electron.terminal.resize(id, cols, rows))
 
     const ro = new ResizeObserver(() => {
-      try { fitAddon.fit() } catch (_) {}
-    })
+      try { fitAddon.fit() } catch (_) {} })
     if (containerRef.current) ro.observe(containerRef.current)
 
     return () => {
-      cleanup()
+      outputCleanup()
       ro.disconnect()
-      window.electron.terminal.kill()
+      window.electron.terminal.kill(id)
       term.dispose()
+    }
+  }, [id])
+
+  return <div ref={containerRef} className="flex-1 overflow-hidden px-1" />
+}
+
+export function TerminalView({ cwd, onClose }: TerminalViewProps): React.ReactElement {
+  const [tabs, setTabs] = useState<TerminalTab[]>([])
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const creating = useRef(false)
+
+  const createTerminal = useCallback(async () => {
+    if (creating.current) return
+    creating.current = true
+    try {
+      const dir = cwd || '/'
+      const id = await window.electron.terminal.create(dir)
+      const label = dir.split('/').pop() || 'shell'
+      setTabs((prev) => [...prev, { id, label }])
+      setActiveId(id)
+    } finally {
+      creating.current = false
     }
   }, [cwd])
 
+  useEffect(() => {
+    createTerminal()
+  }, [])
+
+  const closeTerminal = (id: string): void => {
+    setTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === id)
+      const next = prev.filter((t) => t.id !== id)
+      if (activeId === id) {
+        const fallback = next[Math.min(idx, next.length - 1)]
+        setActiveId(fallback?.id ?? null)
+      }
+      return next
+    })
+  }
+
   return (
     <div className="flex h-full flex-col bg-background">
-      {/* Terminal tab bar */}
-      <div className="flex items-center border-b border-border bg-card px-2 py-1 gap-2 shrink-0">
-        <div className="flex items-center gap-1.5 rounded-md bg-background px-2.5 py-0.5 text-xs text-foreground/70 border border-border/60">
-          <span>{cwd?.split('/').pop() ?? 'shell'}</span>
-        </div>
-        <div className="flex-1" />
+      {/* Tab bar */}
+      <div className="flex items-center border-b border-border bg-card px-2 py-1 gap-0.5 shrink-0">
+        {tabs.map((tab) => (
+          <div
+            key={tab.id}
+            className={cn(
+              'group flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs border transition-colors cursor-pointer',
+              tab.id === activeId
+                ? 'bg-background text-foreground border-border/60'
+                : 'text-muted-foreground border-transparent hover:border-border/40 hover:text-foreground'
+            )}
+            onClick={() => setActiveId(tab.id)}
+          >
+            <span>{tab.label}</span>
+            <button
+              onClick={(e) => { e.stopPropagation(); closeTerminal(tab.id) }}
+              className="rounded p-0.5 text-muted-foreground/50 hover:text-foreground transition-colors"
+              aria-label="Close terminal"
+            >
+              <XIcon className="size-3" />
+            </button>
+          </div>
+        ))}
         <button
           title="New terminal"
-          onClick={onNewTerminal}
+          onClick={createTerminal}
           className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
         >
-          <Plus className="size-3.5" />
+          <PlusIcon className="size-3.5" />
         </button>
+        <div className="flex-1" />
         <button
-          title="Close terminal"
+          title="Close terminal panel"
           onClick={onClose}
           className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
         >
-          <X className="size-3.5" />
+          <ChevronDownIcon className="size-3.5" />
         </button>
       </div>
 
-      {/* xterm.js mount point */}
-      <div ref={containerRef} className="flex-1 overflow-hidden px-1" />
+      {/* Terminal instances */}
+      {tabs.map((tab) => (
+        <div key={tab.id} className={tab.id === activeId ? 'flex flex-1 flex-col min-h-0' : 'hidden'}>
+          <TerminalInstance id={tab.id} cwd={cwd || '/'} />
+        </div>
+      ))}
+      {tabs.length === 0 && (
+        <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+          Starting terminal...
+        </div>
+      )}
     </div>
   )
 }

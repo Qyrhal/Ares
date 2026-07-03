@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 import {
   ChevronRight, File, FileCode, FileJson, FileText,
-  FilePlus, FolderClosed, FolderOpen, FolderPlus, FolderOpen as FolderOpenIcon,
-  Pencil, Trash2
+  FilePlus, FolderClosed, FolderPlus, Pencil, Trash2
 } from 'lucide-react'
+import { FolderOpenIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import { FileNode } from '@/types'
 import { ContextMenu, ContextMenuEntry } from './ui/context-menu'
@@ -117,7 +117,7 @@ function TreeNode({
     doCreateFile, doCreateFolder, doRename, doDelete,
   } = useOps()
   const isDir = node.type === 'directory'
-  const Icon = isDir ? (expanded ? FolderOpen : FolderClosed) : fileIconFor(node.name)
+  const Icon = isDir ? (expanded ? FolderOpenIcon : FolderClosed) : fileIconFor(node.name)
   const isRenaming = renaming?.path === node.path
   const isCreatingInside = isDir && creating?.parentPath === node.path
 

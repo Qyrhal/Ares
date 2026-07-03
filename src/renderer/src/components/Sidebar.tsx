@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { Plus, MessageSquare, Trash2 } from 'lucide-react'
+import { MessageSquare } from 'lucide-react'
+import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -76,17 +77,10 @@ function SessionsPane({
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+      <div className="flex items-center px-3 py-2 border-b border-border">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Sessions
         </span>
-        <button
-          onClick={onNew}
-          title="New session (⌘N)"
-          className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-        >
-          <Plus className="size-3.5" />
-        </button>
       </div>
 
       <div className="flex flex-col gap-0.5 overflow-y-auto px-2 py-1 flex-1">
@@ -128,7 +122,7 @@ function SessionsPane({
                 className="ml-auto shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/20 hover:text-destructive"
                 aria-label="Delete session"
               >
-                <Trash2 className="size-3" />
+                <Trash2Icon className="size-3" />
               </button>
             )}
           </button>

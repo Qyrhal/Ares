@@ -1,5 +1,6 @@
 import React from 'react'
-import { FileText, Image, File, X, CheckCircle2, Loader2, AlertCircle, Terminal, ChevronDown, ChevronRight } from 'lucide-react'
+import { AlertCircle, CheckCircle2, File, FileText, Image, Loader2 } from 'lucide-react'
+import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { Message } from '@/types'
 import {
@@ -31,14 +32,14 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
       <Marker variant="default" className="cursor-pointer select-none" onClick={() => setExpanded((v) => !v)}>
         <MarkerIcon>{statusIcon}</MarkerIcon>
         <MarkerContent className="flex items-center gap-1.5">
-          <Terminal className="size-3" />
+          <TerminalIcon className="size-3" />
           <span className="font-mono text-[11px]">{message.toolName}</span>
           {message.toolStatus === 'running' && (
             <span className="shimmer text-muted-foreground text-[10px]">running…</span>
           )}
         </MarkerContent>
         <span className="ml-auto">
-          {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+          {expanded ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
         </span>
       </Marker>
       {expanded && message.toolInput && (

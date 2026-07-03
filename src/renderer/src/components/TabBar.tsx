@@ -1,5 +1,6 @@
 import React from 'react'
-import { X, MessageSquare, FileCode } from 'lucide-react'
+import { FileCode, MessageSquare } from 'lucide-react'
+import { XIcon } from '@animateicons/react/lucide'
 import { cn, truncate } from '@/lib/utils'
 import { Tab } from '@/types'
 
@@ -58,7 +59,7 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: TabBarPro
               className="ml-auto flex size-4 shrink-0 items-center justify-center rounded opacity-0 transition-opacity hover:bg-accent group-hover:opacity-100"
               aria-label="Close tab"
             >
-              <X className="size-3" />
+              <XIcon className="size-3" />
             </button>
           </button>
         )

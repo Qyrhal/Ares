@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Check, ChevronDown, Search } from 'lucide-react'
+import { CheckIcon, ChevronDownIcon, SearchIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 
 export interface SelectOption {
@@ -71,7 +71,7 @@ export function Select({
         <span className={cn('truncate', selected ? 'text-foreground' : 'text-muted-foreground')}>
           {selected?.label ?? placeholder}
         </span>
-        <ChevronDown
+        <ChevronDownIcon
           className={cn('size-4 shrink-0 text-muted-foreground transition-transform', open && 'rotate-180')}
         />
       </button>
@@ -80,7 +80,7 @@ export function Select({
         <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[220px] rounded-lg border border-border bg-popover shadow-2xl">
           {searchable && (
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-              <Search className="size-3.5 shrink-0 text-muted-foreground" />
+              <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
               <input
                 ref={searchRef}
                 value={search}
@@ -114,7 +114,7 @@ export function Select({
                     )}
                   >
                     <span className="flex size-4 shrink-0 items-center justify-center">
-                      {opt.value === value && <Check className="size-3.5" />}
+                      {opt.value === value && <CheckIcon className="size-3.5" />}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="truncate">{opt.label}</div>

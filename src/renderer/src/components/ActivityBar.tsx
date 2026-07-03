@@ -1,5 +1,6 @@
 import React from 'react'
-import { MessageSquare, FolderOpen, GitBranch, Settings, SquareTerminal } from 'lucide-react'
+import { MessageSquare, SquareTerminal } from 'lucide-react'
+import { FolderOpenIcon, GitBranchIcon, SettingsIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import { ActivityView } from '@/types'
 
@@ -16,8 +17,8 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
     <div className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-card py-2 gap-1">
       {([
         { view: 'chat' as ActivityView,     icon: MessageSquare, label: 'Chat',           badge: 0 },
-        { view: 'explorer' as ActivityView, icon: FolderOpen,    label: 'Explorer',       badge: 0 },
-        { view: 'git' as ActivityView,      icon: GitBranch,     label: 'Source Control', badge: gitBadge },
+        { view: 'explorer' as ActivityView, icon: FolderOpenIcon,    label: 'Explorer',       badge: 0 },
+        { view: 'git' as ActivityView,      icon: GitBranchIcon,     label: 'Source Control', badge: gitBadge },
       ] as const).map(({ view, icon: Icon, label, badge }) => (
         <button
           key={view}
@@ -67,7 +68,7 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'
         )}
       >
-        <Settings className="size-5" />
+        <SettingsIcon className="size-5" />
       </button>
     </div>
   )

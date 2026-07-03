@@ -298,6 +298,13 @@ export default function App(): React.ReactElement {
                 />
                 <InputBar
                   onSend={handleSend}
+                  onRevealInExplorer={() => {
+                    if (store.workspacePath) {
+                      store.setActiveView('explorer')
+                    } else {
+                      handleOpenFolder()
+                    }
+                  }}
                   disabled={store.isLoading}
                   placeholder={`Ask ${activeSession.model || store.settings.defaultModel}…`}
                 />
@@ -310,10 +317,8 @@ export default function App(): React.ReactElement {
           {store.terminalOpen && (
             <div className="h-56 shrink-0 border-t border-border overflow-hidden">
               <TerminalView
-                key={store.terminalKey}
                 cwd={store.workspacePath}
                 onClose={store.toggleTerminal}
-                onNewTerminal={store.bumpTerminal}
               />
             </div>
           )}

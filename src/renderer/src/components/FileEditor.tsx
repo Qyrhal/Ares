@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import { Save, Loader2 } from 'lucide-react'
+import { Loader2, Save } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface FileEditorProps {
