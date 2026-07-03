@@ -41,6 +41,10 @@ declare global {
         readDir(path: string): Promise<FileNode[]>
         readFile(path: string): Promise<string>
         writeFile(path: string, content: string): Promise<void>
+        createFile(path: string): Promise<void>
+        createFolder(path: string): Promise<void>
+        rename(oldPath: string, newPath: string): Promise<void>
+        delete(path: string): Promise<void>
       }
       git: {
         status(cwd: string): Promise<GitStatus>

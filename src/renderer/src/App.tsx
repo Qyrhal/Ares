@@ -37,7 +37,7 @@ function toMessage(r: RawMessage): Message {
 }
 
 const DEFAULT_SETTINGS: AppSettings = {
-  apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini'
+  apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red'
 }
 
 export default function App(): React.ReactElement {
@@ -101,24 +101,22 @@ export default function App(): React.ReactElement {
   }, [])
 
   // ── Tab helpers ────────────────────────────────────────────────────────────
-  function openSessionTab(session: Session): void {
+  const openSessionTab = useCallback((session: Session): void => {
     setTabs((prev) => {
       if (prev.find((t) => t.type === 'session' && t.id === session.id)) return prev
       return [...prev, { type: 'session', id: session.id, title: session.title }]
     })
     setActiveTabId(session.id)
     setActiveView('chat')
-  }
+  }, [])
 
-  function openFileTab(node: FileNode): void {
-    const existingTab = tabs.find((t) => t.type === 'file' && t.path === node.path)
-    if (existingTab) {
-      setActiveTabId(node.path)
-    } else {
-      setTabs((prev) => [...prev, { type: 'file', path: node.path, name: node.name, isDirty: false }])
-      setActiveTabId(node.path)
-    }
-  }
+  const openFileTab = useCallback((node: FileNode): void => {
+    setTabs((prev) => {
+      if (prev.find((t) => t.type === 'file' && t.path === node.path)) return prev
+      return [...prev, { type: 'file', path: node.path, name: node.name, isDirty: false }]
+    })
+    setActiveTabId(node.path)
+  }, [])
 
   function handleCloseTab(id: string): void {
     setTabs((prev) => {
@@ -228,6 +226,67 @@ export default function App(): React.ReactElement {
     )
   }, [activeSession, isLoading, messages, sendMessage])
 
+  // ── File system operations ─────────────────────────────────────────────────
+  const refreshTree = useCallback(async () => {
+    if (!workspacePath) return
+    const nodes = await el.fs.readDir(workspacePath)
+    setFileNodes(nodes)
+  }, [workspacePath])
+
+  const handleFsCreateFile = useCallback(async (parentPath: string, name: string) => {
+    const fullPath = parentPath + '/' + name
+    await el.fs.createFile(fullPath)
+    await refreshTree()
+    openFileTab({ name, path: fullPath, type: 'file' })
+  }, [refreshTree, openFileTab])
+
+  const handleFsCreateFolder = useCallback(async (parentPath: string, name: string) => {
+    await el.fs.createFolder(parentPath + '/' + name)
+    await refreshTree()
+  }, [refreshTree])
+
+  const handleFsRename = useCallback(async (oldPath: string, newName: string) => {
+    const dir = oldPath.substring(0, oldPath.lastIndexOf('/'))
+    const newPath = dir + '/' + newName
+    await el.fs.rename(oldPath, newPath)
+    await refreshTree()
+    // Update any open tabs that match oldPath or are inside a renamed folder
+    setTabs((prev) => prev.map((t) => {
+      if (t.type !== 'file') return t
+      if (t.path === oldPath) return { ...t, path: newPath, name: newName }
+      if (t.path.startsWith(oldPath + '/')) return { ...t, path: newPath + t.path.slice(oldPath.length) }
+      return t
+    }))
+    setActiveTabId((id) => {
+      if (id === oldPath) return newPath
+      if (id?.startsWith(oldPath + '/')) return newPath + id.slice(oldPath.length)
+      return id
+    })
+  }, [refreshTree])
+
+  const handleFsDelete = useCallback(async (node: FileNode) => {
+    await el.fs.delete(node.path)
+    await refreshTree()
+    // Close tabs for deleted file or files inside deleted folder
+    setTabs((prev) => {
+      const removed = prev.filter((t) =>
+        t.type === 'file' && (
+          t.path === node.path ||
+          (node.type === 'directory' && t.path.startsWith(node.path + '/'))
+        )
+      )
+      const next = prev.filter((t) => !removed.includes(t))
+      setActiveTabId((id) => {
+        if (removed.some((t) => (t.type === 'file' ? t.path : t.id) === id)) {
+          const fallback = next[next.length - 1]
+          return fallback ? (fallback.type === 'session' ? fallback.id : fallback.path) : null
+        }
+        return id
+      })
+      return next
+    })
+  }, [refreshTree])
+
   // ── Settings save ──────────────────────────────────────────────────────────
   const handleSaveSettings = useCallback(async (s: AppSettings) => {
     await el.settings.set(s)
@@ -274,8 +333,12 @@ export default function App(): React.ReactElement {
             onDeleteSession={handleDeleteSession}
             fileNodes={fileNodes}
             workspacePath={workspacePath}
-            onOpenFile={(node) => { openFileTab(node); }}
+            onOpenFile={openFileTab}
             onOpenFolder={handleOpenFolder}
+            onFsCreateFile={handleFsCreateFile}
+            onFsCreateFolder={handleFsCreateFolder}
+            onFsRename={handleFsRename}
+            onFsDelete={handleFsDelete}
           />
         )}
 
