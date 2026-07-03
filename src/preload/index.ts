@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
 const db = {
   getSessions: () => ipcRenderer.invoke('db:getSessions'),
@@ -52,7 +52,19 @@ const nativeGit = {
   init:          (cwd: string) => ipcRenderer.invoke('git:init', cwd),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit }
+const nativeTerminal = {
+  create: (cwd: string) => ipcRenderer.invoke('terminal:create', cwd),
+  write:  (data: string) => ipcRenderer.send('terminal:input', data),
+  resize: (cols: number, rows: number) => ipcRenderer.invoke('terminal:resize', cols, rows),
+  kill:   () => ipcRenderer.send('terminal:kill'),
+  onOutput: (cb: (data: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, data: string): void => cb(data)
+    ipcRenderer.on('terminal:output', listener)
+    return () => ipcRenderer.off('terminal:output', listener)
+  }
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)
