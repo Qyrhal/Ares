@@ -7,7 +7,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
   getSessions, createSession, updateSession, deleteSession,
   getMessages, addMessage, deleteMessage,
-  getSettings, setSettings, getWorkspacePath, setWorkspacePath
+  getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects
 } from './db'
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
@@ -138,6 +138,7 @@ function registerIpcHandlers(): void {
   // Workspace
   ipcMain.handle('workspace:getPath', () => getWorkspacePath())
   ipcMain.handle('workspace:setPath', (_, p: string | null) => setWorkspacePath(p))
+  ipcMain.handle('workspace:getRecent', () => getRecentProjects())
 
   // Dialog
   ipcMain.handle('dialog:openFolder', async (_event) => {

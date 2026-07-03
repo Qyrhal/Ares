@@ -62,14 +62,15 @@ export default function App(): React.ReactElement {
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    Promise.all([el.settings.get(), el.db.getSessions(), el.workspace.getPath()])
-      .then(([rawSettings, rawSessions, wp]) => {
+    Promise.all([el.settings.get(), el.db.getSessions(), el.workspace.getPath(), el.workspace.getRecent().catch(() => [])])
+      .then(([rawSettings, rawSessions, wp, recents]) => {
         const settings = parseSettings(rawSettings)
         store.setSettings(settings)
         applyTheme(settings.themeId)
 
         const sessions = rawSessions.map(parseSession)
         store.setSessions(sessions)
+        store.setRecentProjects(Array.isArray(recents) ? recents : [])
 
         if (wp) {
           el.fs.readDir(wp).then((nodes) => store.setWorkspace(wp, nodes))
@@ -298,6 +299,7 @@ export default function App(): React.ReactElement {
       },
       store.settings.permissionMode,
       onToolPermission,
+      workspacePath,
     )
   }, [activeSession, sendMessage, expandMentions, onToolPermission])
 
@@ -348,6 +350,15 @@ export default function App(): React.ReactElement {
     const nodes = await el.fs.readDir(p)
     store.setWorkspace(p, nodes)
     store.setActiveView('explorer')
+    el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
+  }, [])
+
+  const handleSelectProject = useCallback(async (path: string) => {
+    await el.workspace.setPath(path)
+    const nodes = await el.fs.readDir(path)
+    store.setWorkspace(path, nodes)
+    store.setActiveView('explorer')
+    el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
   }, [])
 
   // ── Render ───────────────────────────────────────────────────────────────────
@@ -442,6 +453,9 @@ export default function App(): React.ReactElement {
                   fileNodes={store.fileNodes}
                   apiBaseUrl={store.settings.apiBaseUrl}
                   apiKey={store.settings.apiKey}
+                  recentProjects={store.recentProjects}
+                  onSelectProject={handleSelectProject}
+                  onOpenFinder={handleOpenFolder}
                 />
               </>
             ) : (

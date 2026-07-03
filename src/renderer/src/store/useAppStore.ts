@@ -36,6 +36,7 @@ interface AppStore {
   // ── Workspace ───────────────────────────────────────────────────────────────
   workspacePath: string | null
   fileNodes: FileNode[]
+  recentProjects: string[]
 
   // ── Settings ────────────────────────────────────────────────────────────────
   settings: AppSettings
@@ -75,6 +76,7 @@ interface AppStore {
 
   setWorkspace: (path: string | null, nodes: FileNode[]) => void
   setFileNodes: (nodes: FileNode[]) => void
+  setRecentProjects: (paths: string[]) => void
 
   setSettings: (s: AppSettings) => void
 }
@@ -97,6 +99,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   workspacePath: null,
   fileNodes: [],
+  recentProjects: [],
 
   settings: DEFAULT_SETTINGS,
 
@@ -230,6 +233,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Workspace actions ────────────────────────────────────────────────────────
   setWorkspace: (path, nodes) => set({ workspacePath: path, fileNodes: nodes }),
+  setRecentProjects: (paths) => set({ recentProjects: paths }),
 
   setFileNodes: (nodes) => set({ fileNodes: nodes }),
 

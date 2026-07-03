@@ -1,8 +1,9 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { File, FileText, Image, FileCode, Search } from 'lucide-react'
-import { PaperclipIcon, SendIcon, XIcon, FolderOpenIcon, TerminalIcon } from '@animateicons/react/lucide'
+import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { FileAttachment, FileNode } from '@/types'
+import { ProjectPicker } from '@/components/ProjectPicker'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
   AttachmentDescription, AttachmentActions, AttachmentAction, AttachmentGroup
@@ -26,6 +27,9 @@ interface InputBarProps {
   fileNodes?: FileNode[]
   apiBaseUrl?: string
   apiKey?: string
+  recentProjects?: string[]
+  onSelectProject?: (path: string) => void
+  onOpenFinder?: () => void
 }
 
 function fileIcon(type: string): React.ReactElement {
@@ -49,7 +53,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -331,6 +335,17 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
+      {onOpenFinder && (
+        <div className="mb-2">
+          <ProjectPicker
+            workspacePath={workspacePath ?? null}
+            recentProjects={recentProjects}
+            onSelectPath={onSelectProject ?? (() => {})}
+            onOpenFinder={onOpenFinder}
+          />
+        </div>
+      )}
+
       {attachments.length > 0 && (
         <AttachmentGroup className="mb-2">
           {attachments.map((att) => (
@@ -472,15 +487,6 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
           <SendIcon className="size-3.5" />
         </button>
 
-        <button
-          type="button"
-          onClick={onRevealInExplorer}
-          className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          aria-label="Reveal in sidebar"
-          title="Reveal in sidebar"
-        >
-          <FolderOpenIcon className="size-3.5" />
-        </button>
       </div>
 
       <p className="mt-1.5 text-center text-[10px] text-muted-foreground/40">
