@@ -12,6 +12,8 @@ export interface RawMessage {
   tool_output: string | null; created_at: number
 }
 
+import type { GitStatus, GitBranches } from './types'
+
 declare global {
   interface Window {
     electron: {
@@ -39,6 +41,22 @@ declare global {
         readDir(path: string): Promise<FileNode[]>
         readFile(path: string): Promise<string>
         writeFile(path: string, content: string): Promise<void>
+      }
+      git: {
+        status(cwd: string): Promise<GitStatus>
+        stageFile(cwd: string, path: string): Promise<void>
+        unstageFile(cwd: string, path: string): Promise<void>
+        stageAll(cwd: string): Promise<void>
+        unstageAll(cwd: string): Promise<void>
+        discardFile(cwd: string, path: string): Promise<void>
+        commit(cwd: string, message: string): Promise<void>
+        push(cwd: string): Promise<string>
+        pull(cwd: string): Promise<string>
+        branches(cwd: string): Promise<GitBranches>
+        checkout(cwd: string, branch: string): Promise<void>
+        createBranch(cwd: string, branch: string): Promise<void>
+        diff(cwd: string, path: string, staged: boolean): Promise<string>
+        init(cwd: string): Promise<void>
       }
     }
   }
