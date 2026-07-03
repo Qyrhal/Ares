@@ -39,7 +39,7 @@ describe('FileTree — no workspace', () => {
 describe('FileTree — with workspace', () => {
   it('shows workspace name in header', () => {
     render(<FileTree {...makeProps()} />)
-    expect(screen.getByText('project')).toBeInTheDocument()
+    expect(screen.getByText('/project')).toBeInTheDocument()
   })
 
   it('shows "Empty folder" when no nodes', () => {

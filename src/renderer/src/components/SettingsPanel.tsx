@@ -48,12 +48,11 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
 
   useEffect(() => { setForm(settings) }, [settings])
 
-  // ── Auto-fetch models when URL or key changes ──────────────────────────────
+  // Auto-fetch models when URL or key changes
   useEffect(() => {
     const baseUrl = form.apiBaseUrl.replace(/\/$/, '')
     if (!baseUrl) return
 
-    // Debounce: wait 600ms after last change before fetching
     const timer = setTimeout(async () => {
       setConnStatus('loading')
       setConnMessage('')
@@ -128,12 +127,11 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-2xl px-8 py-10">
         <h1 className="mb-1 text-xl font-semibold text-foreground">Settings</h1>
-        <p className="mb-8 text-sm text-muted-foreground">Configure your AI provider and preferences.</p>
+        <p className="mb-8 text-sm text-muted-foreground">Configure your AI endpoint and preferences.</p>
 
-        {/* ── AI Provider ───────────────────────────────────────────────── */}
-        <Section title="AI Provider" description="Connect to any OpenAI-compatible endpoint.">
+        {/* ── AI Endpoint ────────────────────────────────────────────── */}
+        <Section title="AI endpoint" description="Connect to any OpenAI-compatible API. Ares uses Pi Agent as its runtime, so it works with any server that speaks the OpenAI chat completions protocol.">
 
-          {/* Preset buttons */}
           <div>
             <label className="mb-2 block text-xs font-medium text-muted-foreground">Quick select</label>
             <div className="flex flex-wrap gap-2">
@@ -171,7 +169,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
                   type={showKey ? 'text' : 'password'}
                   value={form.apiKey}
                   onChange={(e) => set('apiKey', e.target.value)}
-                  placeholder="sk-…"
+                  placeholder="sk-… (leave blank for local servers)"
                   className={cn(INPUT, 'pr-10')}
                 />
                 <button
@@ -196,7 +194,6 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
               </Button>
             </div>
 
-            {/* Connection status feedback */}
             {connStatus !== 'idle' && (
               <div className={cn(
                 'mt-2 flex items-center gap-2 rounded-md border px-3 py-2 text-xs',
@@ -212,7 +209,6 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
             )}
           </Field>
 
-          {/* Model selector */}
           <Field
             label="Default model"
             hint={connStatus === 'ok'
@@ -275,7 +271,6 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
                   )}
                   style={active ? { ['--tw-ring-color' as string]: theme.primary } : {}}
                 >
-                  {/* Swatch */}
                   <span
                     className="flex size-9 items-center justify-center rounded-full shadow-md transition-transform group-hover:scale-110"
                     style={{ backgroundColor: theme.primary }}
@@ -296,7 +291,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
         </Section>
 
         {/* ── System prompt ──────────────────────────────────────────── */}
-        <Section title="System prompt" description="Custom instructions injected before every AI request. Use this to set behaviour, tone, or constraints.">
+        <Section title="System prompt" description="Custom instructions injected before every AI request.">
           <Field label="System prompt">
             <textarea
               value={form.systemPrompt}
@@ -355,7 +350,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
         <Section title="About" className="mt-10">
           <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground space-y-1">
             <p><span className="font-medium text-foreground">Ares</span> v0.1.0</p>
-            <p>OpenCode-style AI desktop app — Electron · React · Tailwind v4 · shadcn.</p>
+            <p>OpenCode-style AI desktop app — Electron · React · Tailwind v4 · shadcn · Pi Agent.</p>
           </div>
         </Section>
       </div>

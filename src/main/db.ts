@@ -47,8 +47,8 @@ interface Store {
 
 const DEFAULT_SETTINGS: DbSettings = {
   apiKey: '',
-  apiBaseUrl: 'https://api.openai.com/v1',
-  defaultModel: 'gpt-4o-mini',
+  apiBaseUrl: '',
+  defaultModel: '',
   themeId: 'red',
   systemPrompt: '',
   permissionMode: 'ask',
