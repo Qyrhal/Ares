@@ -6,10 +6,11 @@ import type { Session, Message, AppSettings } from '@/types'
 export const RawSessionSchema = z.object({
   id: z.string(),
   title: z.string(),
-  model: z.string(),
+  model: z.string().default(''),
   created_at: z.number(),
   updated_at: z.number(),
   message_count: z.number().optional().default(0),
+  pinned: z.boolean().optional().default(false),
 })
 
 export const RawMessageSchema = z.object({
@@ -30,6 +31,8 @@ export const AppSettingsSchema = z.object({
   apiBaseUrl: z.string().default('https://api.openai.com/v1'),
   defaultModel: z.string().default('gpt-4o-mini'),
   themeId: z.string().default('red'),
+  systemPrompt: z.string().default(''),
+  permissionMode: z.enum(['ask', 'auto', 'yolo']).default('ask'),
 })
 
 // ── Parsed domain types ────────────────────────────────────────────────────────
@@ -43,6 +46,7 @@ export function parseSession(raw: unknown): Session {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
     messageCount: r.message_count,
+    pinned: r.pinned,
   }
 }
 

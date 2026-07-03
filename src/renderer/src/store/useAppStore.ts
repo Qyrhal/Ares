@@ -6,6 +6,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiBaseUrl: 'https://api.openai.com/v1',
   defaultModel: 'gpt-4o-mini',
   themeId: 'red',
+  systemPrompt: '',
+  permissionMode: 'ask',
 }
 
 function tabKey(t: Tab): string {
@@ -59,6 +61,7 @@ interface AppStore {
   addSession: (session: Session) => void
   updateSession: (id: string, patch: Partial<Session>) => void
   removeSession: (id: string) => void
+  togglePinSession: (id: string) => void
 
   setMessages: (msgs: Message[]) => void
   appendMessage: (msg: Message) => void
@@ -190,6 +193,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   removeSession: (id) => set((s) => ({
     sessions: s.sessions.filter((s) => s.id !== id),
+  })),
+
+  togglePinSession: (id) => set((s) => ({
+    sessions: s.sessions.map((s) =>
+      s.id === id ? { ...s, pinned: !s.pinned } : s
+    ),
   })),
 
   // ── Message actions ──────────────────────────────────────────────────────────

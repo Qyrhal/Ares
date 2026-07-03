@@ -13,7 +13,7 @@ const electronMock = {
     deleteMessage: vi.fn().mockResolvedValue(undefined),
   },
   settings: {
-    get: vi.fn().mockResolvedValue({ apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red' }),
+    get: vi.fn().mockResolvedValue({ apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
     set: vi.fn().mockResolvedValue(undefined),
   },
   workspace: {
@@ -45,6 +45,16 @@ const electronMock = {
     resize: vi.fn().mockResolvedValue(undefined),
     kill: vi.fn(),
     onOutput: vi.fn().mockReturnValue(() => {}),
+  },
+  ext: {
+    fetchModels: vi.fn().mockResolvedValue({ data: [{ id: 'gpt-4o' }] }),
+  },
+  tools: {
+    readFile: vi.fn().mockResolvedValue('file content'),
+    writeFile: vi.fn().mockResolvedValue(undefined),
+    editFile: vi.fn().mockResolvedValue(undefined),
+    createFile: vi.fn().mockResolvedValue(undefined),
+    listFiles: vi.fn().mockResolvedValue([{ name: 'test.ts', path: '/test.ts', isDirectory: false }]),
   },
 }
 

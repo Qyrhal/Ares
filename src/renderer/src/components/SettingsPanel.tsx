@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save } from 'lucide-react'
 import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
 import { AppSettings } from '@/types'
@@ -6,6 +6,18 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { THEMES, applyTheme, DEFAULT_THEME_ID } from '@/lib/theme'
+
+const el = window.electron
+
+const SKILL_PROMPT = `You are an AI coding assistant with full read/write access to the user's workspace. You can perform the following operations:
+
+1. readFile(path) — Read the full contents of any file.
+2. writeFile(path, content) — Write new content to a file (creates directories, overwrites existing).
+3. editFile(path, oldString, newString) — Find-and-replace text in an existing file. Use this for targeted changes.
+4. createFile(path, content) — Create a brand new file (fails if it already exists).
+5. listFiles(dir) — List files and directories (excludes hidden files and node_modules).
+
+ALWAYS prefer editFile over writeFile for making changes to existing files — it preserves surrounding context. Use writeFile only when replacing an entire file or creating a file that already needs to exist.`
 
 interface SettingsPanelProps {
   settings: AppSettings
@@ -35,33 +47,18 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
   useEffect(() => { setForm(settings) }, [settings])
 
   // ── Auto-fetch models when URL or key changes ──────────────────────────────
-  const fetchController = useRef<AbortController | null>(null)
   useEffect(() => {
     const baseUrl = form.apiBaseUrl.replace(/\/$/, '')
     if (!baseUrl) return
 
     // Debounce: wait 600ms after last change before fetching
     const timer = setTimeout(async () => {
-      fetchController.current?.abort()
-      const ctrl = new AbortController()
-      fetchController.current = ctrl
-
       setConnStatus('loading')
       setConnMessage('')
       setFetchedModels([])
 
       try {
-        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-        if (form.apiKey) headers['Authorization'] = `Bearer ${form.apiKey}`
-
-        const res = await fetch(`${baseUrl}/models`, {
-          headers,
-          signal: ctrl.signal,
-        })
-
-        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
-
-        const json = await res.json()
+        const json = await el.ext.fetchModels(baseUrl, form.apiKey)
         const models: SelectOption[] = (json.data ?? [])
           .map((m: { id: string }) => ({ value: m.id, label: m.id }))
           .sort((a: SelectOption, b: SelectOption) => a.value.localeCompare(b.value))
@@ -104,20 +101,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
     setFetchedModels([])
 
     try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
-
-      const res = await fetch(`${baseUrl}/models`, {
-        method: 'GET',
-        headers,
-        signal: AbortSignal.timeout(10_000)
-      })
-
-      if (!res.ok) {
-        throw new Error(`HTTP ${res.status} ${res.statusText}`)
-      }
-
-      const json = await res.json()
+      const json = await el.ext.fetchModels(baseUrl, apiKey)
       const models: SelectOption[] = (json.data ?? [])
         .map((m: { id: string }) => ({ value: m.id, label: m.id }))
         .sort((a: SelectOption, b: SelectOption) => a.value.localeCompare(b.value))
@@ -307,6 +291,53 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
               )
             })}
           </div>
+        </Section>
+
+        {/* ── System prompt ──────────────────────────────────────────── */}
+        <Section title="System prompt" description="Custom instructions injected before every AI request. Use this to set behaviour, tone, or constraints.">
+          <Field label="System prompt">
+            <textarea
+              value={form.systemPrompt}
+              onChange={(e) => set('systemPrompt', e.target.value)}
+              placeholder="You are a helpful coding assistant..."
+              rows={4}
+              className="input-field min-h-[80px] resize-y text-xs leading-relaxed"
+            />
+          </Field>
+
+          <Field label="Skill prompt (auto-injected)" hint="This is automatically added so the AI knows its capabilities. Not editable.">
+            <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono">
+              {SKILL_PROMPT.trim()}
+            </div>
+          </Field>
+        </Section>
+
+        {/* ── Permissions ──────────────────────────────────────────────── */}
+        <Section title="Permissions" description="Control how tool calls are handled.">
+          <Field label="Permission mode">
+            <div className="flex flex-wrap gap-2">
+              {([
+                { value: 'ask', label: 'Ask', desc: 'Prompt for every tool call' },
+                { value: 'auto', label: 'Auto', desc: 'Auto-approve reads, ask for writes' },
+                { value: 'yolo', label: 'YOLO', desc: 'Auto-approve everything' },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set('permissionMode', opt.value)}
+                  className={cn(
+                    'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors',
+                    form.permissionMode === opt.value
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
+                  )}
+                >
+                  <span className="text-xs font-medium">{opt.label}</span>
+                  <span className="text-[10px] opacity-70">{opt.desc}</span>
+                </button>
+              ))}
+            </div>
+          </Field>
         </Section>
 
         {/* Save */}

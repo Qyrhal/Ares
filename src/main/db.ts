@@ -10,6 +10,7 @@ export interface DbSession {
   created_at: number
   updated_at: number
   message_count?: number
+  pinned?: boolean
 }
 
 export interface DbMessage {
@@ -30,6 +31,8 @@ export interface DbSettings {
   apiBaseUrl: string
   defaultModel: string
   themeId: string
+  systemPrompt: string
+  permissionMode: string
 }
 
 interface Store {
@@ -43,7 +46,9 @@ const DEFAULT_SETTINGS: DbSettings = {
   apiKey: '',
   apiBaseUrl: 'https://api.openai.com/v1',
   defaultModel: 'gpt-4o-mini',
-  themeId: 'red'
+  themeId: 'red',
+  systemPrompt: '',
+  permissionMode: 'ask',
 }
 
 function getStorePath(): string {
@@ -68,7 +73,11 @@ export function getSessions(): DbSession[] {
   const { sessions, messages } = readStore()
   return sessions
     .map((s) => ({ ...s, message_count: messages.filter((m) => m.session_id === s.id).length }))
-    .sort((a, b) => b.updated_at - a.updated_at)
+    .sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1
+      if (!a.pinned && b.pinned) return 1
+      return b.updated_at - a.updated_at
+    })
 }
 
 export function createSession(title: string, model = 'gpt-4o-mini'): DbSession {
@@ -81,7 +90,7 @@ export function createSession(title: string, model = 'gpt-4o-mini'): DbSession {
   return session
 }
 
-export function updateSession(id: string, updates: Partial<Pick<DbSession, 'title' | 'model'>>): void {
+export function updateSession(id: string, updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned'>>): void {
   const store = readStore()
   store.sessions = store.sessions.map((s) =>
     s.id === id ? { ...s, ...updates, updated_at: Date.now() } : s

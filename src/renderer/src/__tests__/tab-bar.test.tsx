@@ -25,7 +25,7 @@ beforeEach(() => {
     tabs: [], activeTabId: null,
     sessions: [], messages: [], isLoading: false,
     workspacePath: null, fileNodes: [],
-    settings: { apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red' },
+    settings: { apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red', systemPrompt: '', permissionMode: 'ask' },
   })
   vi.clearAllMocks()
 })

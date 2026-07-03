@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, session } from 'electron'
 import type NodePty from 'node-pty'
 import { join } from 'path'
 import fs from 'fs'
@@ -71,6 +71,23 @@ function createWindow(): void {
   })
 
   win.on('ready-to-show', () => win.show())
+
+  // Bypass CORS for API calls made from the renderer (OpenAI SDK, etc.)
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': ['*'],
+    'Access-Control-Allow-Methods': ['GET, POST, PUT, DELETE, PATCH, OPTIONS'],
+    'Access-Control-Allow-Headers': ['*'],
+    'Access-Control-Max-Age': ['86400'],
+  }
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        ...corsHeaders,
+      },
+    })
+  })
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
@@ -96,6 +113,9 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+// Disable CORS for API calls from the renderer (desktop app, no security risk)
+app.commandLine.appendSwitch('disable-web-security')
 
 function registerIpcHandlers(): void {
   // DB – sessions
@@ -161,6 +181,43 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => getFileDiff(cwd, p, staged))
   ipcMain.handle('git:log',            (_, cwd: string, limit?: number) => getLog(cwd, limit))
   ipcMain.handle('git:init',           (_, cwd: string) => initRepo(cwd))
+
+  // API — proxy fetch through main process to avoid CORS
+  ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string) => {
+    const url = baseUrl.replace(/\/$/, '') + '/models'
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) })
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+    return res.json()
+  })
+
+  // Tools — file operations for AI to read/edit/create files
+  ipcMain.handle('tools:readFile', async (_, p: string) => {
+    return fs.readFileSync(p, 'utf-8')
+  })
+  ipcMain.handle('tools:writeFile', async (_, p: string, content: string) => {
+    fs.mkdirSync(nodePath.dirname(p), { recursive: true })
+    fs.writeFileSync(p, content, 'utf-8')
+  })
+  ipcMain.handle('tools:editFile', async (_, p: string, oldString: string, newString: string) => {
+    const content = fs.readFileSync(p, 'utf-8')
+    if (!content.includes(oldString)) {
+      throw new Error(`Could not find "${oldString.slice(0, 50)}..." in ${p}`)
+    }
+    const updated = content.replace(oldString, newString)
+    fs.writeFileSync(p, updated, 'utf-8')
+  })
+  ipcMain.handle('tools:createFile', async (_, p: string, content: string) => {
+    fs.mkdirSync(nodePath.dirname(p), { recursive: true })
+    fs.writeFileSync(p, content, 'utf-8')
+  })
+  ipcMain.handle('tools:listFiles', async (_, dir: string) => {
+    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    return entries
+      .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
+      .map((e) => ({ name: e.name, path: nodePath.join(dir, e.name), isDirectory: e.isDirectory() }))
+  })
 
   // Terminal
   ipcMain.handle('terminal:create', (_, cwd: string) => {
