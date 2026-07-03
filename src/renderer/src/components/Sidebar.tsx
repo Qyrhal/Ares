@@ -4,6 +4,7 @@ import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
 import { Button } from '@/components/ui/button'
 import { FileTree } from './FileTree'
+import { GitPane } from './GitPane'
 
 interface SidebarProps {
   mode: ActivityView
@@ -27,21 +28,26 @@ export function Sidebar({
 }: SidebarProps): React.ReactElement {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
-      {mode === 'chat'
-        ? <SessionsPane
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            onNew={onNewSession}
-            onSelect={onSelectSession}
-            onDelete={onDeleteSession}
-          />
-        : <FileTree
-            nodes={fileNodes}
-            workspacePath={workspacePath}
-            onOpenFile={onOpenFile}
-            onOpenFolder={onOpenFolder}
-          />
-      }
+      {mode === 'chat' && (
+        <SessionsPane
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onNew={onNewSession}
+          onSelect={onSelectSession}
+          onDelete={onDeleteSession}
+        />
+      )}
+      {mode === 'explorer' && (
+        <FileTree
+          nodes={fileNodes}
+          workspacePath={workspacePath}
+          onOpenFile={onOpenFile}
+          onOpenFolder={onOpenFolder}
+        />
+      )}
+      {mode === 'git' && (
+        <GitPane workspacePath={workspacePath} />
+      )}
     </aside>
   )
 }

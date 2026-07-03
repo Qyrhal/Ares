@@ -1,5 +1,5 @@
 import React from 'react'
-import { MessageSquare, FolderOpen, Settings } from 'lucide-react'
+import { MessageSquare, FolderOpen, GitBranch, Settings } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ActivityView } from '@/types'
 
@@ -11,6 +11,7 @@ interface ActivityBarProps {
 const TOP_ITEMS: { view: ActivityView; icon: React.FC<{ className?: string }>; label: string }[] = [
   { view: 'chat',     icon: MessageSquare, label: 'Chat' },
   { view: 'explorer', icon: FolderOpen,    label: 'Explorer' },
+  { view: 'git',      icon: GitBranch,     label: 'Source Control' },
 ]
 
 export function ActivityBar({ activeView, onChangeView }: ActivityBarProps): React.ReactElement {

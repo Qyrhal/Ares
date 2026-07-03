@@ -8,6 +8,11 @@ import {
   getMessages, addMessage, deleteMessage,
   getSettings, setSettings, getWorkspacePath, setWorkspacePath
 } from './db'
+import {
+  getStatus, stageFile, unstageFile, stageAll, unstageAll,
+  discardFile, commit, push, pull,
+  getBranches, checkoutBranch, createBranch, getFileDiff, initRepo
+} from './git'
 
 interface FileNode {
   name: string
@@ -122,4 +127,20 @@ function registerIpcHandlers(): void {
   ipcMain.handle('fs:writeFile', (_, p: string, content: string) => {
     fs.writeFileSync(p, content, 'utf-8')
   })
+
+  // Git
+  ipcMain.handle('git:status',         (_, cwd: string) => getStatus(cwd))
+  ipcMain.handle('git:stageFile',      (_, cwd: string, p: string) => stageFile(cwd, p))
+  ipcMain.handle('git:unstageFile',    (_, cwd: string, p: string) => unstageFile(cwd, p))
+  ipcMain.handle('git:stageAll',       (_, cwd: string) => stageAll(cwd))
+  ipcMain.handle('git:unstageAll',     (_, cwd: string) => unstageAll(cwd))
+  ipcMain.handle('git:discardFile',    (_, cwd: string, p: string) => discardFile(cwd, p))
+  ipcMain.handle('git:commit',         (_, cwd: string, msg: string) => commit(cwd, msg))
+  ipcMain.handle('git:push',           (_, cwd: string) => push(cwd))
+  ipcMain.handle('git:pull',           (_, cwd: string) => pull(cwd))
+  ipcMain.handle('git:branches',       (_, cwd: string) => getBranches(cwd))
+  ipcMain.handle('git:checkout',       (_, cwd: string, branch: string) => checkoutBranch(cwd, branch))
+  ipcMain.handle('git:createBranch',   (_, cwd: string, branch: string) => createBranch(cwd, branch))
+  ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => getFileDiff(cwd, p, staged))
+  ipcMain.handle('git:init',           (_, cwd: string) => initRepo(cwd))
 }

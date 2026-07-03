@@ -49,7 +49,30 @@ export type Tab =
   | { type: 'session'; id: string; title: string }
   | { type: 'file'; path: string; name: string; isDirty: boolean }
 
-export type ActivityView = 'chat' | 'explorer' | 'settings'
+export type ActivityView = 'chat' | 'explorer' | 'git' | 'settings'
+
+export interface GitFile {
+  path: string
+  originalPath?: string
+  index: string
+  working: string
+}
+
+export interface GitStatus {
+  hasRepo: boolean
+  branch: string
+  upstream: string | null
+  ahead: number
+  behind: number
+  staged: GitFile[]
+  unstaged: GitFile[]
+  untracked: GitFile[]
+}
+
+export interface GitBranches {
+  local: string[]
+  current: string
+}
 
 export type Model = {
   id: string

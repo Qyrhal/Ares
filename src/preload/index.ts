@@ -31,7 +31,24 @@ const nativeFs = {
   writeFile: (p: string, content: string) => ipcRenderer.invoke('fs:writeFile', p, content)
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs }
+const nativeGit = {
+  status:        (cwd: string) => ipcRenderer.invoke('git:status', cwd),
+  stageFile:     (cwd: string, p: string) => ipcRenderer.invoke('git:stageFile', cwd, p),
+  unstageFile:   (cwd: string, p: string) => ipcRenderer.invoke('git:unstageFile', cwd, p),
+  stageAll:      (cwd: string) => ipcRenderer.invoke('git:stageAll', cwd),
+  unstageAll:    (cwd: string) => ipcRenderer.invoke('git:unstageAll', cwd),
+  discardFile:   (cwd: string, p: string) => ipcRenderer.invoke('git:discardFile', cwd, p),
+  commit:        (cwd: string, msg: string) => ipcRenderer.invoke('git:commit', cwd, msg),
+  push:          (cwd: string) => ipcRenderer.invoke('git:push', cwd),
+  pull:          (cwd: string) => ipcRenderer.invoke('git:pull', cwd),
+  branches:      (cwd: string) => ipcRenderer.invoke('git:branches', cwd),
+  checkout:      (cwd: string, branch: string) => ipcRenderer.invoke('git:checkout', cwd, branch),
+  createBranch:  (cwd: string, branch: string) => ipcRenderer.invoke('git:createBranch', cwd, branch),
+  diff:          (cwd: string, p: string, staged: boolean) => ipcRenderer.invoke('git:diff', cwd, p, staged),
+  init:          (cwd: string) => ipcRenderer.invoke('git:init', cwd),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)
