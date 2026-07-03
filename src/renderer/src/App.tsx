@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { FileNode, Tab, FileAttachment, Message } from '@/types'
+import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TabBar } from '@/components/TabBar'
@@ -297,9 +297,10 @@ export default function App(): React.ReactElement {
         store.upsertMessage(streamingId, { ...streamingMsg, content: `**Error:** ${err.message}`, isStreaming: false })
         store.setLoading(false)
       },
-      store.settings.permissionMode,
+      (sess.permissionMode ?? store.settings.permissionMode) as PermissionMode,
       onToolPermission,
       workspacePath,
+      sess.effort ?? 'medium',
     )
   }, [activeSession, sendMessage, expandMentions, onToolPermission])
 
@@ -456,6 +457,18 @@ export default function App(): React.ReactElement {
                   recentProjects={store.recentProjects}
                   onSelectProject={handleSelectProject}
                   onOpenFinder={handleOpenFolder}
+                  currentModel={activeSession.model || store.settings.defaultModel}
+                  messages={store.messages}
+                  effort={activeSession.effort ?? 'medium'}
+                  onEffortChange={(e) => {
+                    store.updateSession(activeSession.id, { effort: e as EffortLevel })
+                    el.db.updateSession(activeSession.id, { effort: e })
+                  }}
+                  permissionMode={activeSession.permissionMode ?? store.settings.permissionMode}
+                  onPermissionModeChange={(m) => {
+                    store.updateSession(activeSession.id, { permissionMode: m })
+                    el.db.updateSession(activeSession.id, { permissionMode: m })
+                  }}
                 />
               </>
             ) : (
