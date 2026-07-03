@@ -46,6 +46,13 @@ declare global {
         rename(oldPath: string, newPath: string): Promise<void>
         delete(path: string): Promise<void>
       }
+      terminal: {
+        create(cwd: string): Promise<void>
+        write(data: string): void
+        resize(cols: number, rows: number): Promise<void>
+        kill(): void
+        onOutput(cb: (data: string) => void): () => void
+      }
       git: {
         status(cwd: string): Promise<GitStatus>
         stageFile(cwd: string, path: string): Promise<void>

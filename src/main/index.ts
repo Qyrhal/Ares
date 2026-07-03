@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import type NodePty from 'node-pty'
 import { join } from 'path'
 import fs from 'fs'
 import nodePath from 'path'
@@ -13,6 +14,8 @@ import {
   discardFile, commit, push, pull,
   getBranches, checkoutBranch, createBranch, getFileDiff, initRepo
 } from './git'
+
+let ptyProcess: NodePty.IPty | null = null
 
 interface FileNode {
   name: string
@@ -155,4 +158,32 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:createBranch',   (_, cwd: string, branch: string) => createBranch(cwd, branch))
   ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => getFileDiff(cwd, p, staged))
   ipcMain.handle('git:init',           (_, cwd: string) => initRepo(cwd))
+
+  // Terminal
+  ipcMain.handle('terminal:create', (_, cwd: string) => {
+    const [win] = BrowserWindow.getAllWindows()
+    if (!win) return
+    if (ptyProcess) { try { ptyProcess.kill() } catch (_e) {} ptyProcess = null }
+    try {
+      const nodePty = require('node-pty') as typeof NodePty
+      const shellBin = process.env.SHELL || '/bin/zsh'
+      ptyProcess = nodePty.spawn(shellBin, [], {
+        name: 'xterm-256color',
+        cwd: cwd || process.env.HOME || '/',
+        env: { ...process.env } as Record<string, string>,
+        cols: 80,
+        rows: 24,
+      })
+      ptyProcess.onData((data) => {
+        if (!win.isDestroyed()) win.webContents.send('terminal:output', data)
+      })
+      ptyProcess.onExit(() => { ptyProcess = null })
+    } catch (err) {
+      const msg = `\r\n\x1b[31mFailed to start terminal: ${(err as Error).message}\x1b[0m\r\n`
+      if (!win.isDestroyed()) win.webContents.send('terminal:output', msg)
+    }
+  })
+  ipcMain.on('terminal:input',  (_, data: string) => { ptyProcess?.write(data) })
+  ipcMain.handle('terminal:resize', (_, cols: number, rows: number) => { ptyProcess?.resize(cols, rows) })
+  ipcMain.on('terminal:kill',   () => { if (ptyProcess) { try { ptyProcess.kill() } catch (_e) {} ptyProcess = null } })
 }

@@ -1,11 +1,13 @@
 import React from 'react'
-import { MessageSquare, FolderOpen, GitBranch, Settings } from 'lucide-react'
+import { MessageSquare, FolderOpen, GitBranch, Settings, SquareTerminal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { ActivityView } from '@/types'
 
 interface ActivityBarProps {
   activeView: ActivityView
   onChangeView: (v: ActivityView) => void
+  terminalOpen: boolean
+  onToggleTerminal: () => void
 }
 
 const TOP_ITEMS: { view: ActivityView; icon: React.FC<{ className?: string }>; label: string }[] = [
@@ -14,7 +16,7 @@ const TOP_ITEMS: { view: ActivityView; icon: React.FC<{ className?: string }>; l
   { view: 'git',      icon: GitBranch,     label: 'Source Control' },
 ]
 
-export function ActivityBar({ activeView, onChangeView }: ActivityBarProps): React.ReactElement {
+export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTerminal }: ActivityBarProps): React.ReactElement {
   return (
     <div className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-card py-2 gap-1">
       {TOP_ITEMS.map(({ view, icon: Icon, label }) => (
@@ -35,6 +37,20 @@ export function ActivityBar({ activeView, onChangeView }: ActivityBarProps): Rea
 
       {/* Spacer */}
       <div className="flex-1" />
+
+      {/* Terminal toggle */}
+      <button
+        title="Terminal (⌘`)"
+        onClick={onToggleTerminal}
+        className={cn(
+          'flex size-9 items-center justify-center rounded-lg transition-colors',
+          terminalOpen
+            ? 'bg-primary/15 text-primary'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+        )}
+      >
+        <SquareTerminal className="size-5" />
+      </button>
 
       {/* Settings at the bottom */}
       <button

@@ -12,6 +12,7 @@ import { useAI } from '@/hooks/useAI'
 import { FileAttachment } from '@/types'
 import type { RawSession, RawMessage } from './globals'
 import { applyTheme } from '@/lib/theme'
+import { TerminalView } from '@/components/TerminalView'
 
 const el = window.electron
 
@@ -58,6 +59,10 @@ export default function App(): React.ReactElement {
   const [workspacePath, setWorkspacePath] = useState<string | null>(null)
   const [fileNodes, setFileNodes] = useState<FileNode[]>([])
 
+  // ── Terminal ───────────────────────────────────────────────────────────────
+  const [terminalOpen, setTerminalOpen] = useState(false)
+  const [terminalKey, setTerminalKey] = useState(0) // bump to restart shell
+
   const { sendMessage } = useAI(settings)
 
   const activeSessionTab = tabs.find(
@@ -91,10 +96,12 @@ export default function App(): React.ReactElement {
     el.db.getMessages(activeSessionTab.id).then((raw) => setMessages(raw.map(toMessage)))
   }, [activeSessionTab?.id])
 
-  // Keyboard shortcut Cmd+N
+  // Keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') { e.preventDefault(); handleNewSession() }
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === 'n') { e.preventDefault(); handleNewSession() }
+      if (e.key === '`') { e.preventDefault(); setTerminalOpen((v) => !v) }
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
@@ -320,7 +327,12 @@ export default function App(): React.ReactElement {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Activity bar */}
-        <ActivityBar activeView={activeView} onChangeView={setActiveView} />
+        <ActivityBar
+          activeView={activeView}
+          onChangeView={setActiveView}
+          terminalOpen={terminalOpen}
+          onToggleTerminal={() => setTerminalOpen((v) => !v)}
+        />
 
         {/* Sidebar — hidden in settings view */}
         {activeView !== 'settings' && (
@@ -354,7 +366,8 @@ export default function App(): React.ReactElement {
             />
           )}
 
-          {/* Content */}
+          {/* Content — min-h-0 lets it shrink when terminal opens */}
+          <div className="flex-1 overflow-hidden min-h-0">
           {activeView === 'settings' ? (
             <SettingsPanel settings={settings} onSave={handleSaveSettings} />
           ) : activeTab?.type === 'file' ? (
@@ -377,6 +390,19 @@ export default function App(): React.ReactElement {
             </>
           ) : (
             <EmptyMain onNewSession={handleNewSession} onOpenFolder={handleOpenFolder} />
+          )}
+          </div>
+
+          {/* Terminal panel */}
+          {terminalOpen && (
+            <div className="h-56 shrink-0 border-t border-border overflow-hidden">
+              <TerminalView
+                key={terminalKey}
+                cwd={workspacePath}
+                onClose={() => setTerminalOpen(false)}
+                onNewTerminal={() => setTerminalKey((k) => k + 1)}
+              />
+            </div>
           )}
         </div>
       </div>
