@@ -75,15 +75,3 @@ export interface GitBranches {
   current: string
 }
 
-export type Model = {
-  id: string
-  label: string
-  provider: 'anthropic' | 'openai' | 'google' | 'custom'
-}
-
-export const MODELS: Model[] = [
-  { id: 'gpt-4o', label: 'GPT-4o', provider: 'openai' },
-  { id: 'gpt-4o-mini', label: 'GPT-4o Mini', provider: 'openai' },
-  { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6', provider: 'anthropic' },
-  { id: 'claude-opus-4-8', label: 'Claude Opus 4.8', provider: 'anthropic' },
-]

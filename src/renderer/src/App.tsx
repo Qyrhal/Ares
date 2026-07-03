@@ -16,6 +16,10 @@ import { applyTheme } from '@/lib/theme'
 
 const el = window.electron
 
+function tabKey(t: Tab): string {
+  return t.type === 'session' ? t.id : t.path
+}
+
 export default function App(): React.ReactElement {
   const store = useAppStore()
   const { sendMessage } = useAI(store.settings)
@@ -70,9 +74,39 @@ export default function App(): React.ReactElement {
     return () => clearInterval(id)
   }, [store.workspacePath])
 
+  // ── Session operations ───────────────────────────────────────────────────────
+  const handleNewSession = useCallback(async () => {
+    const raw = await el.db.createSession('New session', useAppStore.getState().settings.defaultModel)
+    const session = parseSession(raw)
+    store.addSession(session)
+    store.openSessionTab(session)
+    store.setMessages([])
+  }, [])
+
+  const handleSelectSession = useCallback((id: string) => {
+    const session = useAppStore.getState().sessions.find((s) => s.id === id)
+    if (session) store.openSessionTab(session)
+  }, [])
+
+  const handleDeleteSession = useCallback(async (id: string) => {
+    await el.db.deleteSession(id)
+    store.removeSession(id)
+    store.closeTab(id)
+  }, [])
+
+  // Close a tab: session tabs also remove from sidebar + delete from DB.
+  const handleCloseTab = useCallback(async (id: string) => {
+    const { tabs } = useAppStore.getState()
+    const tab = tabs.find((t) => tabKey(t) === id)
+    if (tab?.type === 'session') {
+      await handleDeleteSession(tab.id)
+    } else {
+      useAppStore.getState().closeTab(id)
+    }
+  }, [handleDeleteSession])
+
   // Keyboard shortcuts — reads store state directly to avoid stale closures
   useEffect(() => {
-    const tabKey = (t: Tab): string => (t.type === 'session' ? t.id : t.path)
     const handler = (e: KeyboardEvent): void => {
       if (!(e.metaKey || e.ctrlKey)) return
       const { tabs, activeTabId } = useAppStore.getState()
@@ -80,10 +114,10 @@ export default function App(): React.ReactElement {
       if (e.key === 'n' || e.key === 't') { e.preventDefault(); handleNewSession(); return }
       if (e.key === 'w') {
         e.preventDefault()
-        if (activeTabId) useAppStore.getState().closeTab(activeTabId)
+        if (activeTabId) handleCloseTab(activeTabId)
         return
       }
-      if (e.key === '`') { e.preventDefault(); useAppStore.getState().toggleTerminal(); return }
+      if (e.key === '`' || e.key === 'j') { e.preventDefault(); useAppStore.getState().toggleTerminal(); return }
       if (e.key === '[') {
         e.preventDefault()
         if (!tabs.length) return
@@ -109,27 +143,7 @@ export default function App(): React.ReactElement {
     }
     window.addEventListener('keydown', handler)
     return () => window.removeEventListener('keydown', handler)
-  }, [])
-
-  // ── Session operations ───────────────────────────────────────────────────────
-  const handleNewSession = useCallback(async () => {
-    const raw = await el.db.createSession('New session', useAppStore.getState().settings.defaultModel)
-    const session = parseSession(raw)
-    store.addSession(session)
-    store.openSessionTab(session)
-    store.setMessages([])
-  }, [])
-
-  const handleSelectSession = useCallback((id: string) => {
-    const session = useAppStore.getState().sessions.find((s) => s.id === id)
-    if (session) store.openSessionTab(session)
-  }, [])
-
-  const handleDeleteSession = useCallback(async (id: string) => {
-    await el.db.deleteSession(id)
-    store.removeSession(id)
-    store.closeTab(id)
-  }, [])
+  }, [handleCloseTab])
 
   // ── Send message ─────────────────────────────────────────────────────────────
   const handleSend = useCallback(async (text: string, attachments: FileAttachment[]) => {
@@ -156,6 +170,7 @@ export default function App(): React.ReactElement {
     }
 
     await sendMessage(
+      sess.model || store.settings.defaultModel || 'gpt-4o-mini',
       [...messages, userMsg],
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
@@ -277,7 +292,8 @@ export default function App(): React.ReactElement {
               tabs={store.tabs}
               activeTabId={store.activeTabId}
               onSelectTab={store.selectTab}
-              onCloseTab={store.closeTab}
+              onCloseTab={handleCloseTab}
+              onNewSession={handleNewSession}
             />
           )}
 
