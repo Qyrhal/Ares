@@ -127,6 +127,18 @@ function registerIpcHandlers(): void {
   ipcMain.handle('fs:writeFile', (_, p: string, content: string) => {
     fs.writeFileSync(p, content, 'utf-8')
   })
+  ipcMain.handle('fs:createFile', (_, p: string) => {
+    fs.writeFileSync(p, '', { flag: 'wx' })
+  })
+  ipcMain.handle('fs:createFolder', (_, p: string) => {
+    fs.mkdirSync(p)
+  })
+  ipcMain.handle('fs:rename', (_, oldPath: string, newPath: string) => {
+    fs.renameSync(oldPath, newPath)
+  })
+  ipcMain.handle('fs:delete', (_, p: string) => {
+    fs.rmSync(p, { recursive: true, force: true })
+  })
 
   // Git
   ipcMain.handle('git:status',         (_, cwd: string) => getStatus(cwd))

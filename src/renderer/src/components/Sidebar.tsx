@@ -3,7 +3,7 @@ import { Plus, MessageSquare, Trash2 } from 'lucide-react'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
 import { Button } from '@/components/ui/button'
-import { FileTree } from './FileTree'
+import { FileTree, FileTreeProps } from './FileTree'
 import { GitPane } from './GitPane'
 
 interface SidebarProps {
@@ -19,12 +19,17 @@ interface SidebarProps {
   workspacePath: string | null
   onOpenFile: (node: FileNode) => void
   onOpenFolder: () => void
+  onFsCreateFile: FileTreeProps['onCreateFile']
+  onFsCreateFolder: FileTreeProps['onCreateFolder']
+  onFsRename: FileTreeProps['onRename']
+  onFsDelete: FileTreeProps['onDelete']
 }
 
 export function Sidebar({
   mode,
   sessions, activeSessionId, onNewSession, onSelectSession, onDeleteSession,
-  fileNodes, workspacePath, onOpenFile, onOpenFolder
+  fileNodes, workspacePath, onOpenFile, onOpenFolder,
+  onFsCreateFile, onFsCreateFolder, onFsRename, onFsDelete,
 }: SidebarProps): React.ReactElement {
   return (
     <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
@@ -43,6 +48,10 @@ export function Sidebar({
           workspacePath={workspacePath}
           onOpenFile={onOpenFile}
           onOpenFolder={onOpenFolder}
+          onCreateFile={onFsCreateFile}
+          onCreateFolder={onFsCreateFolder}
+          onRename={onFsRename}
+          onDelete={onFsDelete}
         />
       )}
       {mode === 'git' && (

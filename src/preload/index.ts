@@ -28,7 +28,11 @@ const nativeDialog = {
 const nativeFs = {
   readDir: (p: string) => ipcRenderer.invoke('fs:readDir', p),
   readFile: (p: string) => ipcRenderer.invoke('fs:readFile', p),
-  writeFile: (p: string, content: string) => ipcRenderer.invoke('fs:writeFile', p, content)
+  writeFile: (p: string, content: string) => ipcRenderer.invoke('fs:writeFile', p, content),
+  createFile: (p: string) => ipcRenderer.invoke('fs:createFile', p),
+  createFolder: (p: string) => ipcRenderer.invoke('fs:createFolder', p),
+  rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
+  delete: (p: string) => ipcRenderer.invoke('fs:delete', p),
 }
 
 const nativeGit = {
