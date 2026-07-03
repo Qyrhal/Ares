@@ -23,6 +23,8 @@ export interface Message {
   createdAt: number
 }
 
+export type EffortLevel = 'low' | 'medium' | 'high'
+
 export interface Session {
   id: string
   title: string
@@ -31,6 +33,8 @@ export interface Session {
   updatedAt: number
   messageCount: number
   pinned?: boolean
+  effort?: EffortLevel
+  permissionMode?: PermissionMode
 }
 
 export type PermissionMode = 'ask' | 'auto' | 'yolo'

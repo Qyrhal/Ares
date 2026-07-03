@@ -11,6 +11,8 @@ export interface DbSession {
   updated_at: number
   message_count?: number
   pinned?: boolean
+  effort?: string
+  permissionMode?: string
 }
 
 export interface DbMessage {

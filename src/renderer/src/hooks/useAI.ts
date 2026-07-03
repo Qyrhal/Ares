@@ -162,6 +162,7 @@ export function useAI(settings: AppSettings) {
     permissionMode?: PermissionMode,
     onToolPermission?: ToolPermissionCallback,
     workspacePath?: string | null,
+    effort?: string,
   ): Promise<void> => {
     if (!client) {
       await noKeyFallback(onStream, onDone)
@@ -171,6 +172,8 @@ export function useAI(settings: AppSettings) {
     const apiMessages = messages.map(toApiMessage)
     const systemParts = [SKILL_PROMPT]
     if (workspacePath) systemParts.push(`Current workspace: \`${workspacePath}\``)
+    if (effort === 'low') systemParts.push('Be concise. Keep responses short and direct.')
+    if (effort === 'high') systemParts.push('Be thorough and detailed. Think step by step and cover edge cases.')
     if (settings.systemPrompt?.trim()) systemParts.push(settings.systemPrompt.trim())
     const sysMsg: OpenAI.Chat.Completions.ChatCompletionMessageParam = {
       role: 'system',

@@ -1,8 +1,8 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import { File, FileText, Image, FileCode, Search } from 'lucide-react'
+import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
-import { FileAttachment, FileNode } from '@/types'
+import { FileAttachment, FileNode, Message, PermissionMode } from '@/types'
 import { ProjectPicker } from '@/components/ProjectPicker'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
@@ -30,6 +30,56 @@ interface InputBarProps {
   recentProjects?: string[]
   onSelectProject?: (path: string) => void
   onOpenFinder?: () => void
+  // bottom toolbar
+  currentModel?: string
+  messages?: Message[]
+  effort?: string
+  onEffortChange?: (effort: string) => void
+  permissionMode?: PermissionMode
+  onPermissionModeChange?: (mode: PermissionMode) => void
+}
+
+const PERM_MODES: PermissionMode[] = ['ask', 'auto', 'yolo']
+const PERM_LABELS: Record<PermissionMode, string> = { ask: 'Ask', auto: 'Auto', yolo: 'Yolo' }
+const EFFORT_LEVELS = ['low', 'medium', 'high'] as const
+const EFFORT_LABELS: Record<string, string> = { low: 'Low', medium: 'Med', high: 'High' }
+
+function contextWindow(model: string): number {
+  const m = (model ?? '').toLowerCase()
+  if (m.includes('claude')) return 200000
+  if (m.includes('gpt-4.1') || m.includes('gpt-4o')) return 128000
+  if (m.includes('gpt-4')) return 8192
+  if (m.includes('gpt-3.5')) return 16385
+  if (m.includes('deepseek')) return 64000
+  return 128000
+}
+
+function estimateTokens(messages: Message[]): number {
+  return messages.reduce((sum, m) => sum + Math.ceil((m.content?.length ?? 0) / 4), 0)
+}
+
+function ContextDonut({ used, total }: { used: number; total: number }): React.ReactElement {
+  const pct = total > 0 ? Math.min(used / total, 1) : 0
+  const r = 7
+  const circ = 2 * Math.PI * r
+  const dash = circ * pct
+  const colorClass = pct > 0.8 ? 'text-destructive' : pct > 0.5 ? 'text-amber-400' : 'text-muted-foreground'
+  const pctLabel = `${Math.round(pct * 100)}%`
+  const label = `${used.toLocaleString()} / ${total.toLocaleString()} tokens (${pctLabel})`
+  return (
+    <span title={label} className={cn('shrink-0', colorClass)}>
+      <svg width="18" height="18" viewBox="0 0 18 18">
+        <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
+        <circle
+          cx="9" cy="9" r={r} fill="none"
+          stroke="currentColor" strokeWidth="2.5"
+          strokeDasharray={`${dash} ${circ - dash}`}
+          strokeLinecap="round"
+          transform="rotate(-90 9 9)"
+        />
+      </svg>
+    </span>
+  )
 }
 
 function fileIcon(type: string): React.ReactElement {
@@ -53,7 +103,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -75,13 +125,20 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
   const [cmdCursor, setCmdCursor] = useState(0)
   const [cmdHighlight, setCmdHighlight] = useState(0)
 
-  // model picker state (for /model command)
+  // model picker state (for /model command and bottom bar)
   const [showModelPicker, setShowModelPicker] = useState(false)
   const [modelOptions, setModelOptions] = useState<ModelOption[]>([])
   const [modelSearch, setModelSearch] = useState('')
   const [modelLoading, setModelLoading] = useState(false)
   const [modelError, setModelError] = useState('')
   const [modelHighlight, setModelHighlight] = useState(0)
+
+  // effort dropdown state
+  const [showEffortPicker, setShowEffortPicker] = useState(false)
+  const effortRef = useRef<HTMLDivElement>(null)
+
+  const usedTokens = useMemo(() => estimateTokens(messages), [messages])
+  const ctxWindow = useMemo(() => contextWindow(currentModel), [currentModel])
 
   const flatFiles = useMemo(() => flattenNodes(fileNodes), [fileNodes])
   const filtered = useMemo(() => {
@@ -327,6 +384,15 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
     return () => document.removeEventListener('mousedown', handleClick)
   }, [anyDropdownOpen, closeAll])
 
+  useEffect(() => {
+    if (!showEffortPicker) return
+    const handler = (e: MouseEvent) => {
+      if (effortRef.current && !effortRef.current.contains(e.target as Node)) setShowEffortPicker(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showEffortPicker])
+
   const canSend = (text.trim().length > 0 || attachments.length > 0) && !disabled
 
   return (
@@ -430,51 +496,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
             </div>
           )}
 
-          {/* Model picker (for /model command) */}
-          {showModelPicker && (
-            <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 w-80 overflow-hidden rounded-lg border border-border bg-popover shadow-lg z-50">
-              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
-                <Search className="size-3.5 text-muted-foreground shrink-0" />
-                <input
-                  ref={modelSearchRef}
-                  type="text"
-                  value={modelSearch}
-                  onChange={(e) => { setModelSearch(e.target.value); setModelHighlight(0) }}
-                  placeholder="Search models…"
-                  className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Escape') { e.preventDefault(); setShowModelPicker(false); textareaRef.current?.focus(); return }
-                    if (e.key === 'ArrowDown') { e.preventDefault(); setModelHighlight((p) => Math.min(p + 1, filteredModels.length - 1)); return }
-                    if (e.key === 'ArrowUp') { e.preventDefault(); setModelHighlight((p) => Math.max(p - 1, 0)); return }
-                    if (e.key === 'Enter' && filteredModels[modelHighlight]) { e.preventDefault(); handleModelSelect(filteredModels[modelHighlight].value); return }
-                  }}
-                />
-                {modelLoading && <span className="inline-block size-3 rounded-full border-2 border-muted-foreground/30 border-t-primary/80 animate-spin" />}
-              </div>
-              <div className="max-h-48 overflow-y-auto p-1">
-                {modelError && !modelLoading && (
-                  <p className="px-2 py-3 text-[11px] text-destructive text-center">{modelError}</p>
-                )}
-                {modelLoading && !modelError && (
-                  <p className="px-2 py-3 text-[11px] text-muted-foreground text-center">Loading models…</p>
-                )}
-                {!modelLoading && !modelError && filteredModels.length === 0 && (
-                  <p className="px-2 py-3 text-[11px] text-muted-foreground text-center">No models found</p>
-                )}
-                {filteredModels.map((m, i) => (
-                  <button
-                    key={m.value}
-                    type="button"
-                    className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === modelHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
-                    onMouseDown={(e) => { e.preventDefault(); handleModelSelect(m.value) }}
-                    onMouseEnter={() => setModelHighlight(i)}
-                  >
-                    <span className="truncate">{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* model picker is rendered outside this div — see below */}
         </div>
 
         <button
@@ -489,9 +511,124 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
 
       </div>
 
-      <p className="mt-1.5 text-center text-[10px] text-muted-foreground/40">
-        Ares can make mistakes. Verify important information.
-      </p>
+      {/* Model picker — outside textarea div so it positions relative to outer container */}
+      {showModelPicker && (
+        <div ref={dropdownRef} className="absolute bottom-full left-0 right-0 mb-1 mx-4 w-80 overflow-hidden rounded-lg border border-border bg-popover shadow-lg z-50">
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <Search className="size-3.5 text-muted-foreground shrink-0" />
+            <input
+              ref={modelSearchRef}
+              type="text"
+              value={modelSearch}
+              onChange={(e) => { setModelSearch(e.target.value); setModelHighlight(0) }}
+              placeholder="Search models…"
+              className="flex-1 bg-transparent text-xs text-foreground placeholder:text-muted-foreground focus:outline-none"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') { e.preventDefault(); setShowModelPicker(false); textareaRef.current?.focus(); return }
+                if (e.key === 'ArrowDown') { e.preventDefault(); setModelHighlight((p) => Math.min(p + 1, filteredModels.length - 1)); return }
+                if (e.key === 'ArrowUp') { e.preventDefault(); setModelHighlight((p) => Math.max(p - 1, 0)); return }
+                if (e.key === 'Enter' && filteredModels[modelHighlight]) { e.preventDefault(); handleModelSelect(filteredModels[modelHighlight].value); return }
+              }}
+            />
+            {modelLoading && <span className="inline-block size-3 rounded-full border-2 border-muted-foreground/30 border-t-primary/80 animate-spin" />}
+          </div>
+          <div className="max-h-48 overflow-y-auto p-1">
+            {modelError && !modelLoading && (
+              <p className="px-2 py-3 text-[11px] text-destructive text-center">{modelError}</p>
+            )}
+            {modelLoading && !modelError && (
+              <p className="px-2 py-3 text-[11px] text-muted-foreground text-center">Loading models…</p>
+            )}
+            {!modelLoading && !modelError && filteredModels.length === 0 && (
+              <p className="px-2 py-3 text-[11px] text-muted-foreground text-center">No models found</p>
+            )}
+            {filteredModels.map((m, i) => (
+              <button
+                key={m.value}
+                type="button"
+                className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === modelHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
+                onMouseDown={(e) => { e.preventDefault(); handleModelSelect(m.value) }}
+                onMouseEnter={() => setModelHighlight(i)}
+              >
+                <span className="truncate">{m.label}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Bottom toolbar ─────────────────────────────────────────── */}
+      <div className="mt-2 flex items-center justify-between">
+
+        {/* Left: permission mode */}
+        <button
+          type="button"
+          onClick={() => {
+            const idx = PERM_MODES.indexOf(permissionMode)
+            const next = PERM_MODES[(idx + 1) % PERM_MODES.length]
+            onPermissionModeChange?.(next)
+          }}
+          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          title="Click to cycle permission mode"
+        >
+          <Shield className="size-3 shrink-0" />
+          <span>{PERM_LABELS[permissionMode]}</span>
+        </button>
+
+        {/* Right: model | effort | context */}
+        <div className="flex items-center gap-1">
+          {/* Model chip — opens existing model picker */}
+          <button
+            type="button"
+            onClick={() => { fetchModels(); setShowModelPicker(true); setModelSearch(''); setModelHighlight(0); requestAnimationFrame(() => modelSearchRef.current?.focus()) }}
+            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors max-w-[140px]"
+            title="Change model"
+          >
+            <span className="truncate">{currentModel || 'No model'}</span>
+          </button>
+
+          {/* Separator */}
+          <span className="text-border select-none">|</span>
+
+          {/* Effort picker */}
+          <div ref={effortRef} className="relative">
+            <button
+              type="button"
+              onClick={() => setShowEffortPicker((v) => !v)}
+              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              title="Effort level"
+            >
+              <Zap className="size-3 shrink-0" />
+              <span>{EFFORT_LABELS[effort] ?? 'Med'}</span>
+              <ChevronDown className={cn('size-3 shrink-0 transition-transform', showEffortPicker && 'rotate-180')} />
+            </button>
+            {showEffortPicker && (
+              <div className="absolute bottom-full right-0 mb-1 w-28 overflow-hidden rounded-lg border border-border bg-popover shadow-lg z-50 p-1">
+                {EFFORT_LEVELS.map((lvl) => (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onMouseDown={(e) => { e.preventDefault(); onEffortChange?.(lvl); setShowEffortPicker(false) }}
+                    className={cn(
+                      'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs transition-colors',
+                      effort === lvl ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50'
+                    )}
+                  >
+                    <Zap className="size-3 shrink-0" />
+                    <span className="capitalize">{lvl}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Separator */}
+          <span className="text-border select-none">|</span>
+
+          {/* Context donut */}
+          <ContextDonut used={usedTokens} total={ctxWindow} />
+        </div>
+      </div>
     </div>
   )
 }

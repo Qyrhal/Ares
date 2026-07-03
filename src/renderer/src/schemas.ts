@@ -11,6 +11,8 @@ export const RawSessionSchema = z.object({
   updated_at: z.number(),
   message_count: z.number().optional().default(0),
   pinned: z.boolean().optional().default(false),
+  effort: z.enum(['low', 'medium', 'high']).optional(),
+  permissionMode: z.enum(['ask', 'auto', 'yolo']).optional(),
 })
 
 export const RawMessageSchema = z.object({
@@ -47,6 +49,8 @@ export function parseSession(raw: unknown): Session {
     updatedAt: r.updated_at,
     messageCount: r.message_count,
     pinned: r.pinned,
+    effort: r.effort,
+    permissionMode: r.permissionMode,
   }
 }
 
