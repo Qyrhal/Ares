@@ -36,6 +36,7 @@ export interface AppSettings {
   apiKey: string
   apiBaseUrl: string
   defaultModel: string
+  themeId: string
 }
 
 export interface FileNode {
