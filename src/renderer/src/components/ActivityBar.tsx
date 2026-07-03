@@ -45,7 +45,7 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
 
       {/* Terminal toggle */}
       <button
-        title="Terminal (⌘`)"
+        title="Terminal (⌘` / ⌘J)"
         onClick={onToggleTerminal}
         className={cn(
           'flex size-9 items-center justify-center rounded-lg transition-colors',

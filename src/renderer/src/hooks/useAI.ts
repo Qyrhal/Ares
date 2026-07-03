@@ -20,6 +20,7 @@ export function useAI(settings: AppSettings) {
   }, [settings.apiKey, settings.apiBaseUrl])
 
   const sendMessage = useCallback(async (
+    model: string,
     messages: Message[],
     onStream: StreamCallback,
     onDone: DoneCallback,
@@ -38,7 +39,7 @@ export function useAI(settings: AppSettings) {
         .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }))
 
       const stream = await client.chat.completions.create({
-        model: settings.defaultModel || 'gpt-4o-mini',
+        model: model || settings.defaultModel || 'gpt-4o-mini',
         messages: apiMessages,
         stream: true
       })

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save } from 'lucide-react'
 import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
 import { AppSettings } from '@/types'
@@ -18,25 +18,9 @@ const PRESET_ENDPOINTS = [
   { label: 'LM Studio',   url: 'http://localhost:1234/v1' },
   { label: 'Groq',        url: 'https://api.groq.com/openai/v1' },
   { label: 'Together AI', url: 'https://api.together.xyz/v1' },
-  { label: 'Anthropic',   url: 'https://api.anthropic.com/v1' },
 ]
 
 type ConnStatus = 'idle' | 'loading' | 'ok' | 'error'
-
-// Well-known fallback models when the API doesn't list them
-const FALLBACK_MODELS: SelectOption[] = [
-  { value: 'gpt-4o',              label: 'GPT-4o',              group: 'OpenAI' },
-  { value: 'gpt-4o-mini',         label: 'GPT-4o Mini',         group: 'OpenAI' },
-  { value: 'gpt-4-turbo',         label: 'GPT-4 Turbo',         group: 'OpenAI' },
-  { value: 'o1-mini',             label: 'o1 Mini',             group: 'OpenAI' },
-  { value: 'claude-opus-4-8',     label: 'Claude Opus 4.8',     group: 'Anthropic' },
-  { value: 'claude-sonnet-4-6',   label: 'Claude Sonnet 4.6',   group: 'Anthropic' },
-  { value: 'llama3',              label: 'Llama 3',             group: 'Local' },
-  { value: 'llama3.1',            label: 'Llama 3.1',           group: 'Local' },
-  { value: 'mistral',             label: 'Mistral',             group: 'Local' },
-  { value: 'codellama',           label: 'Code Llama',          group: 'Local' },
-  { value: 'deepseek-coder',      label: 'DeepSeek Coder',      group: 'Local' },
-]
 
 export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.ReactElement {
   const [form, setForm] = useState<AppSettings>(settings)
@@ -50,10 +34,54 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
 
   useEffect(() => { setForm(settings) }, [settings])
 
-  // Reset connection status when URL or key changes
+  // ── Auto-fetch models when URL or key changes ──────────────────────────────
+  const fetchController = useRef<AbortController | null>(null)
   useEffect(() => {
-    setConnStatus('idle')
-    setConnMessage('')
+    const baseUrl = form.apiBaseUrl.replace(/\/$/, '')
+    if (!baseUrl) return
+
+    // Debounce: wait 600ms after last change before fetching
+    const timer = setTimeout(async () => {
+      fetchController.current?.abort()
+      const ctrl = new AbortController()
+      fetchController.current = ctrl
+
+      setConnStatus('loading')
+      setConnMessage('')
+      setFetchedModels([])
+
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (form.apiKey) headers['Authorization'] = `Bearer ${form.apiKey}`
+
+        const res = await fetch(`${baseUrl}/models`, {
+          headers,
+          signal: ctrl.signal,
+        })
+
+        if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+
+        const json = await res.json()
+        const models: SelectOption[] = (json.data ?? [])
+          .map((m: { id: string }) => ({ value: m.id, label: m.id }))
+          .sort((a: SelectOption, b: SelectOption) => a.value.localeCompare(b.value))
+
+        setFetchedModels(models)
+        setConnStatus('ok')
+        setConnMessage(`Connected · ${models.length} model${models.length !== 1 ? 's' : ''} available`)
+
+        if (!form.defaultModel && models.length > 0) {
+          setForm((prev) => ({ ...prev, defaultModel: models[0].value }))
+        }
+      } catch (err) {
+        if ((err as Error).name === 'AbortError') return
+        setConnStatus('error')
+        setConnMessage((err as Error).message)
+      }
+    }, 600)
+
+    return () => { clearTimeout(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.apiBaseUrl, form.apiKey])
 
   const set = (k: keyof AppSettings, v: string): void =>
@@ -98,7 +126,6 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
       setConnStatus('ok')
       setConnMessage(`Connected · ${models.length} model${models.length !== 1 ? 's' : ''} available`)
 
-      // Auto-select first model if none set
       if (!form.defaultModel && models.length > 0) {
         set('defaultModel', models[0].value)
       }
@@ -108,7 +135,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
     }
   }, [form.apiBaseUrl, form.apiKey, form.defaultModel])
 
-  const modelOptions: SelectOption[] = fetchedModels.length > 0 ? fetchedModels : FALLBACK_MODELS
+  const modelOptions: SelectOption[] = fetchedModels
   const currentModelInList = modelOptions.some((m) => m.value === form.defaultModel)
 
   return (
@@ -202,19 +229,28 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
           {/* Model selector */}
           <Field
             label="Default model"
-            hint={fetchedModels.length > 0
+            hint={connStatus === 'ok'
               ? `${fetchedModels.length} models fetched from your endpoint`
-              : 'Select from presets or type your own'}
+              : connStatus === 'error'
+                ? 'Could not fetch models — type a model ID below'
+                : undefined}
           >
             <div className="space-y-2">
-              <Select
-                value={form.defaultModel}
-                onChange={(v) => set('defaultModel', v)}
-                options={modelOptions}
-                placeholder="Choose a model…"
-                searchable
-              />
-              {!currentModelInList && form.defaultModel && (
+              {modelOptions.length > 0 ? (
+                <Select
+                  value={form.defaultModel}
+                  onChange={(v) => set('defaultModel', v)}
+                  options={modelOptions}
+                  placeholder="Choose a model…"
+                  searchable
+                />
+              ) : (
+                <div className="flex items-center gap-1.5 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+                  <AlertCircle className="size-3.5 shrink-0" />
+                  <span>Test your endpoint above to discover available models</span>
+                </div>
+              )}
+              {!currentModelInList && form.defaultModel && modelOptions.length > 0 && (
                 <div className="flex items-center gap-1.5 text-xs text-amber-400">
                   <AlertCircle className="size-3.5 shrink-0" />
                   <span>"{form.defaultModel}" not in list — will be sent as-is</span>

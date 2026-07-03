@@ -104,7 +104,7 @@ describe('selectTab — sidebar sync (bug fix)', () => {
 describe('Terminal panel', () => {
   it('activity bar terminal button opens the terminal', async () => {
     await renderApp()
-    const termBtn = screen.getByTitle('Terminal (⌘`)')
+    const termBtn = screen.getByTitle('Terminal (⌘` / ⌘J)')
     await act(async () => { fireEvent.click(termBtn) })
     await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
   })

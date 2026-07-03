@@ -1,6 +1,6 @@
 import React from 'react'
 import { FileCode, MessageSquare } from 'lucide-react'
-import { XIcon } from '@animateicons/react/lucide'
+import { PlusIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, truncate } from '@/lib/utils'
 import { Tab } from '@/types'
 
@@ -9,6 +9,7 @@ interface TabBarProps {
   activeTabId: string | null
   onSelectTab: (id: string) => void
   onCloseTab: (id: string) => void
+  onNewSession: () => void
 }
 
 function tabId(tab: Tab): string {
@@ -19,11 +20,17 @@ function tabLabel(tab: Tab): string {
   return tab.type === 'session' ? tab.title : tab.name
 }
 
-export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: TabBarProps): React.ReactElement {
-  if (tabs.length === 0) return <div className="h-9 shrink-0 border-b border-border" />
-
+export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession }: TabBarProps): React.ReactElement {
   return (
-    <div className="flex h-9 shrink-0 items-end overflow-x-auto border-b border-border bg-card/50">
+    <div className="flex h-9 shrink-0 items-end overflow-x-auto border-b border-border bg-card/50" data-testid="tab-bar">
+      <button
+        onClick={onNewSession}
+        className="flex h-full shrink-0 items-center px-2 text-muted-foreground hover:text-foreground transition-colors"
+        aria-label="New session"
+        title="New session"
+      >
+        <PlusIcon className="size-4" />
+      </button>
       {tabs.map((tab) => {
         const id = tabId(tab)
         const isActive = id === activeTabId
@@ -40,7 +47,6 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab }: TabBarPro
                 : 'bg-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground'
             )}
           >
-            {/* Active indicator line */}
             {isActive && (
               <span className="absolute inset-x-0 top-0 h-[2px] rounded-b-sm bg-primary" />
             )}
