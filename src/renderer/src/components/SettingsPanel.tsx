@@ -9,6 +9,8 @@ import { THEMES, applyTheme, DEFAULT_THEME_ID } from '@/lib/theme'
 
 const el = window.electron
 
+const INPUT = 'w-full rounded border border-border bg-input px-3 py-[0.4rem] text-[13px] text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground'
+
 const SKILL_PROMPT = `You are an AI coding assistant with full read/write access to the user's workspace. You can perform the following operations:
 
 1. readFile(path) — Read the full contents of any file.
@@ -158,7 +160,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
               value={form.apiBaseUrl}
               onChange={(e) => set('apiBaseUrl', e.target.value)}
               placeholder="https://api.openai.com/v1"
-              className="input-field"
+              className={INPUT}
             />
           </Field>
 
@@ -170,7 +172,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
                   value={form.apiKey}
                   onChange={(e) => set('apiKey', e.target.value)}
                   placeholder="sk-…"
-                  className="input-field pr-10"
+                  className={cn(INPUT, 'pr-10')}
                 />
                 <button
                   type="button"
@@ -245,7 +247,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
                 value={form.defaultModel}
                 onChange={(e) => set('defaultModel', e.target.value)}
                 placeholder="Or type a model ID directly…"
-                className="input-field text-xs"
+                className={cn(INPUT, 'text-xs')}
               />
             </div>
           </Field>
@@ -301,7 +303,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
               onChange={(e) => set('systemPrompt', e.target.value)}
               placeholder="You are a helpful coding assistant..."
               rows={4}
-              className="input-field min-h-[80px] resize-y text-xs leading-relaxed"
+              className={cn(INPUT, 'min-h-[80px] resize-y text-xs leading-relaxed')}
             />
           </Field>
 
