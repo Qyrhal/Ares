@@ -11,6 +11,7 @@ import { SettingsPanel } from '@/components/SettingsPanel'
 import { useAI } from '@/hooks/useAI'
 import { FileAttachment } from '@/types'
 import type { RawSession, RawMessage } from './globals'
+import { applyTheme } from '@/lib/theme'
 
 const el = window.electron
 
@@ -72,6 +73,7 @@ export default function App(): React.ReactElement {
       el.workspace.getPath()
     ]).then(([s, rawSessions, wp]) => {
       setSettings(s)
+      applyTheme(s.themeId || 'red')
       const loaded = rawSessions.map(toSession)
       setSessions(loaded)
       if (wp) {

@@ -29,6 +29,7 @@ export interface DbSettings {
   apiKey: string
   apiBaseUrl: string
   defaultModel: string
+  themeId: string
 }
 
 interface Store {
@@ -41,7 +42,8 @@ interface Store {
 const DEFAULT_SETTINGS: DbSettings = {
   apiKey: '',
   apiBaseUrl: 'https://api.openai.com/v1',
-  defaultModel: 'gpt-4o-mini'
+  defaultModel: 'gpt-4o-mini',
+  themeId: 'red'
 }
 
 function getStorePath(): string {

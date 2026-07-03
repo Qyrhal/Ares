@@ -8,7 +8,7 @@
   --color-card-foreground: #e8e8e8;
   --color-popover: #1a1a1a;
   --color-popover-foreground: #e8e8e8;
-  --color-primary: #7c6af7;
+  --color-primary: #dc2626;
   --color-primary-foreground: #ffffff;
   --color-secondary: #1e1e1e;
   --color-secondary-foreground: #a1a1a1;
@@ -20,7 +20,7 @@
   --color-destructive-foreground: #ffffff;
   --color-border: #2a2a2a;
   --color-input: #1e1e1e;
-  --color-ring: #7c6af7;
+  --color-ring: #dc2626;
   --radius: 0.5rem;
 
   --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;

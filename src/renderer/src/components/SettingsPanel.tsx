@@ -7,6 +7,7 @@ import { AppSettings } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { THEMES, applyTheme, DEFAULT_THEME_ID } from '@/lib/theme'
 
 interface SettingsPanelProps {
   settings: AppSettings
@@ -230,6 +231,48 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
               />
             </div>
           </Field>
+        </Section>
+
+        {/* ── Theme ─────────────────────────────────────────────────── */}
+        <Section title="Accent colour" description="Choose the highlight colour used throughout the interface.">
+          <div className="flex flex-wrap gap-3">
+            {THEMES.map((theme) => {
+              const active = (form.themeId || DEFAULT_THEME_ID) === theme.id
+              return (
+                <button
+                  key={theme.id}
+                  type="button"
+                  title={theme.label}
+                  onClick={() => {
+                    set('themeId', theme.id)
+                    applyTheme(theme.id)
+                  }}
+                  className={cn(
+                    'group flex flex-col items-center gap-1.5 rounded-xl p-2 transition-all',
+                    active
+                      ? 'ring-2 ring-offset-2 ring-offset-background'
+                      : 'hover:bg-accent/50'
+                  )}
+                  style={active ? { ['--tw-ring-color' as string]: theme.primary } : {}}
+                >
+                  {/* Swatch */}
+                  <span
+                    className="flex size-9 items-center justify-center rounded-full shadow-md transition-transform group-hover:scale-110"
+                    style={{ backgroundColor: theme.primary }}
+                  >
+                    {active && (
+                      <svg className="size-4 text-white" viewBox="0 0 16 16" fill="currentColor">
+                        <path d="M13.707 4.293a1 1 0 0 1 0 1.414l-7 7a1 1 0 0 1-1.414 0l-3-3a1 1 0 0 1 1.414-1.414L6 10.586l6.293-6.293a1 1 0 0 1 1.414 0z" />
+                      </svg>
+                    )}
+                  </span>
+                  <span className={cn('text-xs', active ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                    {theme.label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
         </Section>
 
         {/* Save */}
