@@ -9,6 +9,7 @@ import {
   getMessages, addMessage, deleteMessage,
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects
 } from './db'
+import { handlePiSend, handlePiAbort, cleanupPiSession } from './pi'
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
   discardFile, commit, push, pull,
@@ -123,7 +124,10 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:createSession', (_, title: string, model?: string) => createSession(title, model))
   ipcMain.handle('db:updateSession', (_, id: string, updates: object) =>
     updateSession(id, updates as Parameters<typeof updateSession>[1]))
-  ipcMain.handle('db:deleteSession', (_, id: string) => deleteSession(id))
+  ipcMain.handle('db:deleteSession', (_, id: string) => {
+    cleanupPiSession(id)
+    return deleteSession(id)
+  })
 
   // DB – messages
   ipcMain.handle('db:getMessages', (_, sessionId: string) => getMessages(sessionId))
@@ -253,4 +257,15 @@ function registerIpcHandlers(): void {
     const pty = ptyProcesses.get(id)
     if (pty) { try { pty.kill() } catch (_e) {} ptyProcesses.delete(id) }
   })
+
+  // Pi agent
+  ipcMain.on('pi:send', (event, reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: string, cwd: string | null) => {
+    const [win] = BrowserWindow.getAllWindows()
+    if (!win) return
+    handlePiSend(win, reqId, sessionId, message, model, apiBaseUrl, apiKey, cwd).catch((err) => {
+      if (!win.isDestroyed()) win.webContents.send('pi:error', reqId, (err as Error).message)
+    })
+  })
+  ipcMain.on('pi:abort', (_, sessionId: string) => { handlePiAbort(sessionId).catch(() => {}) })
+  ipcMain.on('pi:cleanup', (_, sessionId: string) => { cleanupPiSession(sessionId) })
 }

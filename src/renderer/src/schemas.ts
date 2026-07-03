@@ -30,8 +30,8 @@ export const RawMessageSchema = z.object({
 
 export const AppSettingsSchema = z.object({
   apiKey: z.string().default(''),
-  apiBaseUrl: z.string().default('https://api.openai.com/v1'),
-  defaultModel: z.string().default('gpt-4o-mini'),
+  apiBaseUrl: z.string().default(''),
+  defaultModel: z.string().default(''),
   themeId: z.string().default('red'),
   systemPrompt: z.string().default(''),
   permissionMode: z.enum(['ask', 'auto', 'yolo']).default('ask'),

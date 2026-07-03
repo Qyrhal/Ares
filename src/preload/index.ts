@@ -70,6 +70,38 @@ const extApi = {
   fetchModels: (baseUrl: string, apiKey: string) => ipcRenderer.invoke('api:fetchModels', baseUrl, apiKey),
 }
 
+const piApi = {
+  send: (reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: string, cwd: string | null) =>
+    ipcRenderer.send('pi:send', reqId, sessionId, message, model, apiBaseUrl, apiKey, cwd),
+  abort: (sessionId: string) => ipcRenderer.send('pi:abort', sessionId),
+  cleanup: (sessionId: string) => ipcRenderer.send('pi:cleanup', sessionId),
+  onDelta: (cb: (reqId: string, text: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, reqId: string, text: string): void => cb(reqId, text)
+    ipcRenderer.on('pi:delta', listener)
+    return () => ipcRenderer.off('pi:delta', listener)
+  },
+  onDone: (cb: (reqId: string, text: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, reqId: string, text: string): void => cb(reqId, text)
+    ipcRenderer.on('pi:done', listener)
+    return () => ipcRenderer.off('pi:done', listener)
+  },
+  onToolStart: (cb: (reqId: string, name: string, input: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, reqId: string, name: string, input: string): void => cb(reqId, name, input)
+    ipcRenderer.on('pi:tool-start', listener)
+    return () => ipcRenderer.off('pi:tool-start', listener)
+  },
+  onToolEnd: (cb: (reqId: string, output: string, isError: boolean) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, reqId: string, output: string, isError: boolean): void => cb(reqId, output, isError)
+    ipcRenderer.on('pi:tool-end', listener)
+    return () => ipcRenderer.off('pi:tool-end', listener)
+  },
+  onError: (cb: (reqId: string, message: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, reqId: string, message: string): void => cb(reqId, message)
+    ipcRenderer.on('pi:error', listener)
+    return () => ipcRenderer.off('pi:error', listener)
+  },
+}
+
 const nativeTools = {
   readFile:    (p: string) => ipcRenderer.invoke('tools:readFile', p),
   writeFile:   (p: string, content: string) => ipcRenderer.invoke('tools:writeFile', p, content),
@@ -78,7 +110,7 @@ const nativeTools = {
   listFiles:   (dir: string) => ipcRenderer.invoke('tools:listFiles', dir),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools }
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

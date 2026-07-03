@@ -13,12 +13,13 @@ const electronMock = {
     deleteMessage: vi.fn().mockResolvedValue(undefined),
   },
   settings: {
-    get: vi.fn().mockResolvedValue({ apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
+    get: vi.fn().mockResolvedValue({ apiKey: '', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
     set: vi.fn().mockResolvedValue(undefined),
   },
   workspace: {
     getPath: vi.fn().mockResolvedValue(null),
     setPath: vi.fn().mockResolvedValue(undefined),
+    getRecent: vi.fn().mockResolvedValue([]),
   },
   dialog: {
     openFolder: vi.fn().mockResolvedValue(null),
@@ -48,6 +49,16 @@ const electronMock = {
   },
   ext: {
     fetchModels: vi.fn().mockResolvedValue({ data: [{ id: 'gpt-4o' }] }),
+  },
+  pi: {
+    send: vi.fn(),
+    abort: vi.fn(),
+    cleanup: vi.fn(),
+    onDelta: vi.fn().mockReturnValue(() => {}),
+    onDone: vi.fn().mockReturnValue(() => {}),
+    onToolStart: vi.fn().mockReturnValue(() => {}),
+    onToolEnd: vi.fn().mockReturnValue(() => {}),
+    onError: vi.fn().mockReturnValue(() => {}),
   },
   tools: {
     readFile: vi.fn().mockResolvedValue('file content'),

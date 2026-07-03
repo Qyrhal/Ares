@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@animateicons/react": "^0.3.4",
+    "@earendil-works/pi-coding-agent": "^0.80.3",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@monaco-editor/react": "^4.7.0",
@@ -38,6 +39,7 @@
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
+    "highlight.js": "^11",
     "lucide-react": "^0.454.0",
     "node-pty": "^1.1.0",
     "openai": "^6.45.0",

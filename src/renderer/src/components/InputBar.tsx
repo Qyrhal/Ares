@@ -58,27 +58,55 @@ function estimateTokens(messages: Message[]): number {
   return messages.reduce((sum, m) => sum + Math.ceil((m.content?.length ?? 0) / 4), 0)
 }
 
+function fmtTokens(n: number): string {
+  if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`
+  if (n >= 1_000) return `${Math.round(n / 100) / 10}k`
+  return String(n)
+}
+
 function ContextDonut({ used, total }: { used: number; total: number }): React.ReactElement {
+  const [open, setOpen] = React.useState(false)
+  const ref = React.useRef<HTMLDivElement>(null)
   const pct = total > 0 ? Math.min(used / total, 1) : 0
   const r = 7
   const circ = 2 * Math.PI * r
   const dash = circ * pct
   const colorClass = pct > 0.8 ? 'text-destructive' : pct > 0.5 ? 'text-amber-400' : 'text-muted-foreground'
-  const pctLabel = `${Math.round(pct * 100)}%`
-  const label = `${used.toLocaleString()} / ${total.toLocaleString()} tokens (${pctLabel})`
+
+  React.useEffect(() => {
+    if (!open) return
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [open])
+
   return (
-    <span title={label} className={cn('shrink-0', colorClass)}>
-      <svg width="18" height="18" viewBox="0 0 18 18">
-        <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
-        <circle
-          cx="9" cy="9" r={r} fill="none"
-          stroke="currentColor" strokeWidth="2.5"
-          strokeDasharray={`${dash} ${circ - dash}`}
-          strokeLinecap="round"
-          transform="rotate(-90 9 9)"
-        />
-      </svg>
-    </span>
+    <div ref={ref} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn('flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-accent', colorClass)}
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18">
+          <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
+          <circle
+            cx="9" cy="9" r={r} fill="none"
+            stroke="currentColor" strokeWidth="2.5"
+            strokeDasharray={`${dash} ${circ - dash}`}
+            strokeLinecap="round"
+            transform="rotate(-90 9 9)"
+          />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute bottom-full right-0 mb-1.5 whitespace-nowrap rounded-md border border-border bg-popover px-2.5 py-1.5 shadow-lg z-50">
+          <p className="text-[11px] font-medium text-foreground">{fmtTokens(used)} / {fmtTokens(total)}</p>
+          <p className="text-[10px] text-muted-foreground">{Math.round(pct * 100)}% of context used</p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -214,11 +242,11 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
 
   // Fetch models for the model picker
   const fetchModels = useCallback(async () => {
-    const baseUrl = (apiBaseUrl || '').replace(/\/$/, '')
-    if (!baseUrl) { setModelError('No API endpoint configured'); return }
     setModelLoading(true)
     setModelError('')
     try {
+      const baseUrl = (apiBaseUrl || '').replace(/\/$/, '')
+      if (!baseUrl) { setModelError('No API endpoint configured'); setModelLoading(false); return }
       const json = await window.electron.ext.fetchModels(baseUrl, apiKey || '')
       const models: ModelOption[] = (json.data ?? [])
         .map((m: { id: string }) => ({ value: m.id, label: m.id }))
