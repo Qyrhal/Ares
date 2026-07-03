@@ -1,5 +1,5 @@
 import React from 'react'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { AppSettings } from '@/types'
@@ -9,6 +9,8 @@ const BASE_SETTINGS: AppSettings = {
   apiBaseUrl: '',
   defaultModel: '',
   themeId: 'red',
+  systemPrompt: '',
+  permissionMode: 'ask',
 }
 
 beforeEach(() => {
@@ -17,11 +19,7 @@ beforeEach(() => {
 
 describe('SettingsPanel', () => {
   it('auto-fetches models when base URL is set on mount', async () => {
-    const mockModels = { data: [{ id: 'gpt-4' }, { id: 'gpt-4o' }] }
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve(mockModels),
-    } as Response)
+    window.electron.ext.fetchModels = vi.fn().mockResolvedValue({ data: [{ id: 'gpt-4' }, { id: 'gpt-4o' }] })
 
     render(
       <SettingsPanel
@@ -31,9 +29,9 @@ describe('SettingsPanel', () => {
     )
 
     await waitFor(() => {
-      expect(globalThis.fetch).toHaveBeenCalledWith(
-        'http://localhost:11434/v1/models',
-        expect.any(Object)
+      expect(window.electron.ext.fetchModels).toHaveBeenCalledWith(
+        'http://localhost:11434/v1',
+        '',
       )
     })
 
@@ -43,7 +41,7 @@ describe('SettingsPanel', () => {
   })
 
   it('shows error when endpoint is unreachable', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('fetch failed'))
+    window.electron.ext.fetchModels = vi.fn().mockRejectedValue(new Error('fetch failed'))
 
     render(
       <SettingsPanel
@@ -58,7 +56,7 @@ describe('SettingsPanel', () => {
   })
 
   it('shows model hint instead of dropdown when no models fetched', async () => {
-    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('offline'))
+    window.electron.ext.fetchModels = vi.fn().mockRejectedValue(new Error('offline'))
 
     render(
       <SettingsPanel
@@ -72,9 +70,7 @@ describe('SettingsPanel', () => {
     })
   })
 
-  it('does not fetch when base URL is empty', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch')
-
+  it('shows skill prompt section', () => {
     render(
       <SettingsPanel
         settings={BASE_SETTINGS}
@@ -82,9 +78,21 @@ describe('SettingsPanel', () => {
       />
     )
 
-    // Wait a bit for any potential effect to fire
-    await new Promise((r) => setTimeout(r, 100))
+    expect(screen.getByText(/readFile/)).toBeInTheDocument()
+    expect(screen.getByText(/writeFile/)).toBeInTheDocument()
+    expect(screen.getByText(/editFile/)).toBeInTheDocument()
+    expect(screen.getByText(/createFile/)).toBeInTheDocument()
+    expect(screen.getByText(/listFiles/)).toBeInTheDocument()
+  })
 
-    expect(fetchSpy).not.toHaveBeenCalled()
+  it('shows system prompt textarea', () => {
+    render(
+      <SettingsPanel
+        settings={BASE_SETTINGS}
+        onSave={vi.fn()}
+      />
+    )
+
+    expect(screen.getByPlaceholderText('You are a helpful coding assistant...')).toBeInTheDocument()
   })
 })

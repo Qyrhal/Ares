@@ -2,7 +2,7 @@ import type { AppSettings, FileNode } from './types'
 
 export interface RawSession {
   id: string; title: string; model: string
-  created_at: number; updated_at: number; message_count?: number
+  created_at: number; updated_at: number; message_count?: number; pinned?: boolean
 }
 
 export interface RawMessage {
@@ -52,6 +52,16 @@ declare global {
         resize(id: string, cols: number, rows: number): Promise<void>
         kill(id: string): void
         onOutput(cb: (id: string, data: string) => void): () => void
+      }
+      ext: {
+        fetchModels(baseUrl: string, apiKey: string): Promise<{ data: { id: string }[] }>
+      }
+      tools: {
+        readFile(path: string): Promise<string>
+        writeFile(path: string, content: string): Promise<void>
+        editFile(path: string, oldString: string, newString: string): Promise<void>
+        createFile(path: string, content: string): Promise<void>
+        listFiles(dir: string): Promise<{ name: string; path: string; isDirectory: boolean }[]>
       }
       git: {
         status(cwd: string): Promise<GitStatus>

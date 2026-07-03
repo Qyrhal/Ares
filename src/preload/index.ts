@@ -65,7 +65,19 @@ const nativeTerminal = {
   }
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal }
+const extApi = {
+  fetchModels: (baseUrl: string, apiKey: string) => ipcRenderer.invoke('api:fetchModels', baseUrl, apiKey),
+}
+
+const nativeTools = {
+  readFile:    (p: string) => ipcRenderer.invoke('tools:readFile', p),
+  writeFile:   (p: string, content: string) => ipcRenderer.invoke('tools:writeFile', p, content),
+  editFile:    (p: string, oldString: string, newString: string) => ipcRenderer.invoke('tools:editFile', p, oldString, newString),
+  createFile:  (p: string, content: string) => ipcRenderer.invoke('tools:createFile', p, content),
+  listFiles:   (dir: string) => ipcRenderer.invoke('tools:listFiles', dir),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

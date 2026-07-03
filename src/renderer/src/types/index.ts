@@ -30,13 +30,18 @@ export interface Session {
   createdAt: number
   updatedAt: number
   messageCount: number
+  pinned?: boolean
 }
+
+export type PermissionMode = 'ask' | 'auto' | 'yolo'
 
 export interface AppSettings {
   apiKey: string
   apiBaseUrl: string
   defaultModel: string
   themeId: string
+  systemPrompt: string
+  permissionMode: PermissionMode
 }
 
 export interface FileNode {

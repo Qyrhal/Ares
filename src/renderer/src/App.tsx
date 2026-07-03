@@ -1,6 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react'
+import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { FileNode, Tab, FileAttachment } from '@/types'
+import { FileNode, Tab, FileAttachment, Message } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TabBar } from '@/components/TabBar'
@@ -11,6 +11,7 @@ import { SettingsPanel } from '@/components/SettingsPanel'
 import { TerminalView } from '@/components/TerminalView'
 import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
+import { PermissionPrompt } from '@/components/PermissionPrompt'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings } from '@/schemas'
@@ -26,6 +27,29 @@ export default function App(): React.ReactElement {
   const store = useAppStore()
   const { sendMessage } = useAI(store.settings)
   const [gitBadge, setGitBadge] = useState(0)
+
+  // ── Permission prompt ───────────────────────────────────────────────────────
+  const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
+  const permResolver = useRef<((allow: boolean) => void) | null>(null)
+
+  const handlePermApprove = useCallback(() => {
+    permResolver.current?.(true)
+    permResolver.current = null
+    setPendingPerm(null)
+  }, [])
+
+  const handlePermDeny = useCallback(() => {
+    permResolver.current?.(false)
+    permResolver.current = null
+    setPendingPerm(null)
+  }, [])
+
+  const onToolPermission = useCallback(async (name: string, args: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      permResolver.current = resolve
+      setPendingPerm({ toolName: name, toolArgs: args })
+    })
+  }, [])
 
   // ── Derived selectors ────────────────────────────────────────────────────────
   const activeSessionTab = store.tabs.find(
@@ -96,6 +120,13 @@ export default function App(): React.ReactElement {
     store.closeTab(id)
   }, [])
 
+  const handleTogglePinSession = useCallback(async (id: string) => {
+    const s = useAppStore.getState().sessions.find((s) => s.id === id)
+    if (!s) return
+    await el.db.updateSession(id, { pinned: !s.pinned })
+    store.togglePinSession(id)
+  }, [])
+
   // Close a tab: session tabs also remove from sidebar + delete from DB.
   const handleCloseTab = useCallback(async (id: string) => {
     const { tabs } = useAppStore.getState()
@@ -147,9 +178,73 @@ export default function App(): React.ReactElement {
     return () => window.removeEventListener('keydown', handler)
   }, [handleCloseTab])
 
+  // ── @mention expansion ───────────────────────────────────────────────────────
+  const expandMentions = useCallback(async (msgs: Message[], wp: string | null): Promise<Message[]> => {
+    if (!wp) return msgs
+    const last = msgs[msgs.length - 1]
+    if (!last || last.role !== 'user') return msgs
+
+    const mentionRegex = /@([^\s\n]+)/g
+    const mentions = [...last.content.matchAll(mentionRegex)]
+    if (mentions.length === 0) return msgs
+
+    const fileContexts: string[] = []
+    for (const m of mentions) {
+      const relPath = m[1]
+      const absPath = wp + '/' + relPath
+      try {
+        const content = await el.tools.readFile(absPath)
+        fileContexts.push(`\`${relPath}\`:\n\`\`\`\n${content}\n\`\`\``)
+      } catch {
+        // file doesn't exist or can't be read — skip
+      }
+    }
+    if (fileContexts.length === 0) return msgs
+
+    const prefix = fileContexts.join('\n\n')
+    const expanded = { ...last, content: `${prefix}\n\n${last.content}` }
+    return [...msgs.slice(0, -1), expanded]
+  }, [])
+
+  // ── Slash commands ────────────────────────────────────────────────────────────
+  const handleCommand = useCallback(async (cmd: string, args: string) => {
+    const sess = activeSession
+    if (!sess) return
+
+    switch (cmd) {
+      case 'model': {
+        if (!args) {
+          const cur = sess.model || store.settings.defaultModel
+          const msg = await el.db.addMessage(sess.id, 'system', `Current model: ${cur}. Use /model <name> to switch.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        await el.db.updateSession(sess.id, { model: args })
+        store.updateSession(sess.id, { model: args })
+        const msg = await el.db.addMessage(sess.id, 'system', `Switched model to ${args}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'clear': {
+        const msgs = useAppStore.getState().messages
+        for (const m of msgs) {
+          await el.db.deleteMessage(m.id)
+        }
+        store.setMessages([])
+        break
+      }
+      case 'help': {
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /help - this help'
+        const msg = await el.db.addMessage(sess.id, 'system', helpText)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+    }
+  }, [activeSession, store])
+
   // ── Send message ─────────────────────────────────────────────────────────────
   const handleSend = useCallback(async (text: string, attachments: FileAttachment[]) => {
-    const { isLoading, messages } = useAppStore.getState()
+    const { isLoading, messages, workspacePath } = useAppStore.getState()
     const sess = activeSession
     if (!sess || isLoading) return
 
@@ -159,10 +254,12 @@ export default function App(): React.ReactElement {
     store.appendMessage(userMsg)
 
     if (messages.length === 0 && text.trim()) {
-      const title = text.slice(0, 40)
+      const title = text.slice(0, 100).replace(/@\S+\s*/g, '').trim() || text.slice(0, 40)
       await el.db.updateSession(sess.id, { title })
       store.updateSession(sess.id, { title })
     }
+
+    const expandedMessages = await expandMentions([...messages, userMsg], workspacePath)
 
     store.setLoading(true)
     const streamingId = uuidv4()
@@ -173,7 +270,7 @@ export default function App(): React.ReactElement {
 
     await sendMessage(
       sess.model || store.settings.defaultModel || 'gpt-4o-mini',
-      [...messages, userMsg],
+      expandedMessages,
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
         store.upsertMessage(streamingId, streamingMsg)
@@ -198,9 +295,11 @@ export default function App(): React.ReactElement {
       (err) => {
         store.upsertMessage(streamingId, { ...streamingMsg, content: `**Error:** ${err.message}`, isStreaming: false })
         store.setLoading(false)
-      }
+      },
+      store.settings.permissionMode,
+      onToolPermission,
     )
-  }, [activeSession, sendMessage])
+  }, [activeSession, sendMessage, expandMentions, onToolPermission])
 
   // ── File system ──────────────────────────────────────────────────────────────
   const refreshTree = useCallback(async () => {
@@ -277,6 +376,7 @@ export default function App(): React.ReactElement {
             onNewSession={handleNewSession}
             onSelectSession={handleSelectSession}
             onDeleteSession={handleDeleteSession}
+            onTogglePinSession={handleTogglePinSession}
             fileNodes={store.fileNodes}
             workspacePath={store.workspacePath}
             selectedFilePath={store.activeTabId}
@@ -317,8 +417,17 @@ export default function App(): React.ReactElement {
                   sessionTitle={activeSession.title}
                   isLoading={store.isLoading}
                 />
+                {pendingPerm && (
+                  <PermissionPrompt
+                    toolName={pendingPerm.toolName}
+                    toolArgs={pendingPerm.toolArgs}
+                    onApprove={handlePermApprove}
+                    onDeny={handlePermDeny}
+                  />
+                )}
                 <InputBar
                   onSend={handleSend}
+                  onCommand={handleCommand}
                   onRevealInExplorer={() => {
                     if (store.workspacePath) {
                       store.setActiveView('explorer')
@@ -328,6 +437,10 @@ export default function App(): React.ReactElement {
                   }}
                   disabled={store.isLoading}
                   placeholder={`Ask ${activeSession.model || store.settings.defaultModel}…`}
+                  workspacePath={store.workspacePath}
+                  fileNodes={store.fileNodes}
+                  apiBaseUrl={store.settings.apiBaseUrl}
+                  apiKey={store.settings.apiKey}
                 />
               </>
             ) : (
