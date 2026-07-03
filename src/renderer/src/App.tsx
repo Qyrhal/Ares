@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { FileNode, Tab, FileAttachment } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
@@ -19,6 +19,7 @@ const el = window.electron
 export default function App(): React.ReactElement {
   const store = useAppStore()
   const { sendMessage } = useAI(store.settings)
+  const [gitBadge, setGitBadge] = useState(0)
 
   // ── Derived selectors ────────────────────────────────────────────────────────
   const activeSessionTab = store.tabs.find(
@@ -53,6 +54,21 @@ export default function App(): React.ReactElement {
     if (!activeSessionTab) { store.setMessages([]); return }
     el.db.getMessages(activeSessionTab.id).then((raw) => store.setMessages(raw.map(parseMessage)))
   }, [activeSessionTab?.id])
+
+  // Git badge — poll status every 30s to show pending changes/ahead count
+  useEffect(() => {
+    const wp = store.workspacePath
+    if (!wp) { setGitBadge(0); return }
+    const poll = (): void => {
+      el.git.status(wp).then((s) => {
+        if (!s.hasRepo) { setGitBadge(0); return }
+        setGitBadge(s.ahead + s.staged.length + s.unstaged.length + s.untracked.length)
+      }).catch(() => setGitBadge(0))
+    }
+    poll()
+    const id = setInterval(poll, 30_000)
+    return () => clearInterval(id)
+  }, [store.workspacePath])
 
   // Keyboard shortcuts — reads store state directly to avoid stale closures
   useEffect(() => {
@@ -233,6 +249,7 @@ export default function App(): React.ReactElement {
           onChangeView={store.setActiveView}
           terminalOpen={store.terminalOpen}
           onToggleTerminal={store.toggleTerminal}
+          gitBadge={gitBadge}
         />
 
         {store.activeView !== 'settings' && (
