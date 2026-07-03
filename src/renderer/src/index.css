@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "shadcn/tailwind.css";
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&display=swap');
 
 @theme {
   --color-background: #0a0a0a;
@@ -24,6 +25,7 @@
   --radius: 0.5rem;
 
   --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
+  --font-display: "Orbitron", sans-serif;
 }
 
 * {

@@ -253,7 +253,11 @@ export default function App(): React.ReactElement {
   return (
     <div className="flex flex-col h-screen w-screen overflow-hidden bg-background">
       {/* macOS title bar / drag region */}
-      <div className="drag-region h-10 shrink-0 border-b border-border" />
+      <div className="drag-region relative flex h-10 shrink-0 items-center justify-center border-b border-border">
+        <span className="no-drag pointer-events-none select-none font-display text-[11px] font-black tracking-[0.5em] text-foreground/40">
+          ARES
+        </span>
+      </div>
 
       <div className="flex flex-1 overflow-hidden">
         {/* Activity bar */}
