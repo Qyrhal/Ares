@@ -15,7 +15,8 @@ import {
   getBranches, checkoutBranch, createBranch, getFileDiff, initRepo
 } from './git'
 
-let ptyProcess: NodePty.IPty | null = null
+const ptyProcesses = new Map<string, NodePty.IPty>()
+let nextTerminalId = 1
 
 interface FileNode {
   name: string
@@ -162,28 +163,34 @@ function registerIpcHandlers(): void {
   // Terminal
   ipcMain.handle('terminal:create', (_, cwd: string) => {
     const [win] = BrowserWindow.getAllWindows()
-    if (!win) return
-    if (ptyProcess) { try { ptyProcess.kill() } catch (_e) {} ptyProcess = null }
+    if (!win) return ''
+    const id = `term-${nextTerminalId++}`
     try {
       const nodePty = require('node-pty') as typeof NodePty
       const shellBin = process.env.SHELL || '/bin/zsh'
-      ptyProcess = nodePty.spawn(shellBin, [], {
+      const pty = nodePty.spawn(shellBin, [], {
         name: 'xterm-256color',
         cwd: cwd || process.env.HOME || '/',
         env: { ...process.env } as Record<string, string>,
         cols: 80,
         rows: 24,
       })
-      ptyProcess.onData((data) => {
-        if (!win.isDestroyed()) win.webContents.send('terminal:output', data)
+      pty.onData((data) => {
+        if (!win.isDestroyed()) win.webContents.send('terminal:output', id, data)
       })
-      ptyProcess.onExit(() => { ptyProcess = null })
+      pty.onExit(() => { ptyProcesses.delete(id) })
+      ptyProcesses.set(id, pty)
+      return id
     } catch (err) {
       const msg = `\r\n\x1b[31mFailed to start terminal: ${(err as Error).message}\x1b[0m\r\n`
-      if (!win.isDestroyed()) win.webContents.send('terminal:output', msg)
+      if (!win.isDestroyed()) win.webContents.send('terminal:output', id, msg)
+      return id
     }
   })
-  ipcMain.on('terminal:input',  (_, data: string) => { ptyProcess?.write(data) })
-  ipcMain.handle('terminal:resize', (_, cols: number, rows: number) => { ptyProcess?.resize(cols, rows) })
-  ipcMain.on('terminal:kill',   () => { if (ptyProcess) { try { ptyProcess.kill() } catch (_e) {} ptyProcess = null } })
+  ipcMain.on('terminal:input',  (_, id: string, data: string) => { ptyProcesses.get(id)?.write(data) })
+  ipcMain.handle('terminal:resize', (_, id: string, cols: number, rows: number) => { ptyProcesses.get(id)?.resize(cols, rows) })
+  ipcMain.on('terminal:kill',   (_, id: string) => {
+    const pty = ptyProcesses.get(id)
+    if (pty) { try { pty.kill() } catch (_e) {} ptyProcesses.delete(id) }
+  })
 }

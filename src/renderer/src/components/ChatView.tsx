@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react'
-import { Bot, Sparkles } from 'lucide-react'
+import { SparklesIcon } from '@animateicons/react/lucide'
 import { Message } from '@/types'
 import { MessageItem } from './MessageItem'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -22,7 +22,7 @@ export function ChatView({ messages, sessionTitle, isLoading }: ChatViewProps): 
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-8">
         <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
-          <Sparkles className="size-8 text-primary" />
+          <SparklesIcon className="size-8 text-primary" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-foreground">{sessionTitle}</h2>

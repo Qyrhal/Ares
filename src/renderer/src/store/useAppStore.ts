@@ -16,7 +16,6 @@ interface AppStore {
   // ── UI ──────────────────────────────────────────────────────────────────────
   activeView: ActivityView
   terminalOpen: boolean
-  terminalKey: number
 
   // ── Tabs ────────────────────────────────────────────────────────────────────
   tabs: Tab[]
@@ -38,7 +37,6 @@ interface AppStore {
 
   setActiveView: (v: ActivityView) => void
   toggleTerminal: () => void
-  bumpTerminal: () => void
 
   // Adds the tab if not already open, activates it, and syncs sidebar view.
   openSessionTab: (session: Session) => void
@@ -73,7 +71,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ── Initial state ────────────────────────────────────────────────────────────
   activeView: 'chat',
   terminalOpen: false,
-  terminalKey: 0,
 
   tabs: [],
   activeTabId: null,
@@ -91,8 +88,6 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setActiveView: (v) => set({ activeView: v }),
 
   toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen })),
-
-  bumpTerminal: () => set((s) => ({ terminalKey: s.terminalKey + 1 })),
 
   // ── Tab actions ──────────────────────────────────────────────────────────────
   openSessionTab: (session) => set((s) => {

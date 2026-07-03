@@ -40,7 +40,7 @@ const electronMock = {
     checkout: vi.fn(), createBranch: vi.fn(), diff: vi.fn().mockResolvedValue(''), init: vi.fn(),
   },
   terminal: {
-    create: vi.fn().mockResolvedValue(undefined),
+    create: vi.fn().mockResolvedValue('term-1'),
     write: vi.fn(),
     resize: vi.fn().mockResolvedValue(undefined),
     kill: vi.fn(),

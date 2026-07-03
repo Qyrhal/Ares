@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { ArrowDown, ArrowUp, Loader2, RefreshCw, RotateCcw, AlertCircle } from 'lucide-react'
 import {
-  GitBranch, RefreshCw, ArrowUp, ArrowDown, Plus, Minus,
-  RotateCcw, ChevronDown, ChevronRight, GitCommitHorizontal,
-  Loader2, AlertCircle, GitMerge, Check, X
-} from 'lucide-react'
+  GitBranchIcon, PlusIcon, MinusIcon,
+  ChevronDownIcon, ChevronRightIcon, GitCommitHorizontalIcon,
+  GitMergeIcon, CheckIcon, XIcon
+} from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import { GitFile, GitStatus, GitBranches } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -71,7 +72,7 @@ function FileRow({
           title={area === 'staged' ? 'Unstage' : 'Stage'}
           className="flex size-5 items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
         >
-          {area === 'staged' ? <Minus className="size-3" /> : <Plus className="size-3" />}
+          {area === 'staged' ? <MinusIcon className="size-3" /> : <PlusIcon className="size-3" />}
         </button>
       </div>
     </div>
@@ -97,7 +98,7 @@ function Section({
         className="flex cursor-pointer items-center gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground select-none"
         onClick={onToggle}
       >
-        {expanded ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
+        {expanded ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
         <span className="flex-1">{title}</span>
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px]">{count}</span>
         {onBulkAction && count > 0 && (
@@ -106,7 +107,7 @@ function Section({
             title={bulkLabel}
             className="ml-1 rounded hover:bg-accent p-0.5"
           >
-            {bulkLabel === 'Stage all' ? <Plus className="size-3" /> : <Minus className="size-3" />}
+            {bulkLabel === 'Stage all' ? <PlusIcon className="size-3" /> : <MinusIcon className="size-3" />}
           </button>
         )}
       </div>
@@ -158,9 +159,9 @@ function BranchPicker({
           disabled ? 'opacity-40 cursor-default' : 'hover:bg-accent cursor-pointer'
         )}
       >
-        <GitBranch className="size-3 shrink-0 text-primary" />
+        <GitBranchIcon className="size-3 shrink-0 text-primary" />
         <span className="truncate font-medium text-foreground">{current || '—'}</span>
-        {!disabled && <ChevronDown className="size-3 shrink-0 text-muted-foreground" />}
+        {!disabled && <ChevronDownIcon className="size-3 shrink-0 text-muted-foreground" />}
       </button>
 
       {open && (
@@ -175,7 +176,7 @@ function BranchPicker({
                   b === current ? 'text-primary' : 'text-foreground'
                 )}
               >
-                {b === current && <Check className="size-3" />}
+                {b === current && <CheckIcon className="size-3" />}
                 {b !== current && <span className="w-3" />}
                 {b}
               </button>
@@ -193,10 +194,10 @@ function BranchPicker({
                   className="flex-1 rounded border border-border bg-input px-2 py-1 text-xs text-foreground outline-none focus:border-primary"
                 />
                 <button onClick={handleCreate} className="rounded bg-primary px-2 py-1 text-xs text-primary-foreground">
-                  <Check className="size-3" />
+                  <CheckIcon className="size-3" />
                 </button>
                 <button onClick={() => setCreating(false)} className="rounded px-1 text-muted-foreground hover:text-foreground">
-                  <X className="size-3" />
+                  <XIcon className="size-3" />
                 </button>
               </div>
             ) : (
@@ -204,7 +205,7 @@ function BranchPicker({
                 onClick={() => setCreating(true)}
                 className="flex w-full items-center gap-2 rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
               >
-                <Plus className="size-3" /> Create branch…
+                <PlusIcon className="size-3" /> Create branch…
               </button>
             )}
           </div>
@@ -257,7 +258,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   if (!workspacePath) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
-        <GitBranch className="size-10 text-muted-foreground/30" />
+        <GitBranchIcon className="size-10 text-muted-foreground/30" />
         <p className="text-xs text-muted-foreground">Open a folder to use source control.</p>
       </div>
     )
@@ -267,7 +268,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   if (status && !status.hasRepo) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 text-center">
-        <GitBranch className="size-10 text-muted-foreground/30" />
+        <GitBranchIcon className="size-10 text-muted-foreground/30" />
         <div>
           <p className="text-xs font-medium text-foreground">Not a git repository</p>
           <p className="mt-0.5 text-xs text-muted-foreground">Initialize to start tracking changes.</p>
@@ -278,7 +279,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
           onClick={() => run('git init', () => el.git.init(workspacePath))}
           disabled={opState === 'loading'}
         >
-          {opState === 'loading' ? <Loader2 className="size-3 animate-spin" /> : <GitMerge className="size-3" />}
+          {opState === 'loading' ? <Loader2 className="size-3 animate-spin" /> : <GitMergeIcon className="size-3" />}
           Initialize repository
         </Button>
       </div>
@@ -385,7 +386,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
               disabled={!commitMsg.trim() || opState === 'loading'}
               className="flex flex-1 items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              <GitCommitHorizontal className="size-3.5" />
+              <GitCommitHorizontalIcon className="size-3.5" />
               {(status?.staged.length ?? 0) > 0 ? 'Commit staged' : 'Commit all'}
             </button>
           </div>
@@ -458,7 +459,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
         {/* Empty state */}
         {status?.hasRepo && totalChanges === 0 && (
           <div className="flex flex-col items-center justify-center gap-1 py-10 text-center">
-            <Check className="size-6 text-green-500/60" />
+            <CheckIcon className="size-6 text-green-500/60" />
             <p className="text-xs text-muted-foreground">No changes</p>
           </div>
         )}

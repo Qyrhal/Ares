@@ -47,11 +47,11 @@ declare global {
         delete(path: string): Promise<void>
       }
       terminal: {
-        create(cwd: string): Promise<void>
-        write(data: string): void
-        resize(cols: number, rows: number): Promise<void>
-        kill(): void
-        onOutput(cb: (data: string) => void): () => void
+        create(cwd: string): Promise<string>
+        write(id: string, data: string): void
+        resize(id: string, cols: number, rows: number): Promise<void>
+        kill(id: string): void
+        onOutput(cb: (id: string, data: string) => void): () => void
       }
       git: {
         status(cwd: string): Promise<GitStatus>

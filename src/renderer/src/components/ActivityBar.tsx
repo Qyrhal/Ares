@@ -1,5 +1,6 @@
 import React from 'react'
-import { MessageSquare, FolderOpen, GitBranch, Settings, SquareTerminal } from 'lucide-react'
+import { MessageSquare, SquareTerminal } from 'lucide-react'
+import { FolderOpenIcon, GitBranchIcon, SettingsIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import { ActivityView } from '@/types'
 
@@ -8,30 +9,34 @@ interface ActivityBarProps {
   onChangeView: (v: ActivityView) => void
   terminalOpen: boolean
   onToggleTerminal: () => void
+  gitBadge?: number
 }
 
-const TOP_ITEMS: { view: ActivityView; icon: React.FC<{ className?: string }>; label: string }[] = [
-  { view: 'chat',     icon: MessageSquare, label: 'Chat' },
-  { view: 'explorer', icon: FolderOpen,    label: 'Explorer' },
-  { view: 'git',      icon: GitBranch,     label: 'Source Control' },
-]
-
-export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTerminal }: ActivityBarProps): React.ReactElement {
+export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTerminal, gitBadge = 0 }: ActivityBarProps): React.ReactElement {
   return (
     <div className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-card py-2 gap-1">
-      {TOP_ITEMS.map(({ view, icon: Icon, label }) => (
+      {([
+        { view: 'chat' as ActivityView,     icon: MessageSquare, label: 'Chat',           badge: 0 },
+        { view: 'explorer' as ActivityView, icon: FolderOpenIcon,    label: 'Explorer',       badge: 0 },
+        { view: 'git' as ActivityView,      icon: GitBranchIcon,     label: 'Source Control', badge: gitBadge },
+      ] as const).map(({ view, icon: Icon, label, badge }) => (
         <button
           key={view}
           title={label}
           onClick={() => onChangeView(view)}
           className={cn(
-            'flex size-9 items-center justify-center rounded-lg transition-colors',
+            'relative flex size-9 items-center justify-center rounded-lg transition-colors',
             activeView === view
               ? 'bg-primary/15 text-primary'
               : 'text-muted-foreground hover:bg-accent hover:text-foreground'
           )}
         >
           <Icon className="size-5" />
+          {badge > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-0.5 text-[9px] font-bold leading-none text-primary-foreground">
+              {badge > 99 ? '99+' : badge}
+            </span>
+          )}
         </button>
       ))}
 
@@ -63,7 +68,7 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
             : 'text-muted-foreground hover:bg-accent hover:text-foreground'
         )}
       >
-        <Settings className="size-5" />
+        <SettingsIcon className="size-5" />
       </button>
     </div>
   )

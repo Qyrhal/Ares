@@ -30,6 +30,7 @@
     ]
   },
   "dependencies": {
+    "@animateicons/react": "^0.3.4",
     "@electron-toolkit/preload": "^3.0.1",
     "@electron-toolkit/utils": "^3.0.0",
     "@monaco-editor/react": "^4.7.0",

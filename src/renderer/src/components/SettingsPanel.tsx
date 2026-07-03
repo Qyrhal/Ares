@@ -1,8 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import {
-  Save, Eye, EyeOff, CheckCircle2, Loader2,
-  Wifi, WifiOff, RefreshCw, AlertCircle
-} from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save } from 'lucide-react'
+import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
 import { AppSettings } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
@@ -168,7 +166,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
                   onClick={() => setShowKey((v) => !v)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
-                  {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  {showKey ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
                 </button>
               </div>
               <Button
@@ -193,8 +191,8 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
                 connStatus === 'error'   && 'border-destructive/30 bg-destructive/10 text-destructive',
                 connStatus === 'loading' && 'border-border bg-muted/30 text-muted-foreground'
               )}>
-                {connStatus === 'ok'      && <Wifi className="size-3.5 shrink-0" />}
-                {connStatus === 'error'   && <WifiOff className="size-3.5 shrink-0" />}
+                {connStatus === 'ok'      && <WifiIcon className="size-3.5 shrink-0" />}
+                {connStatus === 'error'   && <WifiOffIcon className="size-3.5 shrink-0" />}
                 {connStatus === 'loading' && <Loader2 className="size-3.5 shrink-0 animate-spin" />}
                 {connStatus === 'loading' ? 'Connecting…' : connMessage}
               </div>

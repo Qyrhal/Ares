@@ -1,5 +1,6 @@
 import React, { useRef, useState, useCallback } from 'react'
-import { Paperclip, Send, X, File, Image, FileText } from 'lucide-react'
+import { File, FileText, Image } from 'lucide-react'
+import { PaperclipIcon, SendIcon, XIcon, FolderOpenIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { FileAttachment } from '@/types'
 import {
@@ -11,6 +12,7 @@ import { v4 as uuidv4 } from 'uuid'
 
 interface InputBarProps {
   onSend: (text: string, attachments: FileAttachment[]) => void
+  onRevealInExplorer?: () => void
   disabled?: boolean
   placeholder?: string
 }
@@ -21,7 +23,7 @@ function fileIcon(type: string): React.ReactElement {
   return <File className="size-4" />
 }
 
-export function InputBar({ onSend, disabled, placeholder }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onRevealInExplorer, disabled, placeholder }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -107,7 +109,7 @@ export function InputBar({ onSend, disabled, placeholder }: InputBarProps): Reac
                   onClick={() => removeAttachment(att.id)}
                   className="opacity-100"
                 >
-                  <X />
+                  <XIcon />
                 </AttachmentAction>
               </AttachmentActions>
             </Attachment>
@@ -134,7 +136,7 @@ export function InputBar({ onSend, disabled, placeholder }: InputBarProps): Reac
           className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label="Attach file"
         >
-          <Paperclip className="size-4" />
+          <PaperclipIcon className="size-4" />
         </button>
 
         {/* Textarea */}
@@ -162,7 +164,18 @@ export function InputBar({ onSend, disabled, placeholder }: InputBarProps): Reac
           )}
           aria-label="Send message"
         >
-          <Send className="size-3.5" />
+          <SendIcon className="size-3.5" />
+        </button>
+
+        {/* Reveal in explorer */}
+        <button
+          type="button"
+          onClick={onRevealInExplorer}
+          className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          aria-label="Reveal in sidebar"
+          title="Reveal in sidebar"
+        >
+          <FolderOpenIcon className="size-3.5" />
         </button>
       </div>
 
