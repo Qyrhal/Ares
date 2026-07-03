@@ -1,0 +1,67 @@
+import { z } from 'zod'
+import type { Session, Message, AppSettings } from '@/types'
+
+// ── IPC wire types ─────────────────────────────────────────────────────────────
+
+export const RawSessionSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  model: z.string(),
+  created_at: z.number(),
+  updated_at: z.number(),
+  message_count: z.number().optional().default(0),
+})
+
+export const RawMessageSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  role: z.enum(['user', 'assistant', 'tool', 'system']),
+  content: z.string(),
+  attachments: z.string().nullable().optional(),
+  tool_name: z.string().nullable().optional(),
+  tool_status: z.string().nullable().optional(),
+  tool_input: z.string().nullable().optional(),
+  tool_output: z.string().nullable().optional(),
+  created_at: z.number(),
+})
+
+export const AppSettingsSchema = z.object({
+  apiKey: z.string().default(''),
+  apiBaseUrl: z.string().default('https://api.openai.com/v1'),
+  defaultModel: z.string().default('gpt-4o-mini'),
+  themeId: z.string().default('red'),
+})
+
+// ── Parsed domain types ────────────────────────────────────────────────────────
+
+export function parseSession(raw: unknown): Session {
+  const r = RawSessionSchema.parse(raw)
+  return {
+    id: r.id,
+    title: r.title,
+    model: r.model,
+    createdAt: r.created_at,
+    updatedAt: r.updated_at,
+    messageCount: r.message_count,
+  }
+}
+
+export function parseMessage(raw: unknown): Message {
+  const r = RawMessageSchema.parse(raw)
+  return {
+    id: r.id,
+    sessionId: r.session_id,
+    role: r.role,
+    content: r.content,
+    attachments: r.attachments ? JSON.parse(r.attachments) : undefined,
+    toolName: r.tool_name ?? undefined,
+    toolStatus: (r.tool_status as Message['toolStatus']) ?? undefined,
+    toolInput: r.tool_input ?? undefined,
+    toolOutput: r.tool_output ?? undefined,
+    createdAt: r.created_at,
+  }
+}
+
+export function parseSettings(raw: unknown): AppSettings {
+  return AppSettingsSchema.parse(raw)
+}
