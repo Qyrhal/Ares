@@ -96,52 +96,6 @@ export default function App(): React.ReactElement {
     el.db.getMessages(activeSessionTab.id).then((raw) => setMessages(raw.map(toMessage)))
   }, [activeSessionTab?.id])
 
-  // Keyboard shortcuts — re-registers when tabs/activeTabId change so
-  // tab-navigation always reads the latest list.
-  useEffect(() => {
-    const tabId = (t: Tab): string => (t.type === 'session' ? t.id : t.path)
-    const handler = (e: KeyboardEvent): void => {
-      if (!(e.metaKey || e.ctrlKey)) return
-      // New session: ⌘N  ⌘T
-      if (e.key === 'n' || e.key === 't') { e.preventDefault(); handleNewSession(); return }
-      // Close active tab: ⌘W
-      if (e.key === 'w') {
-        e.preventDefault()
-        if (activeTabId) handleCloseTab(activeTabId)
-        return
-      }
-      // Toggle terminal: ⌘`
-      if (e.key === '`') { e.preventDefault(); setTerminalOpen((v) => !v); return }
-      // Previous tab: ⌘[
-      if (e.key === '[') {
-        e.preventDefault()
-        if (tabs.length === 0) return
-        const idx = tabs.findIndex((t) => tabId(t) === activeTabId)
-        const prev = tabs[idx <= 0 ? tabs.length - 1 : idx - 1]
-        if (prev) setActiveTabId(tabId(prev))
-        return
-      }
-      // Next tab: ⌘]
-      if (e.key === ']') {
-        e.preventDefault()
-        if (tabs.length === 0) return
-        const idx = tabs.findIndex((t) => tabId(t) === activeTabId)
-        const next = tabs[idx >= tabs.length - 1 ? 0 : idx + 1]
-        if (next) setActiveTabId(tabId(next))
-        return
-      }
-      // Jump to tab by position: ⌘1-9
-      const num = parseInt(e.key, 10)
-      if (!isNaN(num) && num >= 1 && num <= 9) {
-        e.preventDefault()
-        const tab = tabs[num - 1]
-        if (tab) setActiveTabId(tabId(tab))
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [handleNewSession, activeTabId, tabs])
-
   // ── Tab helpers ────────────────────────────────────────────────────────────
   const openSessionTab = useCallback((session: Session): void => {
     setTabs((prev) => {
@@ -186,6 +140,45 @@ export default function App(): React.ReactElement {
     openSessionTab(session)
     setMessages([])
   }, [settings.defaultModel])
+
+  // Keyboard shortcuts — after handleNewSession so it's not in TDZ
+  useEffect(() => {
+    const tabId = (t: Tab): string => (t.type === 'session' ? t.id : t.path)
+    const handler = (e: KeyboardEvent): void => {
+      if (!(e.metaKey || e.ctrlKey)) return
+      if (e.key === 'n' || e.key === 't') { e.preventDefault(); handleNewSession(); return }
+      if (e.key === 'w') {
+        e.preventDefault()
+        if (activeTabId) handleCloseTab(activeTabId)
+        return
+      }
+      if (e.key === '`') { e.preventDefault(); setTerminalOpen((v) => !v); return }
+      if (e.key === '[') {
+        e.preventDefault()
+        if (tabs.length === 0) return
+        const idx = tabs.findIndex((t) => tabId(t) === activeTabId)
+        const prev = tabs[idx <= 0 ? tabs.length - 1 : idx - 1]
+        if (prev) setActiveTabId(tabId(prev))
+        return
+      }
+      if (e.key === ']') {
+        e.preventDefault()
+        if (tabs.length === 0) return
+        const idx = tabs.findIndex((t) => tabId(t) === activeTabId)
+        const next = tabs[idx >= tabs.length - 1 ? 0 : idx + 1]
+        if (next) setActiveTabId(tabId(next))
+        return
+      }
+      const num = parseInt(e.key, 10)
+      if (!isNaN(num) && num >= 1 && num <= 9) {
+        e.preventDefault()
+        const tab = tabs[num - 1]
+        if (tab) setActiveTabId(tabId(tab))
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [handleNewSession, activeTabId, tabs])
 
   const handleSelectSession = useCallback((id: string) => {
     const session = sessions.find((s) => s.id === id)
@@ -401,8 +394,8 @@ export default function App(): React.ReactElement {
             />
           )}
 
-          {/* Content — min-h-0 lets it shrink when terminal opens */}
-          <div className="flex-1 overflow-hidden min-h-0">
+          {/* Content — flex-col so ChatView/InputBar fill height; min-h-0 allows shrink when terminal opens */}
+          <div className="flex flex-1 flex-col overflow-hidden min-h-0">
           {activeView === 'settings' ? (
             <SettingsPanel settings={settings} onSave={handleSaveSettings} />
           ) : activeTab?.type === 'file' ? (
