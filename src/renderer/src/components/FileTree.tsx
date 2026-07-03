@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { FileNode } from '@/types'
+import { ContextMenu, ContextMenuEntry } from './ui/context-menu'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,10 @@ interface OpsCtx {
   setCreating: (s: CreateState | null) => void
   renaming: RenameState | null
   setRenaming: (s: RenameState | null) => void
+  // Paths that must be forcibly expanded (e.g. when creating inside a collapsed dir)
+  forceExpandPaths: ReadonlySet<string>
+  forceExpand: (path: string) => void
+  showCtxMenu: (e: React.MouseEvent, node: FileNode | null) => void
   doCreateFile: (parentPath: string, name: string) => Promise<void>
   doCreateFolder: (parentPath: string, name: string) => Promise<void>
   doRename: (oldPath: string, newName: string) => Promise<void>
@@ -106,11 +111,20 @@ function TreeNode({
   onOpenFile: (n: FileNode) => void
 }): React.ReactElement {
   const [expanded, setExpanded] = useState(depth < 1)
-  const { creating, setCreating, renaming, setRenaming, doCreateFile, doCreateFolder, doRename, doDelete } = useOps()
+  const {
+    creating, setCreating, renaming, setRenaming,
+    forceExpandPaths, forceExpand, showCtxMenu,
+    doCreateFile, doCreateFolder, doRename, doDelete,
+  } = useOps()
   const isDir = node.type === 'directory'
   const Icon = isDir ? (expanded ? FolderOpen : FolderClosed) : fileIconFor(node.name)
   const isRenaming = renaming?.path === node.path
   const isCreatingInside = isDir && creating?.parentPath === node.path
+
+  // Respond to programmatic expand requests (e.g. from context menu)
+  useEffect(() => {
+    if (isDir && forceExpandPaths.has(node.path)) setExpanded(true)
+  }, [forceExpandPaths])
 
   if (isRenaming) {
     return (
@@ -126,7 +140,7 @@ function TreeNode({
           }}
           onCancel={() => setRenaming(null)}
         />
-        {isDir && expanded && node.children && node.children.map((child) => (
+        {isDir && expanded && node.children?.map((child) => (
           <TreeNode key={child.path} node={child} depth={depth + 1} onOpenFile={onOpenFile} />
         ))}
       </div>
@@ -135,7 +149,10 @@ function TreeNode({
 
   return (
     <div>
-      <div className="group relative flex items-center">
+      <div
+        className="group relative flex items-center"
+        onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); showCtxMenu(e, node) }}
+      >
         <button
           onClick={() => { if (isDir) setExpanded((v) => !v); else onOpenFile(node) }}
           style={{ paddingLeft: `${8 + depth * 12}px` }}
@@ -162,7 +179,7 @@ function TreeNode({
                 title="New file"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setExpanded(true)
+                  forceExpand(node.path)
                   setCreating({ type: 'file', parentPath: node.path })
                   setRenaming(null)
                 }}
@@ -174,7 +191,7 @@ function TreeNode({
                 title="New folder"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setExpanded(true)
+                  forceExpand(node.path)
                   setCreating({ type: 'folder', parentPath: node.path })
                   setRenaming(null)
                 }}
@@ -256,10 +273,93 @@ export function FileTree({
 }: FileTreeProps): React.ReactElement {
   const [creating, setCreating] = useState<CreateState | null>(null)
   const [renaming, setRenaming] = useState<RenameState | null>(null)
+  const [forceExpandPaths, setForceExpandPaths] = useState<ReadonlySet<string>>(new Set())
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; node: FileNode | null } | null>(null)
+
+  const forceExpand = (path: string): void =>
+    setForceExpandPaths((prev) => new Set([...prev, path]))
+
+  const showCtxMenu = (e: React.MouseEvent, node: FileNode | null): void => {
+    e.preventDefault()
+    setCtxMenu({ x: e.clientX, y: e.clientY, node })
+  }
+
+  // Build context menu entries based on what was right-clicked
+  const buildEntries = (node: FileNode | null): ContextMenuEntry[] => {
+    const parentPath = node?.path ?? workspacePath ?? '/'
+
+    if (!node) {
+      // Right-clicked on blank tree area
+      return [
+        {
+          label: 'New file',
+          icon: <FilePlus className="size-3.5" />,
+          onClick: () => { setCreating({ type: 'file', parentPath }); setRenaming(null) },
+        },
+        {
+          label: 'New folder',
+          icon: <FolderPlus className="size-3.5" />,
+          onClick: () => { setCreating({ type: 'folder', parentPath }); setRenaming(null) },
+        },
+      ]
+    }
+
+    if (node.type === 'directory') {
+      return [
+        {
+          label: 'New file',
+          icon: <FilePlus className="size-3.5" />,
+          onClick: () => { forceExpand(node.path); setCreating({ type: 'file', parentPath: node.path }); setRenaming(null) },
+        },
+        {
+          label: 'New folder',
+          icon: <FolderPlus className="size-3.5" />,
+          onClick: () => { forceExpand(node.path); setCreating({ type: 'folder', parentPath: node.path }); setRenaming(null) },
+        },
+        { separator: true as const },
+        {
+          label: 'Rename',
+          icon: <Pencil className="size-3.5" />,
+          onClick: () => { setRenaming({ path: node.path, name: node.name }); setCreating(null) },
+        },
+        { separator: true as const },
+        {
+          label: 'Delete',
+          icon: <Trash2 className="size-3.5" />,
+          destructive: true,
+          onClick: () => { if (window.confirm(`Delete "${node.name}"?`)) onDelete(node) },
+        },
+      ]
+    }
+
+    // File node
+    return [
+      {
+        label: 'Open',
+        icon: <File className="size-3.5" />,
+        onClick: () => onOpenFile(node),
+      },
+      { separator: true as const },
+      {
+        label: 'Rename',
+        icon: <Pencil className="size-3.5" />,
+        onClick: () => { setRenaming({ path: node.path, name: node.name }); setCreating(null) },
+      },
+      { separator: true as const },
+      {
+        label: 'Delete',
+        icon: <Trash2 className="size-3.5" />,
+        destructive: true,
+        onClick: () => { if (window.confirm(`Delete "${node.name}"?`)) onDelete(node) },
+      },
+    ]
+  }
 
   const ctx: OpsCtx = {
     creating, setCreating,
     renaming, setRenaming,
+    forceExpandPaths, forceExpand,
+    showCtxMenu,
     doCreateFile: onCreateFile,
     doCreateFolder: onCreateFolder,
     doRename: onRename,
@@ -319,8 +419,13 @@ export function FileTree({
           </div>
         </div>
 
-        {/* Tree */}
-        <div className="flex-1 overflow-y-auto py-1">
+        {/* Tree — right-click on blank area */}
+        <div
+          className="flex-1 overflow-y-auto py-1"
+          onContextMenu={(e) => {
+            if (e.target === e.currentTarget) showCtxMenu(e, null)
+          }}
+        >
           {isCreatingAtRoot && (
             <InlineInput
               placeholder={creating!.type === 'file' ? 'filename.tsx' : 'folder name'}
@@ -347,6 +452,16 @@ export function FileTree({
           }
         </div>
       </div>
+
+      {/* Context menu portal */}
+      {ctxMenu && (
+        <ContextMenu
+          entries={buildEntries(ctxMenu.node)}
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          onClose={() => setCtxMenu(null)}
+        />
+      )}
     </OpsCtx.Provider>
   )
 }
