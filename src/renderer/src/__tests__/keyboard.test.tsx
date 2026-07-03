@@ -1,9 +1,9 @@
 import React from 'react'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react'
 import App from '../App'
+import { useAppStore } from '../store/useAppStore'
 
-// TerminalView uses xterm.js (Canvas) which jsdom doesn't support — mock it
 vi.mock('../components/TerminalView', () => ({
   TerminalView: ({ onClose }: { cwd: string | null; onClose: () => void; onNewTerminal: () => void }) => (
     <div data-testid="terminal-mock">
@@ -12,7 +12,6 @@ vi.mock('../components/TerminalView', () => ({
   ),
 }))
 
-// Monaco editor also uses browser APIs not available in jsdom
 vi.mock('@monaco-editor/react', () => ({
   default: () => <div data-testid="monaco-mock" />,
   Editor: () => <div data-testid="monaco-mock" />,
@@ -24,89 +23,97 @@ async function renderApp() {
   return result!
 }
 
-describe('Keyboard shortcuts', () => {
-  beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => {
+  // Reset Zustand store to initial state between tests
+  useAppStore.setState({
+    activeView: 'chat', terminalOpen: false, terminalKey: 0,
+    tabs: [], activeTabId: null,
+    sessions: [], messages: [], isLoading: false,
+    workspacePath: null, fileNodes: [],
+    settings: { apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red' },
+  })
+  vi.clearAllMocks()
+})
 
+describe('Keyboard shortcuts', () => {
   it('renders the app without errors', async () => {
     await renderApp()
-    // Title bar with ARES should be present
     expect(screen.getByText('ARES')).toBeInTheDocument()
   })
 
-  it('⌘T opens a new session (creates a tab)', async () => {
-    const { electron } = window as Window & typeof globalThis & { electron: typeof window.electron }
-    const mock = electron.db as { createSession: ReturnType<typeof vi.fn> }
+  it('⌘T creates a new session', async () => {
+    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
     await renderApp()
-    await act(async () => {
-      fireEvent.keyDown(window, { metaKey: true, key: 't' })
-    })
-    await waitFor(() => {
-      expect(mock.createSession).toHaveBeenCalled()
-    })
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 't' }) })
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
   })
 
-  it('⌘N opens a new session', async () => {
-    const mock = (window.electron.db as { createSession: ReturnType<typeof vi.fn> })
-    mock.createSession.mockClear()
+  it('⌘N creates a new session', async () => {
+    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
     await renderApp()
-    await act(async () => {
-      fireEvent.keyDown(window, { metaKey: true, key: 'n' })
-    })
-    await waitFor(() => {
-      expect(mock.createSession).toHaveBeenCalled()
-    })
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 'n' }) })
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
   })
 
-  it('⌘` toggles the terminal panel', async () => {
+  it('⌘` toggles the terminal panel on', async () => {
     await renderApp()
     expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument()
-    await act(async () => {
-      fireEvent.keyDown(window, { metaKey: true, key: '`' })
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
+    await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
+  })
+
+  it('⌘` toggles the terminal panel off', async () => {
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
+    await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
+    await waitFor(() => expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument())
+  })
+
+  it('⌘W does nothing when no tabs are open', async () => {
+    await renderApp()
+    expect(() => fireEvent.keyDown(window, { metaKey: true, key: 'w' })).not.toThrow()
+  })
+})
+
+describe('selectTab — sidebar sync (bug fix)', () => {
+  it('switching to a session tab updates activeView to chat', () => {
+    const session = { id: 's1', type: 'session' as const, title: 'Test' }
+    useAppStore.setState({
+      tabs: [session, { type: 'file' as const, path: '/f.ts', name: 'f.ts', isDirty: false }],
+      activeTabId: '/f.ts',
+      activeView: 'explorer',
     })
-    await waitFor(() => {
-      expect(screen.getByTestId('terminal-mock')).toBeInTheDocument()
+    useAppStore.getState().selectTab('s1')
+    expect(useAppStore.getState().activeView).toBe('chat')
+  })
+
+  it('switching to a file tab does not change activeView', () => {
+    const session = { id: 's1', type: 'session' as const, title: 'Test' }
+    useAppStore.setState({
+      tabs: [session, { type: 'file' as const, path: '/f.ts', name: 'f.ts', isDirty: false }],
+      activeTabId: 's1',
+      activeView: 'chat',
     })
-    // Toggle off
-    await act(async () => {
-      fireEvent.keyDown(window, { metaKey: true, key: '`' })
-    })
-    await waitFor(() => {
-      expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument()
-    })
+    useAppStore.getState().selectTab('/f.ts')
+    expect(useAppStore.getState().activeView).toBe('chat')
+    expect(useAppStore.getState().activeTabId).toBe('/f.ts')
   })
 })
 
 describe('Terminal panel', () => {
-  it('terminal toggle button in activity bar opens the terminal', async () => {
+  it('activity bar terminal button opens the terminal', async () => {
     await renderApp()
     const termBtn = screen.getByTitle('Terminal (⌘`)')
     await act(async () => { fireEvent.click(termBtn) })
-    await waitFor(() => {
-      expect(screen.getByTestId('terminal-mock')).toBeInTheDocument()
-    })
+    await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
   })
 
   it('terminal close button hides the panel', async () => {
     await renderApp()
-    await act(async () => {
-      fireEvent.keyDown(window, { metaKey: true, key: '`' })
-    })
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
     await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
-    await act(async () => {
-      fireEvent.click(screen.getByText('Close terminal'))
-    })
-    await waitFor(() => {
-      expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument()
-    })
-  })
-})
-
-describe('Tab management', () => {
-  it('⌘W does nothing when no tabs are open', async () => {
-    await renderApp()
-    // No error should be thrown
-    expect(() => {
-      fireEvent.keyDown(window, { metaKey: true, key: 'w' })
-    }).not.toThrow()
+    await act(async () => { fireEvent.click(screen.getByText('Close terminal')) })
+    await waitFor(() => expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument())
   })
 })
