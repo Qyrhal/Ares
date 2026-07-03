@@ -395,33 +395,33 @@ export function FileTree({
     <OpsCtx.Provider value={ctx}>
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-          <span className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            {workspacePath.split('/').pop()}
+        <div className="flex h-9 shrink-0 items-center px-3 border-b border-border">
+          <span className="truncate text-[10px] font-semibold uppercase tracking-wider text-muted-foreground" title={workspacePath}>
+            {workspacePath.split('/').slice(-3).join('/')}
           </span>
-          <div className="flex items-center gap-0.5">
-            <button
-              title="New file"
-              onClick={() => { setCreating({ type: 'file', parentPath: workspacePath }); setRenaming(null) }}
-              className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <FilePlus className="size-3.5" />
-            </button>
-            <button
-              title="New folder"
-              onClick={() => { setCreating({ type: 'folder', parentPath: workspacePath }); setRenaming(null) }}
-              className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <FolderPlus className="size-3.5" />
-            </button>
-            <button
-              title="Open another folder"
-              onClick={onOpenFolder}
-              className="flex size-5 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <FolderOpenIcon className="size-3.5" />
-            </button>
-          </div>
+        </div>
+        <div className="flex shrink-0 border-b border-border">
+          <button
+            title="New file"
+            onClick={() => { setCreating({ type: 'file', parentPath: workspacePath }); setRenaming(null) }}
+            className="flex flex-1 items-center justify-center py-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors border-r border-border"
+          >
+            <FilePlus className="size-3.5" />
+          </button>
+          <button
+            title="New folder"
+            onClick={() => { setCreating({ type: 'folder', parentPath: workspacePath }); setRenaming(null) }}
+            className="flex flex-1 items-center justify-center py-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors border-r border-border"
+          >
+            <FolderPlus className="size-3.5" />
+          </button>
+          <button
+            title="Open another folder"
+            onClick={onOpenFolder}
+            className="flex flex-1 items-center justify-center py-1.5 text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          >
+            <FolderOpenIcon className="size-3.5" />
+          </button>
         </div>
 
         {/* Tree — right-click on blank area */}

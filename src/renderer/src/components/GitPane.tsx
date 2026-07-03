@@ -369,7 +369,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   return (
     <div className="flex flex-1 flex-col overflow-hidden text-xs">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+      <div className="flex h-9 shrink-0 items-center justify-between border-b border-border px-3">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Source Control
           {totalChanges > 0 && (
