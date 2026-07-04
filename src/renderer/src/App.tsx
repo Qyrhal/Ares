@@ -272,6 +272,14 @@ export default function App(): React.ReactElement {
     }
   }, [activeSession, store])
 
+  // ── File system ──────────────────────────────────────────────────────────────
+  const refreshTree = useCallback(async () => {
+    const { workspacePath } = useAppStore.getState()
+    if (!workspacePath) return
+    const nodes = await el.fs.readDir(workspacePath)
+    store.setFileNodes(nodes)
+  }, [])
+
   // ── Send message ─────────────────────────────────────────────────────────────
   const handleSend = useCallback(async (text: string, attachments: FileAttachment[]) => {
     const { isLoading, messages, workspacePath } = useAppStore.getState()
@@ -343,14 +351,6 @@ export default function App(): React.ReactElement {
       },
     )
   }, [activeSession, sendMessage, expandMentions, onToolPermission, refreshTree])
-
-  // ── File system ──────────────────────────────────────────────────────────────
-  const refreshTree = useCallback(async () => {
-    const { workspacePath } = useAppStore.getState()
-    if (!workspacePath) return
-    const nodes = await el.fs.readDir(workspacePath)
-    store.setFileNodes(nodes)
-  }, [])
 
   const handleFsCreateFile = useCallback(async (parentPath: string, name: string) => {
     const fullPath = parentPath + '/' + name
