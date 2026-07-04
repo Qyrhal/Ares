@@ -60,7 +60,7 @@ export type Tab =
   | { type: 'session'; id: string; title: string }
   | { type: 'file'; path: string; name: string; isDirty: boolean }
 
-export type ActivityView = 'chat' | 'explorer' | 'git' | 'skills' | 'plugins' | 'settings'
+export type ActivityView = 'chat' | 'explorer' | 'git' | 'skills' | 'plugins' | 'settings' | 'hooks' | 'checkpoints'
 
 export interface PiSkill {
   id: string
@@ -132,4 +132,83 @@ export interface GitBranches {
   local: string[]
   current: string
 }
+
+// ── Checkpoint ──────────────────────────────────────────────────────────────
+
+export interface Checkpoint {
+  id: string
+  index: number
+  message: string
+  date: string
+  branch: string
+}
+
+// ── LSP (Language Server Protocol) ──────────────────────────────────────────
+
+export interface LspDiagnostic {
+  file: string
+  line: number
+  column: number
+  message: string
+  severity: 'error' | 'warning' | 'info'
+  code?: string
+}
+
+export interface LspConfig {
+  servers: LspServerConfig[]
+  enabled: boolean
+}
+
+export interface LspServerConfig {
+  id: string
+  name: string
+  command: string
+  args: string[]
+  languages: string[]
+  enabled: boolean
+}
+
+// ── Custom theme ────────────────────────────────────────────────────────────
+
+export interface CustomTheme {
+  id: string
+  label: string
+  primary: string
+  background: string
+  foreground: string
+  muted: string
+  border: string
+  accent: string
+  card: string
+  input: string
+  destructive: string
+}
+
+// ── Keybind ─────────────────────────────────────────────────────────────────
+
+export interface Keybind {
+  id: string
+  key: string
+  command: string
+  description: string
+  when?: string // optional scope constraint, e.g. 'chat' | 'editor' | 'terminal'
+}
+
+// ── Hook ────────────────────────────────────────────────────────────────────
+
+export type HookEvent = 'preTool' | 'postTool' | 'preSend' | 'postSend' | 'onError'
+export type HookAction = 'script' | 'prompt' | 'webhook'
+
+export interface Hook {
+  id: string
+  event: HookEvent
+  action: HookAction
+  target: string
+  enabled: boolean
+  description?: string
+}
+
+// ── ActivityView extension ─────────────────────────────────────────────────
+
+export type ExtendedActivityView = ActivityView | 'checkpoints'
 

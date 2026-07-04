@@ -55,6 +55,14 @@ const nativeGit = {
   init:          (cwd: string) => ipcRenderer.invoke('git:init', cwd),
 }
 
+const checkpoint = {
+  create: (cwd: string, msg: string) => ipcRenderer.invoke('checkpoint:create', cwd, msg),
+  list:   (cwd: string) => ipcRenderer.invoke('checkpoint:list', cwd),
+  restore:(cwd: string, idx: number) => ipcRenderer.invoke('checkpoint:restore', cwd, idx),
+  drop:   (cwd: string, idx: number) => ipcRenderer.invoke('checkpoint:drop', cwd, idx),
+  diff:   (cwd: string, idx: number) => ipcRenderer.invoke('checkpoint:diff', cwd, idx),
+}
+
 const nativeTerminal = {
   create: (cwd: string) => ipcRenderer.invoke('terminal:create', cwd),
   write:  (id: string, data: string) => ipcRenderer.send('terminal:input', id, data),
@@ -126,7 +134,28 @@ const agentConfigApi = {
   },
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi }
+// ── LSP ────────────────────────────────────────────────────────────────────
+
+const lspApi = {
+  diagnostics: (filePath: string) => ipcRenderer.invoke('lsp:diagnostics', filePath),
+  hasSupport:  () => ipcRenderer.invoke('lsp:hasSupport'),
+}
+
+// ── Hooks ──────────────────────────────────────────────────────────────────
+
+const hooksApi = {
+  get: () => ipcRenderer.invoke('hooks:get'),
+  set: (hooks: unknown[]) => ipcRenderer.invoke('hooks:set', hooks),
+}
+
+// ── Session export/import ──────────────────────────────────────────────────
+
+const sessionApi = {
+  export: (title: string, id: string, messages: unknown[]) => ipcRenderer.invoke('session:export', title, id, messages),
+  import: () => ipcRenderer.invoke('session:import'),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

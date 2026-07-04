@@ -18,6 +18,13 @@ import {
   getBranches, checkoutBranch, createBranch, getFileDiff,
   getLog, initRepo,
 } from './git'
+import {
+  createCheckpoint, listCheckpoints, restoreCheckpoint,
+  dropCheckpoint, diffCheckpoint,
+} from './checkpoints'
+import { getDiagnostics, hasLspSupport } from './lsp'
+import { getHooks, setHooks } from './hooks'
+import { exportSession, importSession } from './session-store'
 
 const ptyProcesses = new Map<string, NodePty.IPty>()
 let nextTerminalId = 1
@@ -199,6 +206,29 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => getFileDiff(cwd, p, staged))
   ipcMain.handle('git:log',            (_, cwd: string, limit?: number) => getLog(cwd, limit))
   ipcMain.handle('git:init',           (_, cwd: string) => initRepo(cwd))
+
+  // Checkpoints — git stash-backed undo snapshots (inspired by Claude Code)
+  ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => createCheckpoint(cwd, msg))
+  ipcMain.handle('checkpoint:list',    (_, cwd: string) => listCheckpoints(cwd))
+  ipcMain.handle('checkpoint:restore', (_, cwd: string, idx: number) => restoreCheckpoint(cwd, idx))
+  ipcMain.handle('checkpoint:drop',    (_, cwd: string, idx: number) => dropCheckpoint(cwd, idx))
+  ipcMain.handle('checkpoint:diff',    (_, cwd: string, idx: number) => diffCheckpoint(cwd, idx))
+
+  // LSP — language server diagnostics (inspired by OpenCode + Claude Code)
+  ipcMain.handle('lsp:diagnostics', async (_, filePath: string) => getDiagnostics(filePath))
+  ipcMain.handle('lsp:hasSupport', () => hasLspSupport())
+
+  // Hooks — lifecycle events (inspired by Claude Code)
+  ipcMain.handle('hooks:get', () => getHooks())
+  ipcMain.handle('hooks:set', (_, hooks: Parameters<typeof setHooks>[0]) => setHooks(hooks))
+
+  // Session export/import (inspired by OpenCode)
+  ipcMain.handle('session:export', async (_, title: string, id: string, messages: any[]) =>
+    exportSession(title, id, messages))
+  ipcMain.handle('session:import', async () => {
+    try { return await importSession() }
+    catch (e) { return { error: (e as Error).message } }
+  })
 
   // API — proxy fetch through main process to avoid CORS
   ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string) => {
