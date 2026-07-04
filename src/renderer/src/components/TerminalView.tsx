@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { PlusIcon, XIcon, ChevronDownIcon, GripHorizontal } from 'lucide-react'
+import { PlusIcon, XIcon, ChevronDownIcon } from '@animateicons/react/lucide'
+import { GripHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface TerminalTab {
