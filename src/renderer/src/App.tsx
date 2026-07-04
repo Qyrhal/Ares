@@ -112,7 +112,16 @@ export default function App(): React.ReactElement {
   // Load messages when active session changes
   useEffect(() => {
     if (!activeSessionTab) { store.setMessages([]); return }
-    el.db.getMessages(activeSessionTab.id).then((raw) => store.setMessages(raw.map(parseMessage)))
+    el.db.getMessages(activeSessionTab.id).then((raw) => {
+      const msgs = raw.map(parseMessage)
+      // Any tool message still 'running' is orphaned from a previous session —
+      // the Pi agent is gone so they can never complete. Fix them now.
+      const stale = msgs.filter((m) => m.role === 'tool' && m.toolStatus === 'running')
+      for (const m of stale) el.db.updateMessage(m.id, { tool_status: 'done' })
+      store.setMessages(msgs.map((m) =>
+        m.role === 'tool' && m.toolStatus === 'running' ? { ...m, toolStatus: 'done' } : m
+      ))
+    })
   }, [activeSessionTab?.id])
 
   // Git badge — poll status every 30s to show pending changes/ahead count
