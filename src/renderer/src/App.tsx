@@ -314,6 +314,7 @@ export default function App(): React.ReactElement {
         const current = useAppStore.getState().sessions.find((s) => s.id === sess.id)
         store.updateSession(sess.id, { messageCount: (current?.messageCount ?? 0) + 1 })
         store.setLoading(false)
+        refreshTree()
       },
       async (toolName, toolInput) => {
         const rawT = await el.db.addMessage(sess.id, 'tool', '', { toolName, toolStatus: 'running', toolInput })
@@ -341,7 +342,7 @@ export default function App(): React.ReactElement {
         store.upsertMessage(streamingId, streamingMsg)
       },
     )
-  }, [activeSession, sendMessage, expandMentions, onToolPermission])
+  }, [activeSession, sendMessage, expandMentions, onToolPermission, refreshTree])
 
   // ── File system ──────────────────────────────────────────────────────────────
   const refreshTree = useCallback(async () => {
