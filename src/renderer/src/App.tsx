@@ -145,8 +145,14 @@ export default function App(): React.ReactElement {
 
   // ── Session operations ───────────────────────────────────────────────────────
   const handleNewSession = useCallback(async () => {
+    const currentWp = useAppStore.getState().workspacePath
     const raw = await el.db.createSession('New session', useAppStore.getState().settings.defaultModel)
     const session = parseSession(raw)
+    // Inherit current workspace and persist it
+    if (currentWp) {
+      await el.db.updateSession(session.id, { workspace_path: currentWp })
+      session.workspacePath = currentWp
+    }
     store.addSession(session)
     store.openSessionTab(session)
     store.setMessages([])
@@ -154,13 +160,15 @@ export default function App(): React.ReactElement {
 
   const handleSelectSession = useCallback((id: string) => {
     const session = useAppStore.getState().sessions.find((s) => s.id === id)
-    if (session) {
-      store.openSessionTab(session)
-      // Switch to session's workspace if it has one
-      if (session.workspacePath) {
-        el.workspace.setPath(session.workspacePath)
-        el.fs.readDir(session.workspacePath).then((nodes) => store.setWorkspace(session.workspacePath!, nodes))
-      }
+    if (!session) return
+    store.openSessionTab(session)
+    if (session.workspacePath) {
+      el.workspace.setPath(session.workspacePath)
+      el.fs.readDir(session.workspacePath).then((nodes) => store.setWorkspace(session.workspacePath!, nodes))
+    } else if (useAppStore.getState().workspacePath) {
+      // Session has no workspace — clear it
+      el.workspace.setPath(null)
+      store.setWorkspace(null, [])
     }
   }, [])
 
@@ -427,7 +435,20 @@ export default function App(): React.ReactElement {
     store.setWorkspace(path, nodes)
     store.setActiveView('explorer')
     el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
-  }, [])
+    // Save workspace to current session
+    const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
+    if (sess) {
+      await el.db.updateSession(sess.id, { workspace_path: path })
+      store.updateSession(sess.id, { workspacePath: path })
+    }
+  }, [activeSession])
+
+  // Wraps store.selectTab to also switch workspace when clicking a session tab
+  const handleSelectTab = useCallback((id: string) => {
+    const tab = useAppStore.getState().tabs.find((t) => tabKey(t) === id)
+    store.selectTab(id)
+    if (tab?.type === 'session') handleSelectSession(tab.id)
+  }, [handleSelectSession])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -477,7 +498,7 @@ export default function App(): React.ReactElement {
             <TabBar
               tabs={store.tabs}
               activeTabId={store.activeTabId}
-              onSelectTab={store.selectTab}
+              onSelectTab={handleSelectTab}
               onCloseTab={handleCloseTab}
               onNewSession={handleNewSession}
             />

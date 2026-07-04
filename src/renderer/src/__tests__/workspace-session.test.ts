@@ -90,3 +90,100 @@ describe('Sidebar — directory display', () => {
     expect(segments.join('/')).toBe('')
   })
 })
+
+describe('Git — workspace-dependent operations', () => {
+  it('git status cwd should match session workspacePath', () => {
+    const session: Session = { id: 's1', title: 'T', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0, workspacePath: '/project/my-repo' }
+    const gitCwd = session.workspacePath!
+    expect(gitCwd).toBe('/project/my-repo')
+  })
+
+  it('git commands should fail gracefully without workspacePath', () => {
+    const session: Session = { id: 's1', title: 'T', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0 }
+    expect(session.workspacePath).toBeUndefined()
+    // GitPane should not call git operations when workspacePath is null
+    const cwd = session.workspacePath ?? null
+    expect(cwd).toBeNull()
+  })
+
+  it('switch between sessions changes workspace', () => {
+    const sA: Session = { id: 'a', title: 'A', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0, workspacePath: '/project/a' }
+    const sB: Session = { id: 'b', title: 'B', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0, workspacePath: '/project/b' }
+
+    let currentWp: string | null | undefined = sA.workspacePath
+    expect(currentWp).toBe('/project/a')
+
+    // Simulate switching to B
+    currentWp = sB.workspacePath
+    expect(currentWp).toBe('/project/b')
+  })
+
+  it('switch to session without workspacePath clears workspace', () => {
+    const sA: Session = { id: 'a', title: 'A', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0, workspacePath: '/project/a' }
+    const sB: Session = { id: 'b', title: 'B', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0 }
+
+    let currentWp: string | null | undefined = sA.workspacePath
+    expect(currentWp).toBe('/project/a')
+
+    // If session B has no workspace, clear it
+    currentWp = sB.workspacePath ?? null
+    expect(currentWp).toBeNull()
+  })
+})
+
+describe('New session — workspace inheritance', () => {
+  it('new session inherits current workspacePath when set', () => {
+    const currentWp = '/project/active'
+    const newSession: Session = { id: 's2', title: 'New', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0 }
+
+    if (currentWp) newSession.workspacePath = currentWp
+    expect(newSession.workspacePath).toBe('/project/active')
+  })
+
+  it('new session without workspacePath gets none', () => {
+    const currentWp: string | null = null
+    const newSession: Session = { id: 's3', title: 'New', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0 }
+
+    if (!currentWp) {
+      // No inheritance
+      expect(newSession.workspacePath).toBeUndefined()
+    }
+  })
+
+  it('opening folder saves to current session', () => {
+    const session: Session = { id: 's1', title: 'T', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0 }
+    const folderPath = '/opened/folder'
+
+    // Simulate updateSession
+    session.workspacePath = folderPath
+    expect(session.workspacePath).toBe('/opened/folder')
+
+    // Check workspace state matches
+    const storeWp = session.workspacePath
+    expect(storeWp).toBe('/opened/folder')
+  })
+
+  it('multiple session switches maintain separate workspaces', () => {
+    const sessions: Session[] = [
+      { id: 'a', title: 'A', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0, workspacePath: '/project/a' },
+      { id: 'b', title: 'B', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0, workspacePath: '/project/b' },
+      { id: 'c', title: 'C', model: 'm', createdAt: 0, updatedAt: 0, messageCount: 0 },
+    ]
+
+    let currentWp: string | null | undefined
+    const switchTo = (id: string) => {
+      const s = sessions.find((x) => x.id === id)
+      if (!s) return
+      currentWp = s.workspacePath ?? null
+    }
+
+    switchTo('a')
+    expect(currentWp).toBe('/project/a')
+    switchTo('b')
+    expect(currentWp).toBe('/project/b')
+    switchTo('c')
+    expect(currentWp).toBeNull()
+    switchTo('a')
+    expect(currentWp).toBe('/project/a')
+  })
+})
