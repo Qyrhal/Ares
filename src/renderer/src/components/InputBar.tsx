@@ -155,6 +155,7 @@ interface ModelOption {
 export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
+  const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -350,9 +351,10 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
     }
 
     if (item.kind === 'skill') {
-      // Skills: expand content directly — the content IS the invocation prompt
-      if (item.content) setTextAndResize(item.content)
-      else insertCommand(item.name)
+      // Skills show as attachment chips instead of pasting raw content
+      const existing = skillAttachments.find((s) => s.name === item.name)
+      if (existing) return // already attached
+      setSkillAttachments((prev) => [...prev, { id: uuidv4(), name: item.name, content: item.content ?? '' }])
       return
     }
 
@@ -441,10 +443,17 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
 
   const handleSend = useCallback(() => {
     const trimmed = text.trim()
-    if (!trimmed && attachments.length === 0) return
+    if (!trimmed && attachments.length === 0 && skillAttachments.length === 0) return
+
+    // Prepend skill content as context
+    let finalText = trimmed
+    if (skillAttachments.length > 0) {
+      const skillContext = skillAttachments.map((s) => `[Skill: ${s.name}]\n${s.content}`).join('\n\n')
+      finalText = finalText ? `${skillContext}\n\n${finalText}` : skillContext
+    }
 
     const reset = () => {
-      setText(''); setAttachments([]); closeAll(); setShowModelPicker(false)
+      setText(''); setAttachments([]); setSkillAttachments([]); closeAll(); setShowModelPicker(false)
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
 
@@ -470,9 +479,9 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
       }
     }
 
-    onSend(trimmed, attachments)
+    onSend(finalText, attachments)
     reset()
-  }, [text, attachments, onSend, onCommand, closeAll, allPickerItems])
+  }, [text, attachments, skillAttachments, onSend, onCommand, closeAll, allPickerItems])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const files = Array.from(e.target.files ?? [])
@@ -553,6 +562,25 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
             </Attachment>
           ))}
         </AttachmentGroup>
+      )}
+
+      {skillAttachments.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {skillAttachments.map((sk) => (
+            <div key={sk.id} className="inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-xs text-violet-300">
+              <Sparkles className="size-3 shrink-0" />
+              <span className="font-medium">{sk.name}</span>
+              <span className="text-[10px] text-violet-400/60">skill</span>
+              <button
+                onClick={() => setSkillAttachments((prev) => prev.filter((s) => s.id !== sk.id))}
+                className="ml-0.5 rounded p-0.5 text-violet-400/50 hover:text-violet-300 hover:bg-violet-500/20"
+                aria-label={`Remove ${sk.name}`}
+              >
+                <XIcon className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
       )}
 
       <div className={cn(
