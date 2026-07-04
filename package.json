@@ -1,7 +1,14 @@
 {
   "name": "ares",
   "version": "0.1.0",
-  "description": "OpenCode desktop app clone",
+  "description": "AI-powered coding assistant desktop app built on Pi Agent and Electron",
+  "author": "Midhun Kumar",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Qyrhal/Ares.git"
+  },
+  "keywords": ["ai", "coding-assistant", "electron", "pi-agent", "mcp", "openai"],
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
