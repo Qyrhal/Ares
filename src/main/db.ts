@@ -25,6 +25,7 @@ export interface DbMessage {
   tool_status: string | null
   tool_input: string | null
   tool_output: string | null
+  thinking: string | null
   created_at: number
 }
 
@@ -37,12 +38,59 @@ export interface DbSettings {
   permissionMode: string
 }
 
+export interface DbPiSkill {
+  id: string
+  name: string
+  description: string
+  content: string
+}
+
+export interface DbPiExtension {
+  id: string
+  name: string
+  path: string
+  enabled: boolean
+}
+
+export interface DbMcpServer {
+  id: string
+  name: string
+  command: string
+  args: string[]
+  env: Record<string, string>
+  enabled: boolean
+}
+
+export interface DbSlashCommand {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  argumentHint?: string
+  source: string
+}
+
+export interface DbAgentConfig {
+  skills: DbPiSkill[]
+  extensions: DbPiExtension[]
+  mcpServers: DbMcpServer[]
+  commands: DbSlashCommand[]
+}
+
+const DEFAULT_AGENT_CONFIG: DbAgentConfig = {
+  skills: [],
+  extensions: [],
+  mcpServers: [],
+  commands: [],
+}
+
 interface Store {
   sessions: DbSession[]
   messages: DbMessage[]
   settings: DbSettings
   workspacePath: string | null
   recentProjects: string[]
+  agentConfig: DbAgentConfig
 }
 
 const DEFAULT_SETTINGS: DbSettings = {
@@ -62,7 +110,7 @@ function readStore(): Store {
   try {
     return JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
   } catch {
-    return { sessions: [], messages: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [] }
+    return { sessions: [], messages: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
   }
 }
 
@@ -126,6 +174,7 @@ export function addMessage(
     toolStatus?: string
     toolInput?: string
     toolOutput?: string
+    thinking?: string
   } = {}
 ): DbMessage {
   const store = readStore()
@@ -138,6 +187,7 @@ export function addMessage(
     tool_status: opts.toolStatus ?? null,
     tool_input: opts.toolInput ?? null,
     tool_output: opts.toolOutput ?? null,
+    thinking: opts.thinking ?? null,
     created_at: now
   }
   store.messages.push(msg)
@@ -184,4 +234,16 @@ export function setWorkspacePath(p: string | null): void {
 
 export function getRecentProjects(): string[] {
   return readStore().recentProjects ?? []
+}
+
+// ── Agent config ──────────────────────────────────────────────────────────────
+
+export function getAgentConfig(): DbAgentConfig {
+  return { ...DEFAULT_AGENT_CONFIG, ...readStore().agentConfig }
+}
+
+export function setAgentConfig(config: DbAgentConfig): void {
+  const store = readStore()
+  store.agentConfig = config
+  writeStore(store)
 }

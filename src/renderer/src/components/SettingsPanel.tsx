@@ -290,7 +290,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
           </div>
         </Section>
 
-        {/* ── System prompt ──────────────────────────────────────────── */}
+        {/* ── System prompt ─────────────────────────────��────────────── */}
         <Section title="System prompt" description="Custom instructions injected before every AI request.">
           <Field label="System prompt">
             <textarea
@@ -309,7 +309,7 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
           </Field>
         </Section>
 
-        {/* ── Permissions ──────────────────────────────────────────────── */}
+        {/* ── Permissions ────────────────────────────���─────────────────── */}
         <Section title="Permissions" description="Control how tool calls are handled.">
           <Field label="Permission mode">
             <div className="flex flex-wrap gap-2">
@@ -357,6 +357,8 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
     </div>
   )
 }
+
+// ── Layout helpers ────────────────────────────────────────────────────────────
 
 function Section({
   title, description, children, className

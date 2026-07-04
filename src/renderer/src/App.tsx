@@ -8,6 +8,8 @@ import { ChatView } from '@/components/ChatView'
 import { InputBar } from '@/components/InputBar'
 import { FileEditor } from '@/components/FileEditor'
 import { SettingsPanel } from '@/components/SettingsPanel'
+import { SkillsPanel } from '@/components/SkillsPanel'
+import { PluginsPanel } from '@/components/PluginsPanel'
 import { TerminalView } from '@/components/TerminalView'
 import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -16,6 +18,8 @@ import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings } from '@/schemas'
 import { applyTheme } from '@/lib/theme'
+import { Toaster } from '@/components/ui/toaster'
+import { toast } from 'sonner'
 
 const el = window.electron
 
@@ -27,6 +31,7 @@ export default function App(): React.ReactElement {
   const store = useAppStore()
   const { sendMessage } = useAI(store.settings)
   const [gitBadge, setGitBadge] = useState(0)
+  const [pluginCommands, setPluginCommands] = useState<import('@/types').SlashCommand[]>([])
 
   // ── Permission prompt ───────────────────────────────────────────────────────
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
@@ -78,6 +83,25 @@ export default function App(): React.ReactElement {
 
         if (sessions.length > 0) store.openSessionTab(sessions[0])
       })
+
+    el.agentConfig.get().then((cfg) => {
+      if (cfg?.commands) setPluginCommands(cfg.commands)
+    })
+
+    return el.agentConfig.onScanResult(({ skills, extensions, mcpServers, commands }) => {
+      const total = skills + extensions + mcpServers + commands
+      if (total === 0) return
+      const parts: string[] = []
+      if (skills > 0) parts.push(`${skills} skill${skills !== 1 ? 's' : ''}`)
+      if (commands > 0) parts.push(`${commands} slash command${commands !== 1 ? 's' : ''}`)
+      if (extensions > 0) parts.push(`${extensions} extension${extensions !== 1 ? 's' : ''}`)
+      if (mcpServers > 0) parts.push(`${mcpServers} MCP server${mcpServers !== 1 ? 's' : ''}`)
+      toast(`${total} plugin${total !== 1 ? 's' : ''} found and loaded`, {
+        description: parts.join(', '),
+        duration: 5000,
+      })
+      el.agentConfig.get().then((cfg) => { if (cfg?.commands) setPluginCommands(cfg.commands) })
+    })
   }, [])
 
   // Load messages when active session changes
@@ -266,7 +290,7 @@ export default function App(): React.ReactElement {
     const streamingId = uuidv4()
     let streamingMsg = {
       id: streamingId, sessionId: sess.id, role: 'assistant' as const,
-      content: '', isStreaming: true, createdAt: Date.now(),
+      content: '', thinking: undefined as string | undefined, isStreaming: true, createdAt: Date.now(),
     }
 
     await sendMessage(
@@ -276,11 +300,11 @@ export default function App(): React.ReactElement {
         streamingMsg = { ...streamingMsg, content: chunk }
         store.upsertMessage(streamingId, streamingMsg)
       },
-      async (fullText) => {
-        const rawA = await el.db.addMessage(sess.id, 'assistant', fullText)
+      async (fullText, thinking) => {
+        const rawA = await el.db.addMessage(sess.id, 'assistant', fullText, { thinking })
         const aMsg = rawA
           ? parseMessage(rawA)
-          : { ...streamingMsg, id: uuidv4(), isStreaming: false }
+          : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false }
         store.upsertMessage(streamingId, aMsg)
         const current = useAppStore.getState().sessions.find((s) => s.id === sess.id)
         store.updateSession(sess.id, { messageCount: (current?.messageCount ?? 0) + 1 })
@@ -301,6 +325,10 @@ export default function App(): React.ReactElement {
       onToolPermission,
       workspacePath,
       sess.effort ?? 'medium',
+      (thinkingChunk) => {
+        streamingMsg = { ...streamingMsg, thinking: thinkingChunk }
+        store.upsertMessage(streamingId, streamingMsg)
+      },
     )
   }, [activeSession, sendMessage, expandMentions, onToolPermission])
 
@@ -380,7 +408,7 @@ export default function App(): React.ReactElement {
           gitBadge={gitBadge}
         />
 
-        {store.activeView !== 'settings' && (
+        {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && (
           <Sidebar
             mode={store.activeView}
             sessions={store.sessions}
@@ -402,7 +430,7 @@ export default function App(): React.ReactElement {
         )}
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          {store.activeView !== 'settings' && (
+          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && (
             <TabBar
               tabs={store.tabs}
               activeTabId={store.activeTabId}
@@ -415,6 +443,10 @@ export default function App(): React.ReactElement {
           <div className="flex flex-1 flex-col overflow-hidden min-h-0">
             {store.activeView === 'settings' ? (
               <SettingsPanel settings={store.settings} onSave={handleSaveSettings} />
+            ) : store.activeView === 'skills' ? (
+              <SkillsPanel />
+            ) : store.activeView === 'plugins' ? (
+              <PluginsPanel />
             ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (
               <ErrorBoundary key="commit-detail"><CommitDetail /></ErrorBoundary>
             ) : activeTab?.type === 'file' ? (
@@ -469,6 +501,7 @@ export default function App(): React.ReactElement {
                     store.updateSession(activeSession.id, { permissionMode: m })
                     el.db.updateSession(activeSession.id, { permissionMode: m })
                   }}
+                  pluginCommands={pluginCommands}
                 />
               </>
             ) : (
@@ -486,6 +519,7 @@ export default function App(): React.ReactElement {
           )}
         </div>
       </div>
+      <Toaster />
     </div>
   )
 }

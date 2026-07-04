@@ -7,9 +7,11 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
   getSessions, createSession, updateSession, deleteSession,
   getMessages, addMessage, deleteMessage,
-  getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects
+  getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
+  getAgentConfig, setAgentConfig,
 } from './db'
-import { handlePiSend, handlePiAbort, cleanupPiSession } from './pi'
+import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions } from './pi'
+import { runBackgroundScan } from './scanner'
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
   discardFile, commit, push, pull,
@@ -72,6 +74,10 @@ function createWindow(): void {
   })
 
   win.on('ready-to-show', () => win.show())
+
+  win.webContents.once('did-finish-load', () => {
+    setTimeout(() => runBackgroundScan(win), 1000)
+  })
 
   // Bypass CORS for API calls made from the renderer (OpenAI SDK, etc.)
   const corsHeaders = {
@@ -138,6 +144,12 @@ function registerIpcHandlers(): void {
   // Settings
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_, s: object) => setSettings(s as Parameters<typeof setSettings>[0]))
+
+  ipcMain.handle('agentConfig:get', () => getAgentConfig())
+  ipcMain.handle('agentConfig:set', (_, config: object) => {
+    setAgentConfig(config as Parameters<typeof setAgentConfig>[0])
+    clearAllPiSessions()
+  })
 
   // Workspace
   ipcMain.handle('workspace:getPath', () => getWorkspacePath())

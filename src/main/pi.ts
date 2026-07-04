@@ -2,15 +2,19 @@
 // modules even with dynamicImportInCjs:false. Wrapping in new Function() makes the call
 // opaque to Rollup's static analysis, so Node.js executes the real ESM import() at runtime.
 import type { AgentSession } from '@earendil-works/pi-coding-agent'
-import { BrowserWindow } from 'electron'
+import { app, BrowserWindow } from 'electron'
 import * as nodeModule from 'module'
+import fs from 'fs'
+import path from 'path'
+import { getAgentConfig } from './db'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
 // markAsUncloneable was added in Node.js 22; Electron 33 ships Node.js 20.
 // The worker_threads exports object is frozen so we can't patch it directly.
 // Instead, hook Module._load to return a Proxy that adds the missing function.
 ;(function patchWorkerThreads() {
-  const M = nodeModule as any
+  // nodeModule is a frozen ESM namespace wrapper — use .default to get the raw CJS Module object
+  const M = (nodeModule as any).default as any
   const orig = M._load?.bind(M)
   if (!orig) return
   M._load = function (request: string, parent: unknown, isMain: boolean) {
@@ -24,7 +28,9 @@ import * as nodeModule from 'module'
           if (prop === 'markAsUncloneable') return () => {}
           const v = (target as any)[prop]
           return typeof v === 'function' ? v.bind(target) : v
-        }
+        },
+        // Silently ignore writes to the non-extensible worker_threads module
+        set() { return true },
       })
     }
     return mod
@@ -39,15 +45,100 @@ async function sdk() {
   return (_sdk ??= await esmImport('@earendil-works/pi-coding-agent'))
 }
 
+type McpClientType = { close(): Promise<void> }
+
 type SessionEntry = {
   session: AgentSession
   settingsKey: string
+  mcpClients: McpClientType[]
 }
 
 const sessions = new Map<string, SessionEntry>()
 
 function settingsKey(apiBaseUrl: string, apiKey: string, modelId: string): string {
   return `${apiBaseUrl}|${apiKey}|${modelId}`
+}
+
+async function buildResourceLoader(cwd: string) {
+  const { DefaultResourceLoader, getAgentDir, SettingsManager } = await sdk()
+  const config = getAgentConfig()
+  const agentDir = getAgentDir()
+
+  const skillsDir = path.join(app.getPath('userData'), 'ares-skills')
+  fs.mkdirSync(skillsDir, { recursive: true })
+
+  // Sync skill files: write current skills, remove stale ones
+  const expectedFiles = new Set(config.skills.map((s) => `${s.id}.md`))
+  for (const f of fs.readdirSync(skillsDir)) {
+    if (!expectedFiles.has(f)) fs.rmSync(path.join(skillsDir, f), { force: true })
+  }
+  for (const skill of config.skills) {
+    const header = `---\nname: ${skill.name}\ndescription: ${skill.description}\n---\n\n`
+    fs.writeFileSync(path.join(skillsDir, `${skill.id}.md`), header + skill.content, 'utf-8')
+  }
+
+  const enabledExtPaths = config.extensions.filter((e) => e.enabled).map((e) => e.path)
+
+  const settingsManager = SettingsManager.create(cwd, agentDir)
+  const loader = new DefaultResourceLoader({
+    cwd,
+    agentDir,
+    settingsManager,
+    additionalSkillPaths: config.skills.length > 0 ? [skillsDir] : [],
+    additionalExtensionPaths: enabledExtPaths,
+    noContextFiles: true,
+  })
+  await loader.reload()
+  return loader
+}
+
+async function buildMcpTools(): Promise<{ tools: any[]; clients: McpClientType[] }> {
+  const config = getAgentConfig()
+  const enabled = config.mcpServers.filter((s) => s.enabled)
+  if (enabled.length === 0) return { tools: [], clients: [] }
+
+  // CJS require works for MCP SDK
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { Client } = require('@modelcontextprotocol/sdk/client/index.js')
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js')
+
+  const tools: any[] = []
+  const clients: McpClientType[] = []
+
+  for (const server of enabled) {
+    try {
+      const transport = new StdioClientTransport({
+        command: server.command,
+        args: server.args,
+        env: { ...process.env, ...server.env },
+        stderr: 'pipe',
+      })
+      const client = new Client({ name: 'ares', version: '1.0.0' }, { capabilities: {} })
+      await client.connect(transport)
+      clients.push(client)
+
+      const { tools: mcpTools } = await client.listTools()
+      for (const t of mcpTools) {
+        tools.push({
+          name: t.name,
+          description: t.description ?? '',
+          parameters: t.inputSchema ?? { type: 'object', properties: {} },
+          async execute(_id: string, params: unknown, _signal: unknown) {
+            const result = await client.callTool({ name: t.name, arguments: params as Record<string, unknown> })
+            const text = (result.content as any[])
+              .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
+              .join('\n')
+            return { content: [{ type: 'text', text }], details: result }
+          },
+        })
+      }
+    } catch (err) {
+      console.error(`[ares] MCP server "${server.name}" failed to connect:`, (err as Error).message)
+    }
+  }
+
+  return { tools, clients }
 }
 
 async function getOrCreate(
@@ -65,7 +156,7 @@ async function getOrCreate(
 
   // Settings changed (or first call) — dispose old session and create fresh one
   if (existing) {
-    try { existing.session.dispose() } catch { /* ignore */ }
+    disposeEntry(existing)
     sessions.delete(sessionId)
   }
 
@@ -91,18 +182,38 @@ async function getOrCreate(
   })
 
   const model = modelRegistry.find(providerId, modelId)!
+  const effectiveCwd = cwd || process.cwd()
+
+  const [resourceLoader, { tools: mcpTools, clients: mcpClients }] = await Promise.all([
+    buildResourceLoader(effectiveCwd),
+    buildMcpTools(),
+  ])
 
   const { session } = await createAgentSession({
     sessionManager: SessionManager.inMemory(),
     authStorage,
     modelRegistry,
     model,
-    cwd: cwd || process.cwd(),
+    cwd: effectiveCwd,
     tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
+    resourceLoader,
+    customTools: mcpTools,
   })
 
-  sessions.set(sessionId, { session, settingsKey: key })
+  sessions.set(sessionId, { session, settingsKey: key, mcpClients })
   return session
+}
+
+function disposeEntry(entry: SessionEntry): void {
+  try { entry.session.dispose() } catch { /* ignore */ }
+  for (const c of entry.mcpClients) {
+    c.close().catch(() => { /* ignore */ })
+  }
+}
+
+export function clearAllPiSessions(): void {
+  for (const entry of sessions.values()) disposeEntry(entry)
+  sessions.clear()
 }
 
 export async function handlePiSend(
@@ -124,6 +235,7 @@ export async function handlePiSend(
   }
 
   let accumulated = ''
+  let thinkingAccumulated = ''
 
   const unsub = session.subscribe((event) => {
     if (win.isDestroyed()) { unsub(); return }
@@ -133,6 +245,10 @@ export async function handlePiSend(
       if (ae.type === 'text_delta') {
         accumulated += ae.delta
         win.webContents.send('pi:delta', reqId, accumulated)
+      }
+      if (ae.type === 'thinking_delta') {
+        thinkingAccumulated += ae.delta
+        win.webContents.send('pi:thinking-delta', reqId, thinkingAccumulated)
       }
     }
 
@@ -151,7 +267,7 @@ export async function handlePiSend(
 
     if (event.type === 'agent_end' && !event.willRetry) {
       unsub()
-      win.webContents.send('pi:done', reqId, accumulated)
+      win.webContents.send('pi:done', reqId, accumulated, thinkingAccumulated || undefined)
     }
   })
 
@@ -171,7 +287,7 @@ export async function handlePiAbort(sessionId: string): Promise<void> {
 export function cleanupPiSession(sessionId: string): void {
   const entry = sessions.get(sessionId)
   if (entry) {
-    try { entry.session.dispose() } catch { /* ignore */ }
+    disposeEntry(entry)
     sessions.delete(sessionId)
   }
 }
