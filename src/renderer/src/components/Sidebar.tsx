@@ -1,11 +1,14 @@
-import React, { useState } from 'react'
-import { MessageSquare, Pin } from 'lucide-react'
+import React, { useState, useCallback } from 'react'
+import { MessageSquare, Pin, Download, Upload } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
 import { FileTree, FileTreeProps } from './FileTree'
 import { GitPane } from './GitPane'
 import { ErrorBoundary } from './ErrorBoundary'
+import { toast } from 'sonner'
+
+const el = window.electron
 
 interface SidebarProps {
   mode: ActivityView
@@ -80,6 +83,36 @@ function SessionsPane({
 }): React.ReactElement {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
 
+  const handleExport = useCallback(async () => {
+    const active = sessions.find((s) => s.id === activeSessionId)
+    if (!active) { toast.error('No active session to export'); return }
+    const msgs = await el.db.getMessages(active.id)
+    const result = await el.session.export(active.title, active.id, msgs)
+    if (result) toast.success(`Session exported to ${result}`)
+  }, [sessions, activeSessionId])
+
+  const handleImport = useCallback(async () => {
+    const result = await el.session.import()
+    if (!result) return
+    if ('error' in result) { toast.error(result.error as string); return }
+    // Create a new session with imported messages
+    const raw = await el.db.createSession((result as { title: string }).title)
+    const msgs = (result as { messages: unknown[] }).messages as Array<{ role: string; content: string; toolName?: string; toolInput?: string; toolOutput?: string; thinking?: string; createdAt: number }>
+    for (const m of msgs) {
+      await el.db.addMessage(raw.id, m.role, m.content, {
+        toolName: m.toolName,
+        toolInput: m.toolInput,
+        toolOutput: m.toolOutput,
+        thinking: m.thinking,
+      })
+    }
+    toast.success(`Imported session "${(result as { title: string }).title}"`)
+    // Force reload
+    const freshSessions = await el.db.getSessions()
+    // The parent should refresh — signal via location reload for simplicity
+    window.location.reload()
+  }, [])
+
   const pinned = sessions.filter((s) => s.pinned)
   const unpinned = sessions.filter((s) => !s.pinned)
 
@@ -135,6 +168,23 @@ function SessionsPane({
         <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
           Sessions
         </span>
+        <div className="ml-auto flex items-center gap-0.5">
+          <button
+            onClick={handleImport}
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="Import session"
+          >
+            <Download className="size-3.5" />
+          </button>
+          <button
+            onClick={handleExport}
+            disabled={!activeSessionId}
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30"
+            title="Export active session"
+          >
+            <Upload className="size-3.5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col gap-0.5 overflow-y-auto px-2 py-1 flex-1">

@@ -10,6 +10,8 @@ import { FileEditor } from '@/components/FileEditor'
 import { SettingsPanel } from '@/components/SettingsPanel'
 import { SkillsPanel } from '@/components/SkillsPanel'
 import { PluginsPanel } from '@/components/PluginsPanel'
+import { HooksPanel } from '@/components/HooksPanel'
+import { CheckpointPanel } from '@/components/CheckpointPanel'
 import { TerminalView } from '@/components/TerminalView'
 import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -18,6 +20,7 @@ import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings } from '@/schemas'
 import { applyTheme } from '@/lib/theme'
+import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
 import { toast } from 'sonner'
 
@@ -190,6 +193,7 @@ export default function App(): React.ReactElement {
         return
       }
       if (e.key === '`' || e.key === 'j') { e.preventDefault(); useAppStore.getState().toggleTerminal(); return }
+      if (e.key === 'Z' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); useAppStore.getState().toggleZenMode(); return }
       if (e.key === '[') {
         e.preventDefault()
         if (!tabs.length) return
@@ -413,45 +417,49 @@ export default function App(): React.ReactElement {
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-background">
-      <div className="drag-region relative flex h-10 shrink-0 items-center justify-center border-b border-border">
-        <span className="no-drag pointer-events-none select-none font-display text-[11px] font-black tracking-[0.5em] text-foreground/40">
-          ARES
-        </span>
-      </div>
+    <div className={cn('flex flex-col h-screen w-screen overflow-hidden bg-background', store.zenMode && 'zen-mode')}>
+      {!store.zenMode && (
+        <div className="drag-region relative flex h-10 shrink-0 items-center justify-center border-b border-border">
+          <span className="no-drag pointer-events-none select-none font-display text-[11px] font-black tracking-[0.5em] text-foreground/40">
+            ARES
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-1 overflow-hidden">
-        <ActivityBar
-          activeView={store.activeView}
-          onChangeView={store.setActiveView}
-          terminalOpen={store.terminalOpen}
-          onToggleTerminal={store.toggleTerminal}
-          gitBadge={gitBadge}
-        />
-
-        {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && (
-          <Sidebar
-            mode={store.activeView}
-            sessions={store.sessions}
-            activeSessionId={activeSessionTab?.id ?? null}
-            onNewSession={handleNewSession}
-            onSelectSession={handleSelectSession}
-            onDeleteSession={handleDeleteSession}
-            onTogglePinSession={handleTogglePinSession}
-            fileNodes={store.fileNodes}
-            workspacePath={store.workspacePath}
-            selectedFilePath={store.activeTabId}
-            onOpenFile={store.openFileTab}
-            onOpenFolder={handleOpenFolder}
-            onFsCreateFile={handleFsCreateFile}
-            onFsCreateFolder={handleFsCreateFolder}
-            onFsRename={handleFsRename}
-            onFsDelete={handleFsDelete}
+        {!store.zenMode && (<>
+          <ActivityBar
+            activeView={store.activeView}
+            onChangeView={store.setActiveView}
+            terminalOpen={store.terminalOpen}
+            onToggleTerminal={store.toggleTerminal}
+            gitBadge={gitBadge}
           />
-        )}
+
+          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && store.activeView !== 'hooks' && store.activeView !== 'checkpoints' && (
+            <Sidebar
+              mode={store.activeView}
+              sessions={store.sessions}
+              activeSessionId={activeSessionTab?.id ?? null}
+              onNewSession={handleNewSession}
+              onSelectSession={handleSelectSession}
+              onDeleteSession={handleDeleteSession}
+              onTogglePinSession={handleTogglePinSession}
+              fileNodes={store.fileNodes}
+              workspacePath={store.workspacePath}
+              selectedFilePath={store.activeTabId}
+              onOpenFile={store.openFileTab}
+              onOpenFolder={handleOpenFolder}
+              onFsCreateFile={handleFsCreateFile}
+              onFsCreateFolder={handleFsCreateFolder}
+              onFsRename={handleFsRename}
+              onFsDelete={handleFsDelete}
+            />
+          )}
+        </>)}
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && (
+          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && store.activeView !== 'hooks' && store.activeView !== 'checkpoints' && (
             <TabBar
               tabs={store.tabs}
               activeTabId={store.activeTabId}
@@ -468,6 +476,10 @@ export default function App(): React.ReactElement {
               <SkillsPanel />
             ) : store.activeView === 'plugins' ? (
               <PluginsPanel />
+            ) : store.activeView === 'hooks' ? (
+              <HooksPanel />
+            ) : store.activeView === 'checkpoints' ? (
+              <CheckpointPanel workspacePath={store.workspacePath} />
             ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (
               <ErrorBoundary key="commit-detail"><CommitDetail /></ErrorBoundary>
             ) : activeTab?.type === 'file' ? (

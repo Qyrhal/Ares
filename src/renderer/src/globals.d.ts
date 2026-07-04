@@ -1,4 +1,4 @@
-import type { AppSettings, FileNode } from './types'
+import type { AppSettings, FileNode, Checkpoint, Hook } from './types'
 
 export interface RawSession {
   id: string; title: string; model: string
@@ -25,6 +25,7 @@ declare global {
         getMessages(sessionId: string): Promise<RawMessage[]>
         addMessage(sessionId: string, role: string, content: string, opts?: object): Promise<RawMessage>
         deleteMessage(id: string): Promise<void>
+        updateMessage(id: string, updates: object): Promise<void>
       }
       settings: {
         get(): Promise<AppSettings>
@@ -33,6 +34,7 @@ declare global {
       workspace: {
         getPath(): Promise<string | null>
         setPath(p: string | null): Promise<void>
+        getRecent(): Promise<string[]>
       }
       dialog: {
         openFolder(): Promise<string | null>
@@ -77,7 +79,43 @@ declare global {
         checkout(cwd: string, branch: string): Promise<void>
         createBranch(cwd: string, branch: string): Promise<void>
         diff(cwd: string, path: string, staged: boolean): Promise<string>
+        log(cwd: string, limit?: number): Promise<{ hash: string; shortHash: string; parents: string[]; author: string; date: string; message: string }[]>
         init(cwd: string): Promise<void>
+      }
+      checkpoint: {
+        create(cwd: string, msg: string): Promise<Checkpoint | null>
+        list(cwd: string): Promise<Checkpoint[]>
+        restore(cwd: string, idx: number): Promise<{ ok: boolean; error?: string }>
+        drop(cwd: string, idx: number): Promise<{ ok: boolean; error?: string }>
+        diff(cwd: string, idx: number): Promise<string>
+      }
+      lsp: {
+        diagnostics(filePath: string): Promise<{ file: string; line: number; column: number; message: string; severity: string; code?: string }[]>
+        hasSupport(): Promise<boolean>
+      }
+      hooks: {
+        get(): Promise<Hook[]>
+        set(hooks: Hook[]): Promise<void>
+      }
+      session: {
+        export(title: string, id: string, messages: unknown[]): Promise<string | null>
+        import(): Promise<{ title: string; messages: unknown[] } | { error: string } | null>
+      }
+      agentConfig: {
+        get(): Promise<import('./types').AgentConfig>
+        set(config: object): Promise<void>
+        onScanResult(cb: (result: { skills: number; extensions: number; mcpServers: number; commands: number }) => void): () => void
+      }
+      pi: {
+        send(reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: string, cwd: string | null): void
+        abort(sessionId: string): void
+        cleanup(sessionId: string): void
+        onDelta(cb: (reqId: string, text: string) => void): () => void
+        onDone(cb: (reqId: string, text: string, thinking?: string) => void): () => void
+        onThinkingDelta(cb: (reqId: string, text: string) => void): () => void
+        onToolStart(cb: (reqId: string, name: string, input: string) => void): () => void
+        onToolEnd(cb: (reqId: string, output: string, isError: boolean) => void): () => void
+        onError(cb: (reqId: string, message: string) => void): () => void
       }
     }
   }

@@ -16,6 +16,12 @@ Built on [Pi Agent](https://github.com/earendil-works/pi-coding-agent) with Elec
 - **MCP servers** — configure Model Context Protocol servers through the UI; they're spawned on demand per session
 - **Slash commands** — built-in commands plus any discovered from installed plugins, all accessible with `/` in the chat input
 - **Workspace context** — `@file` mentions expand file contents inline before the AI sees them
+- **Checkpoints / Undo** (inspired by Claude Code Desktop) — git stash-backed snapshots created before AI tool operations; view, diff, restore, or delete from the Checkpoints panel
+- **Language Server Protocol (LSP) integration** (inspired by OpenCode + Claude Code) — automatic TypeScript/ESLint diagnostics fed to the AI for context-aware code changes
+- **Lifecycle hooks** (inspired by Claude Code Desktop) — run scripts, send webhooks, or inject prompt context on agent lifecycle events (pre/post tool, pre/post send, on error)
+- **Session export/import** (inspired by OpenCode) — share conversations as standalone JSON files; import sessions from the sidebar
+- **Zen mode** (inspired by OpenCode) — distraction-free full-width coding with `Cmd+Shift+Z`
+- **Custom keyboard shortcuts** — Zen mode toggle, easy to extend
 
 ## Tech stack
 
