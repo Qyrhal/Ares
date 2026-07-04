@@ -1,8 +1,8 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown } from 'lucide-react'
+import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
-import { FileAttachment, FileNode, Message, PermissionMode, SlashCommand } from '@/types'
+import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand } from '@/types'
 import { ProjectPicker } from '@/components/ProjectPicker'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
@@ -10,15 +10,30 @@ import {
 } from '@/components/ui/attachment'
 import { v4 as uuidv4 } from 'uuid'
 
-const BUILTIN_COMMANDS = [
-  { name: 'model',  description: 'Change the model for this session' },
-  { name: 'folder', description: 'Open or switch workspace folder' },
-  { name: 'clear',  description: 'Clear all messages in the current session' },
-  { name: 'help',   description: 'Show available slash commands' },
+type PickerKind = 'builtin' | 'skill' | 'command'
+interface PickerItem {
+  kind: PickerKind
+  name: string
+  description: string
+  hint?: string          // argument-hint for commands, line count for skills
+  content?: string       // skill content or command prompt template
+}
+
+const BUILTIN_COMMANDS: PickerItem[] = [
+  { kind: 'builtin', name: 'model',  description: 'Change the model for this session' },
+  { kind: 'builtin', name: 'folder', description: 'Open or switch workspace folder' },
+  { kind: 'builtin', name: 'clear',  description: 'Clear all messages in the current session' },
+  { kind: 'builtin', name: 'help',   description: 'Show available slash commands' },
 ]
 
 function expandTemplate(prompt: string, args: string): string {
   return prompt.replace(/\{\{args\}\}/gi, args).replace(/\$ARGUMENTS/g, args)
+}
+
+const KIND_LABELS: Record<PickerKind, string> = {
+  builtin: 'Built-in',
+  skill:   'Skills',
+  command: 'Plugin commands',
 }
 
 interface InputBarProps {
@@ -34,6 +49,7 @@ interface InputBarProps {
   recentProjects?: string[]
   onSelectProject?: (path: string) => void
   onOpenFinder?: () => void
+  pluginSkills?: PiSkill[]
   pluginCommands?: SlashCommand[]
   // bottom toolbar
   currentModel?: string
@@ -136,7 +152,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -180,16 +196,29 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
     return flatFiles.filter((f) => !f.isDirectory && (f.relPath.toLowerCase().includes(q) || f.name.toLowerCase().includes(q)))
   }, [flatFiles, mentionQuery])
 
-  const allCommands = useMemo(() => [
+  const allPickerItems = useMemo((): PickerItem[] => [
     ...BUILTIN_COMMANDS,
-    ...pluginCommands.map((c) => ({ name: c.name, description: c.description, isPlugin: true, argumentHint: c.argumentHint })),
-  ], [pluginCommands])
+    ...pluginSkills.map((s): PickerItem => ({
+      kind: 'skill',
+      name: s.name,
+      description: s.description || 'No description',
+      hint: s.content ? `${s.content.split('\n').length} lines` : undefined,
+      content: s.content,
+    })),
+    ...pluginCommands.map((c): PickerItem => ({
+      kind: 'command',
+      name: c.name,
+      description: c.description,
+      hint: c.argumentHint,
+      content: c.prompt,
+    })),
+  ], [pluginSkills, pluginCommands])
 
-  const filteredCommands = useMemo(() => {
+  const filteredCommands = useMemo((): PickerItem[] => {
     const q = cmdQuery.toLowerCase()
-    if (!q) return allCommands
-    return allCommands.filter((c) => c.name.startsWith(q))
-  }, [cmdQuery, allCommands])
+    if (!q) return allPickerItems
+    return allPickerItems.filter((c) => c.name.toLowerCase().startsWith(q) || c.description.toLowerCase().includes(q))
+  }, [cmdQuery, allPickerItems])
 
   const filteredModels = useMemo(() => {
     if (!modelSearch) return modelOptions
@@ -286,59 +315,56 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
     })
   }, [text, cmdIndex, closeCommands])
 
-  // Execute a slash command — built-ins open secondary UI, plugin commands expand template
-  const executeCommand = useCallback((cmdName: string) => {
+  const setTextAndResize = useCallback((val: string) => {
+    setText(val)
+    requestAnimationFrame(() => {
+      const ta = textareaRef.current
+      if (ta) { ta.style.height = 'auto'; ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`; ta.focus() }
+    })
+  }, [])
+
+  // Execute a slash command — built-ins open secondary UI, skills/commands expand template
+  const executeCommand = useCallback((item: PickerItem) => {
     closeCommands()
 
-    // Built-in commands
-    switch (cmdName) {
-      case 'model':
-        setText('')
-        if (textareaRef.current) textareaRef.current.style.height = 'auto'
-        fetchModels()
-        setShowModelPicker(true)
-        setModelSearch('')
-        setModelHighlight(0)
-        requestAnimationFrame(() => modelSearchRef.current?.focus())
-        return
-      case 'folder':
-        setText('')
-        if (textareaRef.current) textareaRef.current.style.height = 'auto'
-        onRevealInExplorer?.()
-        return
-      case 'clear':
-        setText('')
-        if (textareaRef.current) textareaRef.current.style.height = 'auto'
-        onCommand?.('clear', '')
-        return
-      case 'help':
-        setText('')
-        if (textareaRef.current) textareaRef.current.style.height = 'auto'
-        onCommand?.('help', '')
-        return
-    }
-
-    // Plugin commands
-    const pluginCmd = pluginCommands.find((c) => c.name === cmdName)
-    if (pluginCmd) {
-      if (pluginCmd.argumentHint) {
-        // Has args — put the /name  in textarea so user can type args
-        insertCommand(cmdName)
-      } else {
-        // No args — expand prompt directly and put in textarea for review
-        const expanded = expandTemplate(pluginCmd.prompt, '')
-        setText(expanded)
-        requestAnimationFrame(() => {
-          const ta = textareaRef.current
-          if (ta) {
-            ta.style.height = 'auto'
-            ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`
-            ta.focus()
-          }
-        })
+    if (item.kind === 'builtin') {
+      switch (item.name) {
+        case 'model':
+          setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
+          fetchModels(); setShowModelPicker(true); setModelSearch(''); setModelHighlight(0)
+          requestAnimationFrame(() => modelSearchRef.current?.focus())
+          return
+        case 'folder':
+          setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
+          onRevealInExplorer?.()
+          return
+        case 'clear':
+          setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
+          onCommand?.('clear', '')
+          return
+        case 'help':
+          setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
+          onCommand?.('help', '')
+          return
       }
     }
-  }, [onCommand, onRevealInExplorer, fetchModels, closeCommands, pluginCommands, insertCommand])
+
+    if (item.kind === 'skill') {
+      // Skills: expand content directly — the content IS the invocation prompt
+      if (item.content) setTextAndResize(item.content)
+      else insertCommand(item.name)
+      return
+    }
+
+    if (item.kind === 'command') {
+      if (item.hint) {
+        // Has argument-hint — put /name  so user types args
+        insertCommand(item.name)
+      } else if (item.content) {
+        setTextAndResize(expandTemplate(item.content, ''))
+      }
+    }
+  }, [onCommand, onRevealInExplorer, fetchModels, closeCommands, insertCommand, setTextAndResize])
 
   const handleModelSelect = useCallback((modelId: string) => {
     setShowModelPicker(false)
@@ -398,8 +424,8 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
     if (showCommands) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setCmdHighlight((prev) => Math.min(prev + 1, filteredCommands.length - 1)); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setCmdHighlight((prev) => Math.max(prev - 1, 0)); return }
-      if (e.key === 'Enter' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight].name); return }
-      if (e.key === 'Tab' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight].name); return }
+      if (e.key === 'Enter' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight]); return }
+      if (e.key === 'Tab' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight]); return }
       if (e.key === 'Escape') { e.preventDefault(); closeCommands(); return }
     }
 
@@ -427,10 +453,10 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
       const cmdName = spaceIdx === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIdx)
       const args = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1).trim()
 
-      // Plugin command — expand template and send as regular message
-      const pluginCmd = pluginCommands.find((c) => c.name === cmdName)
-      if (pluginCmd) {
-        const expanded = expandTemplate(pluginCmd.prompt, args)
+      // Skill or plugin command — expand template and send as regular message
+      const pickerItem = allPickerItems.find((c) => c.name === cmdName && c.kind !== 'builtin')
+      if (pickerItem?.content) {
+        const expanded = expandTemplate(pickerItem.content, args)
         reset()
         onSend(expanded, attachments)
         return
@@ -446,7 +472,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
 
     onSend(trimmed, attachments)
     reset()
-  }, [text, attachments, onSend, onCommand, closeAll, pluginCommands])
+  }, [text, attachments, onSend, onCommand, closeAll, allPickerItems])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const files = Array.from(e.target.files ?? [])
@@ -575,30 +601,56 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
 
           {/* Slash command dropdown */}
           {showCommands && filteredCommands.length > 0 && (
-            <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 max-h-56 w-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg z-50">
-              {filteredCommands.map((cmd, i) => (
-                <button
-                  key={cmd.name}
-                  type="button"
-                  className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors', i === cmdHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
-                  onMouseDown={(e) => { e.preventDefault(); executeCommand(cmd.name) }}
-                  onMouseEnter={() => setCmdHighlight(i)}
-                >
-                  <TerminalIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                  <div className="flex min-w-0 flex-1 flex-col">
-                    <div className="flex items-center gap-1.5">
-                      <span className="font-medium text-xs">/{cmd.name}</span>
-                      {'isPlugin' in cmd && cmd.isPlugin && (
-                        <span className="rounded bg-primary/15 px-1 py-px text-[9px] font-medium text-primary">plugin</span>
-                      )}
-                      {'argumentHint' in cmd && cmd.argumentHint && (
-                        <span className="text-[10px] text-muted-foreground/60 font-mono">{cmd.argumentHint}</span>
-                      )}
+            <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 max-h-72 w-80 overflow-y-auto rounded-xl border border-border bg-popover shadow-xl z-50">
+              {(() => {
+                const sections: PickerKind[] = ['builtin', 'skill', 'command']
+                const nodes: React.ReactNode[] = []
+                let flatIdx = 0
+                for (const kind of sections) {
+                  const items = filteredCommands.filter((c) => c.kind === kind)
+                  if (items.length === 0) continue
+                  nodes.push(
+                    <div key={`hdr-${kind}`} className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+                      {kind === 'builtin' && <TerminalIcon className="size-3 text-muted-foreground" />}
+                      {kind === 'skill'   && <Sparkles className="size-3 text-violet-400" />}
+                      {kind === 'command' && <Plug className="size-3 text-primary" />}
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{KIND_LABELS[kind]}</span>
                     </div>
-                    <span className="truncate text-[10px] text-muted-foreground">{cmd.description}</span>
-                  </div>
-                </button>
-              ))}
+                  )
+                  for (const cmd of items) {
+                    const idx = flatIdx++
+                    nodes.push(
+                      <button
+                        key={`${kind}-${cmd.name}`}
+                        type="button"
+                        className={cn('flex w-full items-start gap-2.5 rounded-lg px-3 py-2 text-left transition-colors mx-0.5',
+                          idx === cmdHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/60'
+                        )}
+                        onMouseDown={(e) => { e.preventDefault(); executeCommand(cmd) }}
+                        onMouseEnter={() => setCmdHighlight(idx)}
+                      >
+                        <div className="mt-0.5 shrink-0">
+                          {cmd.kind === 'skill'   && <Sparkles className="size-3.5 text-violet-400" />}
+                          {cmd.kind === 'command' && <Plug className="size-3.5 text-primary" />}
+                          {cmd.kind === 'builtin' && <TerminalIcon className="size-3.5 text-muted-foreground" />}
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-medium text-xs">/{cmd.name}</span>
+                            {cmd.hint && (
+                              <span className="rounded bg-muted px-1 py-px text-[9px] font-mono text-muted-foreground">{cmd.hint}</span>
+                            )}
+                          </div>
+                          <span className="truncate text-[11px] text-muted-foreground leading-snug">{cmd.description}</span>
+                        </div>
+                      </button>
+                    )
+                  }
+                  nodes.push(<div key={`div-${kind}`} className="mx-3 my-1 border-t border-border/50 last:hidden" />)
+                }
+                return nodes
+              })()}
+              <div className="h-1" />
             </div>
           )}
 

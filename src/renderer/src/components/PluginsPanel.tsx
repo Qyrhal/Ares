@@ -8,7 +8,7 @@ const el = window.electron
 
 const INPUT = 'w-full rounded border border-border bg-input px-3 py-[0.4rem] text-[13px] text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground'
 
-const EMPTY: AgentConfig = { skills: [], extensions: [], mcpServers: [] }
+const EMPTY: AgentConfig = { skills: [], extensions: [], mcpServers: [], commands: [] }
 
 export function PluginsPanel(): React.ReactElement {
   const [config, setConfig] = useState<AgentConfig>(EMPTY)

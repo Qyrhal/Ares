@@ -31,7 +31,8 @@ export default function App(): React.ReactElement {
   const store = useAppStore()
   const { sendMessage } = useAI(store.settings)
   const [gitBadge, setGitBadge] = useState(0)
-  const [pluginCommands, setPluginCommands] = useState<import('@/types').SlashCommand[]>([])
+  const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
+  const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
 
   // ── Permission prompt ───────────────────────────────────────────────────────
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
@@ -84,9 +85,13 @@ export default function App(): React.ReactElement {
         if (sessions.length > 0) store.openSessionTab(sessions[0])
       })
 
-    el.agentConfig.get().then((cfg) => {
-      if (cfg?.commands) setPluginCommands(cfg.commands)
-    })
+    const refreshAgentConfig = (cfg: import('@/types').AgentConfig | null) => {
+      if (!cfg) return
+      setAgentSkills(cfg.skills ?? [])
+      setAgentCommands(cfg.commands ?? [])
+    }
+
+    el.agentConfig.get().then(refreshAgentConfig)
 
     return el.agentConfig.onScanResult(({ skills, extensions, mcpServers, commands }) => {
       const total = skills + extensions + mcpServers + commands
@@ -100,7 +105,7 @@ export default function App(): React.ReactElement {
         description: parts.join(', '),
         duration: 5000,
       })
-      el.agentConfig.get().then((cfg) => { if (cfg?.commands) setPluginCommands(cfg.commands) })
+      el.agentConfig.get().then(refreshAgentConfig)
     })
   }, [])
 
@@ -501,7 +506,8 @@ export default function App(): React.ReactElement {
                     store.updateSession(activeSession.id, { permissionMode: m })
                     el.db.updateSession(activeSession.id, { permissionMode: m })
                   }}
-                  pluginCommands={pluginCommands}
+                  pluginSkills={agentSkills}
+                  pluginCommands={agentCommands}
                 />
               </>
             ) : (
