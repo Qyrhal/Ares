@@ -3,7 +3,8 @@ import { v4 as uuidv4 } from 'uuid'
 import { AppSettings, Message, PermissionMode } from '@/types'
 
 export type StreamCallback = (accumulated: string) => void
-export type DoneCallback = (fullText: string) => void
+export type DoneCallback = (fullText: string, thinking?: string) => void
+export type ThinkingCallback = (accumulated: string) => void
 export type ToolCallCallback = (name: string, input: string) => void
 export type ErrorCallback = (err: Error) => void
 
@@ -20,6 +21,7 @@ export function useAI(settings: AppSettings) {
     _onToolPermission?: unknown,
     workspacePath?: string | null,
     _effort?: string,
+    onThinking?: ThinkingCallback,
   ): Promise<void> => {
     const sessionId = messages[0]?.sessionId
     const lastUser = [...messages].reverse().find((m) => m.role === 'user')
@@ -34,10 +36,11 @@ export function useAI(settings: AppSettings) {
     return new Promise<void>((resolve) => {
       const cleanups = [
         window.electron.pi.onDelta((id, text) => { if (id === reqId) onStream(text) }),
-        window.electron.pi.onDone((id, text) => {
+        window.electron.pi.onThinkingDelta((id, text) => { if (id === reqId) onThinking?.(text) }),
+        window.electron.pi.onDone((id, text, thinking) => {
           if (id !== reqId) return
           cleanups.forEach((c) => c())
-          onDone(text)
+          onDone(text, thinking)
           resolve()
         }),
         window.electron.pi.onToolStart((id, name, input) => { if (id === reqId) onToolCall?.(name, input) }),

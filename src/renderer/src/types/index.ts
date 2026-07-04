@@ -19,6 +19,7 @@ export interface Message {
   toolStatus?: ToolStatus
   toolInput?: string
   toolOutput?: string
+  thinking?: string
   isStreaming?: boolean
   createdAt: number
 }
@@ -59,7 +60,46 @@ export type Tab =
   | { type: 'session'; id: string; title: string }
   | { type: 'file'; path: string; name: string; isDirty: boolean }
 
-export type ActivityView = 'chat' | 'explorer' | 'git' | 'settings'
+export type ActivityView = 'chat' | 'explorer' | 'git' | 'skills' | 'plugins' | 'settings'
+
+export interface PiSkill {
+  id: string
+  name: string
+  description: string
+  content: string
+}
+
+export interface PiExtension {
+  id: string
+  name: string
+  path: string
+  enabled: boolean
+}
+
+export interface McpServer {
+  id: string
+  name: string
+  command: string
+  args: string[]
+  env: Record<string, string>
+  enabled: boolean
+}
+
+export interface SlashCommand {
+  id: string
+  name: string
+  description: string
+  prompt: string
+  argumentHint?: string
+  source: string
+}
+
+export interface AgentConfig {
+  skills: PiSkill[]
+  extensions: PiExtension[]
+  mcpServers: McpServer[]
+  commands: SlashCommand[]
+}
 
 export interface GitFile {
   path: string

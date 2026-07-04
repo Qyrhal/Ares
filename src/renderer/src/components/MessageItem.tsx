@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, CheckCircle2, File, FileText, Image, Loader2 } from 'lucide-react'
+import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2 } from 'lucide-react'
 import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { Message } from '@/types'
@@ -58,6 +58,34 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
   )
 }
 
+function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }): React.ReactElement {
+  const [expanded, setExpanded] = React.useState(false)
+  return (
+    <div className="my-1 w-full">
+      <Marker variant="default" className="cursor-pointer select-none" onClick={() => setExpanded((v) => !v)}>
+        <MarkerIcon>
+          {isStreaming
+            ? <Loader2 className="size-3 animate-spin text-muted-foreground" />
+            : <BrainIcon className="size-3 text-muted-foreground" />}
+        </MarkerIcon>
+        <MarkerContent className="flex items-center gap-1.5">
+          <span className="text-[11px] text-muted-foreground">
+            {isStreaming ? 'Thinking…' : 'Thought'}
+          </span>
+        </MarkerContent>
+        <span className="ml-auto">
+          {expanded ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
+        </span>
+      </Marker>
+      {expanded && (
+        <pre className="mt-1 text-[11px] text-muted-foreground whitespace-pre-wrap break-words">
+          <code>{content}</code>
+        </pre>
+      )}
+    </div>
+  )
+}
+
 export function MessageItem({ message }: MessageItemProps): React.ReactElement {
   const isUser = message.role === 'user'
   const isTool = message.role === 'tool'
@@ -109,6 +137,11 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
               </Attachment>
             ))}
           </AttachmentGroup>
+        )}
+
+        {/* Thinking block (assistant only) */}
+        {!isUser && message.thinking && (
+          <ThinkingBlock content={message.thinking} isStreaming={message.isStreaming && !message.content} />
         )}
 
         {/* Message text */}

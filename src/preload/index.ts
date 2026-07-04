@@ -80,10 +80,15 @@ const piApi = {
     ipcRenderer.on('pi:delta', listener)
     return () => ipcRenderer.off('pi:delta', listener)
   },
-  onDone: (cb: (reqId: string, text: string) => void): (() => void) => {
-    const listener = (_e: IpcRendererEvent, reqId: string, text: string): void => cb(reqId, text)
+  onDone: (cb: (reqId: string, text: string, thinking?: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, reqId: string, text: string, thinking?: string): void => cb(reqId, text, thinking)
     ipcRenderer.on('pi:done', listener)
     return () => ipcRenderer.off('pi:done', listener)
+  },
+  onThinkingDelta: (cb: (reqId: string, text: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, reqId: string, text: string): void => cb(reqId, text)
+    ipcRenderer.on('pi:thinking-delta', listener)
+    return () => ipcRenderer.off('pi:thinking-delta', listener)
   },
   onToolStart: (cb: (reqId: string, name: string, input: string) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, reqId: string, name: string, input: string): void => cb(reqId, name, input)
@@ -110,7 +115,17 @@ const nativeTools = {
   listFiles:   (dir: string) => ipcRenderer.invoke('tools:listFiles', dir),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi }
+const agentConfigApi = {
+  get: () => ipcRenderer.invoke('agentConfig:get'),
+  set: (config: object) => ipcRenderer.invoke('agentConfig:set', config),
+  onScanResult: (cb: (result: { skills: number; extensions: number; mcpServers: number; commands: number }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, result: { skills: number; extensions: number; mcpServers: number; commands: number }): void => cb(result)
+    ipcRenderer.on('agentConfig:scanResult', listener)
+    return () => ipcRenderer.off('agentConfig:scanResult', listener)
+  },
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

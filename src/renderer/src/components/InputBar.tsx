@@ -2,7 +2,7 @@ import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
-import { FileAttachment, FileNode, Message, PermissionMode } from '@/types'
+import { FileAttachment, FileNode, Message, PermissionMode, SlashCommand } from '@/types'
 import { ProjectPicker } from '@/components/ProjectPicker'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
@@ -10,12 +10,16 @@ import {
 } from '@/components/ui/attachment'
 import { v4 as uuidv4 } from 'uuid'
 
-const SLASH_COMMANDS = [
-  { name: 'model', description: 'Change the model for this session' },
+const BUILTIN_COMMANDS = [
+  { name: 'model',  description: 'Change the model for this session' },
   { name: 'folder', description: 'Open or switch workspace folder' },
-  { name: 'clear', description: 'Clear all messages in the current session' },
-  { name: 'help', description: 'Show available slash commands' },
+  { name: 'clear',  description: 'Clear all messages in the current session' },
+  { name: 'help',   description: 'Show available slash commands' },
 ]
+
+function expandTemplate(prompt: string, args: string): string {
+  return prompt.replace(/\{\{args\}\}/gi, args).replace(/\$ARGUMENTS/g, args)
+}
 
 interface InputBarProps {
   onSend: (text: string, attachments: FileAttachment[]) => void
@@ -30,6 +34,7 @@ interface InputBarProps {
   recentProjects?: string[]
   onSelectProject?: (path: string) => void
   onOpenFinder?: () => void
+  pluginCommands?: SlashCommand[]
   // bottom toolbar
   currentModel?: string
   messages?: Message[]
@@ -131,7 +136,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -175,11 +180,16 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
     return flatFiles.filter((f) => !f.isDirectory && (f.relPath.toLowerCase().includes(q) || f.name.toLowerCase().includes(q)))
   }, [flatFiles, mentionQuery])
 
+  const allCommands = useMemo(() => [
+    ...BUILTIN_COMMANDS,
+    ...pluginCommands.map((c) => ({ name: c.name, description: c.description, isPlugin: true, argumentHint: c.argumentHint })),
+  ], [pluginCommands])
+
   const filteredCommands = useMemo(() => {
-    if (!cmdQuery) return SLASH_COMMANDS
     const q = cmdQuery.toLowerCase()
-    return SLASH_COMMANDS.filter((c) => c.name.startsWith(q))
-  }, [cmdQuery])
+    if (!q) return allCommands
+    return allCommands.filter((c) => c.name.startsWith(q))
+  }, [cmdQuery, allCommands])
 
   const filteredModels = useMemo(() => {
     if (!modelSearch) return modelOptions
@@ -260,33 +270,75 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
     }
   }, [apiBaseUrl, apiKey])
 
-  // Execute a slash command — some open secondary UI, some fire immediately
+  // Insert /commandname into textarea (for Tab-completion of command name)
+  const insertCommand = useCallback((cmdName: string) => {
+    const ta = textareaRef.current
+    if (!ta || cmdIndex < 0) return
+    const before = text.slice(0, cmdIndex)
+    const after = text.slice(ta.selectionStart)
+    const newText = `${before}/${cmdName} ${after}`
+    setText(newText)
+    closeCommands()
+    requestAnimationFrame(() => {
+      const pos = before.length + cmdName.length + 2
+      ta.setSelectionRange(pos, pos)
+      ta.focus()
+    })
+  }, [text, cmdIndex, closeCommands])
+
+  // Execute a slash command — built-ins open secondary UI, plugin commands expand template
   const executeCommand = useCallback((cmdName: string) => {
-    setText('')
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    closeCommands()
+
+    // Built-in commands
     switch (cmdName) {
       case 'model':
+        setText('')
+        if (textareaRef.current) textareaRef.current.style.height = 'auto'
         fetchModels()
         setShowModelPicker(true)
         setModelSearch('')
         setModelHighlight(0)
-        closeCommands()
         requestAnimationFrame(() => modelSearchRef.current?.focus())
         return
       case 'folder':
-        closeCommands()
+        setText('')
+        if (textareaRef.current) textareaRef.current.style.height = 'auto'
         onRevealInExplorer?.()
         return
       case 'clear':
-        closeCommands()
+        setText('')
+        if (textareaRef.current) textareaRef.current.style.height = 'auto'
         onCommand?.('clear', '')
         return
       case 'help':
-        closeCommands()
+        setText('')
+        if (textareaRef.current) textareaRef.current.style.height = 'auto'
         onCommand?.('help', '')
         return
     }
-  }, [onCommand, onRevealInExplorer, fetchModels, closeCommands])
+
+    // Plugin commands
+    const pluginCmd = pluginCommands.find((c) => c.name === cmdName)
+    if (pluginCmd) {
+      if (pluginCmd.argumentHint) {
+        // Has args — put the /name  in textarea so user can type args
+        insertCommand(cmdName)
+      } else {
+        // No args — expand prompt directly and put in textarea for review
+        const expanded = expandTemplate(pluginCmd.prompt, '')
+        setText(expanded)
+        requestAnimationFrame(() => {
+          const ta = textareaRef.current
+          if (ta) {
+            ta.style.height = 'auto'
+            ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`
+            ta.focus()
+          }
+        })
+      }
+    }
+  }, [onCommand, onRevealInExplorer, fetchModels, closeCommands, pluginCommands, insertCommand])
 
   const handleModelSelect = useCallback((modelId: string) => {
     setShowModelPicker(false)
@@ -347,7 +399,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
       if (e.key === 'ArrowDown') { e.preventDefault(); setCmdHighlight((prev) => Math.min(prev + 1, filteredCommands.length - 1)); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setCmdHighlight((prev) => Math.max(prev - 1, 0)); return }
       if (e.key === 'Enter' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight].name); return }
-      if (e.key === 'Tab' && filteredCommands[cmdHighlight]) { e.preventDefault(); insertCommand(filteredCommands[cmdHighlight].name); return }
+      if (e.key === 'Tab' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight].name); return }
       if (e.key === 'Escape') { e.preventDefault(); closeCommands(); return }
     }
 
@@ -364,19 +416,37 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
   const handleSend = useCallback(() => {
     const trimmed = text.trim()
     if (!trimmed && attachments.length === 0) return
-    if (trimmed.startsWith('/') && onCommand) {
-      const spaceIdx = trimmed.indexOf(' ')
-      const cmd = spaceIdx === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIdx)
-      const args = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1).trim()
+
+    const reset = () => {
       setText(''); setAttachments([]); closeAll(); setShowModelPicker(false)
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
-      onCommand(cmd, args)
-      return
     }
+
+    if (trimmed.startsWith('/')) {
+      const spaceIdx = trimmed.indexOf(' ')
+      const cmdName = spaceIdx === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIdx)
+      const args = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1).trim()
+
+      // Plugin command — expand template and send as regular message
+      const pluginCmd = pluginCommands.find((c) => c.name === cmdName)
+      if (pluginCmd) {
+        const expanded = expandTemplate(pluginCmd.prompt, args)
+        reset()
+        onSend(expanded, attachments)
+        return
+      }
+
+      // Built-in command
+      if (onCommand) {
+        reset()
+        onCommand(cmdName, args)
+        return
+      }
+    }
+
     onSend(trimmed, attachments)
-    setText(''); setAttachments([]); closeAll(); setShowModelPicker(false)
-    if (textareaRef.current) textareaRef.current.style.height = 'auto'
-  }, [text, attachments, onSend, onCommand, closeAll])
+    reset()
+  }, [text, attachments, onSend, onCommand, closeAll, pluginCommands])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const files = Array.from(e.target.files ?? [])
@@ -505,19 +575,27 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
 
           {/* Slash command dropdown */}
           {showCommands && filteredCommands.length > 0 && (
-            <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 max-h-40 w-64 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg z-50">
+            <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 max-h-56 w-72 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg z-50">
               {filteredCommands.map((cmd, i) => (
                 <button
                   key={cmd.name}
                   type="button"
-                  className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === cmdHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
+                  className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors', i === cmdHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
                   onMouseDown={(e) => { e.preventDefault(); executeCommand(cmd.name) }}
                   onMouseEnter={() => setCmdHighlight(i)}
                 >
                   <TerminalIcon className="size-3.5 shrink-0 text-muted-foreground" />
-                  <div className="flex flex-col">
-                    <span className="font-medium text-xs">/{cmd.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{cmd.description}</span>
+                  <div className="flex min-w-0 flex-1 flex-col">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-medium text-xs">/{cmd.name}</span>
+                      {'isPlugin' in cmd && cmd.isPlugin && (
+                        <span className="rounded bg-primary/15 px-1 py-px text-[9px] font-medium text-primary">plugin</span>
+                      )}
+                      {'argumentHint' in cmd && cmd.argumentHint && (
+                        <span className="text-[10px] text-muted-foreground/60 font-mono">{cmd.argumentHint}</span>
+                      )}
+                    </div>
+                    <span className="truncate text-[10px] text-muted-foreground">{cmd.description}</span>
                   </div>
                 </button>
               ))}
