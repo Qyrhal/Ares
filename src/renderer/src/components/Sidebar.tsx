@@ -123,7 +123,7 @@ function SessionsPane({
       onMouseEnter={() => setHoveredId(s.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
-        'group flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
+        'group flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
         activeSessionId === s.id
           ? 'bg-accent text-foreground'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
