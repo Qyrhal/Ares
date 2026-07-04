@@ -1,4 +1,5 @@
 import type { AppSettings, FileNode, Checkpoint, Hook } from './types'
+import type { GitStatus, GitBranches } from './types'
 
 export interface RawSession {
   id: string; title: string; model: string
@@ -12,7 +13,12 @@ export interface RawMessage {
   tool_output: string | null; created_at: number
 }
 
-import type { GitStatus, GitBranches } from './types'
+export interface McpStatus {
+  name: string
+  connected: boolean
+  error?: string
+  toolCount: number
+}
 
 declare global {
   interface Window {
@@ -36,9 +42,7 @@ declare global {
         setPath(p: string | null): Promise<void>
         getRecent(): Promise<string[]>
       }
-      dialog: {
-        openFolder(): Promise<string | null>
-      }
+      dialog: { openFolder(): Promise<string | null> }
       fs: {
         readDir(path: string): Promise<FileNode[]>
         readFile(path: string): Promise<string>
@@ -55,9 +59,7 @@ declare global {
         kill(id: string): void
         onOutput(cb: (id: string, data: string) => void): () => void
       }
-      ext: {
-        fetchModels(baseUrl: string, apiKey: string): Promise<{ data: { id: string }[] }>
-      }
+      ext: { fetchModels(baseUrl: string, apiKey: string): Promise<{ data: { id: string }[] }> }
       tools: {
         readFile(path: string): Promise<string>
         writeFile(path: string, content: string): Promise<void>
@@ -93,14 +95,12 @@ declare global {
         diagnostics(filePath: string): Promise<{ file: string; line: number; column: number; message: string; severity: string; code?: string }[]>
         hasSupport(): Promise<boolean>
       }
-      hooks: {
-        get(): Promise<Hook[]>
-        set(hooks: Hook[]): Promise<void>
-      }
+      hooks: { get(): Promise<Hook[]>; set(hooks: Hook[]): Promise<void> }
       session: {
         export(title: string, id: string, messages: unknown[]): Promise<string | null>
         import(): Promise<{ title: string; messages: unknown[] } | { error: string } | null>
       }
+      mcp: { status(): Promise<McpStatus[]> }
       agentConfig: {
         get(): Promise<import('./types').AgentConfig>
         set(config: object): Promise<void>

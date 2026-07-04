@@ -155,7 +155,13 @@ const sessionApi = {
   import: () => ipcRenderer.invoke('session:import'),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi }
+// ── MCP ────────────────────────────────────────────────────────────────────
+
+const mcpApi = {
+  status: () => ipcRenderer.invoke('mcp:status'),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

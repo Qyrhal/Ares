@@ -10,7 +10,7 @@ import {
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
 } from './db'
-import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions } from './pi'
+import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions, getMcpStatus } from './pi'
 import { runBackgroundScan } from './scanner'
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
@@ -73,6 +73,7 @@ function createWindow(): void {
     show: false,
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0a0a0a',
+    icon: join(__dirname, '../../resources/icon.svg'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -229,6 +230,9 @@ function registerIpcHandlers(): void {
     try { return await importSession() }
     catch (e) { return { error: (e as Error).message } }
   })
+
+  // MCP status
+  ipcMain.handle('mcp:status', () => getMcpStatus())
 
   // API — proxy fetch through main process to avoid CORS
   ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string) => {

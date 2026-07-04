@@ -93,6 +93,9 @@ const electronMock = {
     export: vi.fn().mockResolvedValue('/tmp/export.json'),
     import: vi.fn().mockResolvedValue(null),
   },
+  mcp: {
+    status: vi.fn().mockResolvedValue([]),
+  },
 }
 
 Object.defineProperty(window, 'electron', { value: electronMock, writable: true })

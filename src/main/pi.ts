@@ -56,6 +56,26 @@ type SessionEntry = {
 
 const sessions = new Map<string, SessionEntry>()
 
+// ── MCP connection status ─────────────────────────────────────────────────────
+
+export interface McpConnectionStatus {
+  name: string
+  connected: boolean
+  error?: string
+  toolCount: number
+}
+
+// Tracks the most recent MCP connection results across all sessions
+let lastMcpResults: McpConnectionStatus[] = []
+
+export function getMcpStatus(): McpConnectionStatus[] {
+  return lastMcpResults
+}
+
+function updateMcpStatus(results: McpConnectionStatus[]): void {
+  lastMcpResults = results
+}
+
 // ── Pi session file persistence ────────────────────────────────────────────────
 // We keep a JSON map from Ares sessionId → Pi session file path so that
 // conversation history survives app restarts.
@@ -126,7 +146,10 @@ async function buildResourceLoader(cwd: string) {
 async function buildMcpTools(): Promise<{ tools: any[]; clients: McpClientType[] }> {
   const config = getAgentConfig()
   const enabled = config.mcpServers.filter((s) => s.enabled)
-  if (enabled.length === 0) return { tools: [], clients: [] }
+  if (enabled.length === 0) {
+    updateMcpStatus([])
+    return { tools: [], clients: [] }
+  }
 
   // CJS require works for MCP SDK
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -136,6 +159,7 @@ async function buildMcpTools(): Promise<{ tools: any[]; clients: McpClientType[]
 
   const tools: any[] = []
   const clients: McpClientType[] = []
+  const statuses: McpConnectionStatus[] = []
 
   for (const server of enabled) {
     try {
@@ -164,11 +188,14 @@ async function buildMcpTools(): Promise<{ tools: any[]; clients: McpClientType[]
           },
         })
       }
+      statuses.push({ name: server.name, connected: true, toolCount: mcpTools.length })
     } catch (err) {
       console.error(`[ares] MCP server "${server.name}" failed to connect:`, (err as Error).message)
+      statuses.push({ name: server.name, connected: false, error: (err as Error).message, toolCount: 0 })
     }
   }
 
+  updateMcpStatus(statuses)
   return { tools, clients }
 }
 

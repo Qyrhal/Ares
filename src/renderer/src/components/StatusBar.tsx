@@ -1,9 +1,16 @@
 import React, { useEffect, useState } from 'react'
-import { History, FolderOpen, Cpu } from 'lucide-react'
+import { History, FolderOpen, Cpu, Plug, PlugZap } from 'lucide-react'
 import { Checkpoint } from '@/types'
 import { cn } from '@/lib/utils'
 
 const el = window.electron
+
+interface McpStatus {
+  name: string
+  connected: boolean
+  error?: string
+  toolCount: number
+}
 
 interface StatusBarProps {
   workspacePath: string | null
@@ -14,6 +21,7 @@ interface StatusBarProps {
 
 export function StatusBar({ workspacePath, currentModel, sessionCount, className }: StatusBarProps): React.ReactElement {
   const [cpCount, setCpCount] = useState(0)
+  const [mcpStatus, setMcpStatus] = useState<McpStatus[]>([])
 
   useEffect(() => {
     if (!workspacePath) { setCpCount(0); return }
@@ -25,6 +33,18 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, className
     return () => clearInterval(id)
   }, [workspacePath])
 
+  useEffect(() => {
+    const poll = () => {
+      el.mcp.status().then(setMcpStatus).catch(() => setMcpStatus([]))
+    }
+    poll()
+    const id = setInterval(poll, 10_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const mcpConnected = mcpStatus.filter((s) => s.connected).length
+  const mcpTotal = mcpStatus.length
+
   return (
     <div className={cn('flex h-6 shrink-0 items-center gap-3 border-t border-border bg-card/80 px-3 text-[10px] text-muted-foreground', className)}>
       {workspacePath ? (
@@ -33,16 +53,27 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, className
           <span className="truncate">{workspacePath}</span>
         </span>
       ) : (
-        <span className="flex items-center gap-1">
+        <span className="flex items-center gap-1 shrink-0">
           <FolderOpen className="size-3 shrink-0" />
-          No folder open
+          No folder
         </span>
       )}
 
       {currentModel && (
         <span className="flex items-center gap-1 shrink-0">
           <Cpu className="size-3" />
-          {currentModel}
+          {currentModel.length > 20 ? currentModel.slice(0, 20) + '…' : currentModel}
+        </span>
+      )}
+
+      {/* MCP status */}
+      {mcpTotal > 0 && (
+        <span
+          className={cn('flex items-center gap-1 shrink-0', mcpConnected === mcpTotal ? 'text-green-500' : 'text-amber-400')}
+          title={mcpStatus.map((s) => `${s.name}: ${s.connected ? 'connected' : s.error || 'disconnected'}`).join('\n')}
+        >
+          {mcpConnected === mcpTotal ? <PlugZap className="size-3" /> : <Plug className="size-3" />}
+          {mcpConnected}/{mcpTotal}
         </span>
       )}
 
