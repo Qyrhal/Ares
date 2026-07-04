@@ -6,7 +6,7 @@ import nodePath from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
   getSessions, createSession, updateSession, deleteSession,
-  getMessages, addMessage, deleteMessage,
+  getMessages, addMessage, deleteMessage, updateMessage,
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
 } from './db'
@@ -140,6 +140,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:addMessage', (_, sessionId: string, role: string, content: string, opts: object) =>
     addMessage(sessionId, role, content, opts as Parameters<typeof addMessage>[3]))
   ipcMain.handle('db:deleteMessage', (_, id: string) => deleteMessage(id))
+  ipcMain.handle('db:updateMessage', (_, id: string, updates: object) => updateMessage(id, updates as any))
 
   // Settings
   ipcMain.handle('settings:get', () => getSettings())
