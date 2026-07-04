@@ -342,7 +342,7 @@ describe('useAI — error handling', () => {
     const onDone = vi.fn()
     await result.current.sendMessage('llama3', [userMsg('hi')], vi.fn(), onDone, undefined, undefined, onError)
     expect(onError).not.toHaveBeenCalled()
-    expect(onDone).toHaveBeenCalledWith('success')
+    expect(onDone).toHaveBeenCalledWith('success', undefined)
   })
 
   it('cleans up all listeners after done fires', async () => {
