@@ -61,6 +61,8 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
 
 function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?: boolean }): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
+  // Auto-open while streaming; collapses naturally when streaming ends (unless user pinned it open)
+  const isOpen = isStreaming || expanded
   return (
     <div className="my-1 w-full">
       <Marker variant="default" className="cursor-pointer select-none" onClick={() => setExpanded((v) => !v)}>
@@ -75,12 +77,13 @@ function ThinkingBlock({ content, isStreaming }: { content: string; isStreaming?
           </span>
         </MarkerContent>
         <span className="ml-auto">
-          {expanded ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
+          {isOpen ? <ChevronDownIcon className="size-3" /> : <ChevronRightIcon className="size-3" />}
         </span>
       </Marker>
-      {expanded && (
-        <pre className="mt-1 text-[11px] text-muted-foreground whitespace-pre-wrap break-words">
+      {isOpen && (
+        <pre className="mt-1 max-h-56 overflow-y-auto text-[11px] text-muted-foreground whitespace-pre-wrap break-words">
           <code>{content}</code>
+          {isStreaming && <span className="inline-block w-px h-[0.75em] bg-muted-foreground/70 ml-0.5 animate-pulse align-middle" />}
         </pre>
       )}
     </div>
@@ -149,16 +152,12 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
         {message.content && (
           isUser ? (
             <div className="markdown-content rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed">
-              {message.isStreaming ? (
-                <span className="shimmer shimmer-color-primary shimmer-duration-1500 text-muted-foreground">{message.content}</span>
-              ) : (
-                <MessageContent content={message.content} />
-              )}
+              <MessageContent content={message.content} />
             </div>
           ) : (
             <div className="markdown-content text-sm leading-relaxed text-foreground">
               {message.isStreaming ? (
-                <span className="shimmer shimmer-color-primary shimmer-duration-1500 text-muted-foreground">{message.content}</span>
+                <StreamingContent content={message.content} />
               ) : (
                 <MessageContent content={message.content} />
               )}
@@ -167,6 +166,14 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
         )}
       </div>
     </div>
+  )
+}
+
+function StreamingContent({ content }: { content: string }): React.ReactElement {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
+      {content}
+    </ReactMarkdown>
   )
 }
 
