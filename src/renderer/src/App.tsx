@@ -546,10 +546,14 @@ export default function App(): React.ReactElement {
           </div>
 
           {store.terminalOpen && (
-            <div className="h-56 shrink-0 border-t border-border">
+            <div
+              className="shrink-0 border-t border-border"
+              style={{ height: store.terminalHeight }}
+            >
               <TerminalView
                 cwd={store.workspacePath}
                 onClose={store.toggleTerminal}
+                onHeightChange={(h) => store.setTerminalHeight(h)}
               />
             </div>
           )}

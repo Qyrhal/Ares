@@ -13,6 +13,7 @@ interface TerminalTab {
 interface TerminalViewProps {
   cwd: string | null
   onClose: () => void
+  onHeightChange?: (height: string) => void
 }
 
 type WriteFn = (data: string) => void
@@ -98,12 +99,11 @@ function TerminalInstance({
   return <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
 }
 
-export function TerminalView({ cwd, onClose }: TerminalViewProps): React.ReactElement {
+export function TerminalView({ cwd, onClose, onHeightChange }: TerminalViewProps): React.ReactElement {
   const [tabs, setTabs] = useState<TerminalTab[]>([])
   const [activeId, setActiveId] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const creating = useRef(false)
-  const [height, setHeight] = useState<number | null>(null)
 
   // Per-terminal write callbacks set by TerminalInstance on mount.
   const writeCallbacks = useRef<Record<string, WriteFn>>({})
@@ -188,17 +188,21 @@ export function TerminalView({ cwd, onClose }: TerminalViewProps): React.ReactEl
   useEffect(() => () => { tabsRef.current.forEach((t) => window.electron.terminal.kill(t.id)) }, [])
 
   return (
-    <div className="flex h-full flex-col bg-background" style={height ? { height: `${height}px` } : undefined}>
+    <div className="flex h-full flex-col bg-background">
       {/* Drag handle */}
       <div
         className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center bg-transparent hover:bg-primary/10 transition-colors"
         onMouseDown={(e) => {
           e.preventDefault()
+          const parent = (e.currentTarget as HTMLElement).parentElement
+          if (!parent) return
           const startY = e.clientY
-          const startH = height ?? 224
+          const startH = parent.offsetHeight
           const onMove = (ev: MouseEvent) => {
             const dy = ev.clientY - startY
-            setHeight(Math.max(80, Math.min(600, startH - dy)))
+            const h = Math.max(80, Math.min(600, startH - dy))
+            onHeightChange?.(`${h}px`)
+            ev.preventDefault()
           }
           const onUp = () => {
             document.removeEventListener('mousemove', onMove)

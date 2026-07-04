@@ -19,6 +19,7 @@ interface AppStore {
   activeView: ActivityView
   terminalOpen: boolean
   zenMode: boolean
+  terminalHeight: string
 
   // ── Tabs ────────────────────────────────────────────────────────────────────
   tabs: Tab[]
@@ -47,6 +48,7 @@ interface AppStore {
   setActiveView: (v: ActivityView) => void
   toggleTerminal: () => void
   toggleZenMode: () => void
+  setTerminalHeight: (h: string) => void
 
   // Adds the tab if not already open, activates it, and syncs sidebar view.
   openSessionTab: (session: Session) => void
@@ -88,6 +90,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   activeView: 'chat',
   terminalOpen: false,
   zenMode: false,
+  terminalHeight: '224px',
 
   tabs: [],
   activeTabId: null,
@@ -112,6 +115,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   toggleTerminal: () => set((s) => ({ terminalOpen: !s.terminalOpen })),
 
   toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
+
+  setTerminalHeight: (h) => set({ terminalHeight: h }),
 
   // ── Tab actions ──────────────────────────────────────────────────────────────
   openSessionTab: (session) => set((s) => {
