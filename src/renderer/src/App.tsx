@@ -320,7 +320,13 @@ export default function App(): React.ReactElement {
         if (rawT) store.appendMessage(parseMessage(rawT))
       },
       async (toolOutput) => {
+        const runningTool = useAppStore.getState().messages.slice().reverse().find(
+          (m) => m.role === 'tool' && m.toolStatus === 'running'
+        )
         store.updateRunningTool({ toolStatus: 'done', toolOutput })
+        if (runningTool) {
+          await el.db.updateMessage(runningTool.id, { tool_status: 'done', tool_output: toolOutput })
+        }
       },
       (err) => {
         store.upsertMessage(streamingId, { ...streamingMsg, content: `**Error:** ${err.message}`, isStreaming: false })

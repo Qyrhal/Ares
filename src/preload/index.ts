@@ -8,7 +8,8 @@ const db = {
   getMessages: (sessionId: string) => ipcRenderer.invoke('db:getMessages', sessionId),
   addMessage: (sessionId: string, role: string, content: string, opts?: object) =>
     ipcRenderer.invoke('db:addMessage', sessionId, role, content, opts ?? {}),
-  deleteMessage: (id: string) => ipcRenderer.invoke('db:deleteMessage', id)
+  deleteMessage: (id: string) => ipcRenderer.invoke('db:deleteMessage', id),
+  updateMessage: (id: string, updates: object) => ipcRenderer.invoke('db:updateMessage', id, updates),
 }
 
 const settings = {

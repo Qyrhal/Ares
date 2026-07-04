@@ -55,6 +55,36 @@ type SessionEntry = {
 
 const sessions = new Map<string, SessionEntry>()
 
+// ── Pi session file persistence ────────────────────────────────────────────────
+// We keep a JSON map from Ares sessionId → Pi session file path so that
+// conversation history survives app restarts.
+
+let _piSessionDir: string | undefined
+function piSessionDir(): string {
+  if (!_piSessionDir) {
+    _piSessionDir = path.join(app.getPath('userData'), 'pi-sessions')
+    fs.mkdirSync(_piSessionDir, { recursive: true })
+  }
+  return _piSessionDir
+}
+
+const piSessionMapFile = (): string => path.join(app.getPath('userData'), 'pi-session-map.json')
+
+function readPiSessionMap(): Record<string, string> {
+  try { return JSON.parse(fs.readFileSync(piSessionMapFile(), 'utf-8')) }
+  catch { return {} }
+}
+
+function recordPiSessionFile(aresId: string, filePath: string): void {
+  const map = readPiSessionMap()
+  map[aresId] = filePath
+  fs.writeFileSync(piSessionMapFile(), JSON.stringify(map), 'utf-8')
+}
+
+function getStoredPiFile(aresId: string): string | undefined {
+  return readPiSessionMap()[aresId]
+}
+
 function settingsKey(apiBaseUrl: string, apiKey: string, modelId: string): string {
   return `${apiBaseUrl}|${apiKey}|${modelId}`
 }
@@ -189,8 +219,19 @@ async function getOrCreate(
     buildMcpTools(),
   ])
 
+  // Restore Pi session from disk if it exists so conversation history survives restarts
+  let sessionManager: InstanceType<typeof SessionManager>
+  const savedPiFile = getStoredPiFile(sessionId)
+  if (savedPiFile && fs.existsSync(savedPiFile)) {
+    sessionManager = SessionManager.open(savedPiFile, piSessionDir(), effectiveCwd)
+  } else {
+    sessionManager = SessionManager.create(effectiveCwd, piSessionDir())
+    const sessionFile = sessionManager.getSessionFile()
+    if (sessionFile) recordPiSessionFile(sessionId, sessionFile)
+  }
+
   const { session } = await createAgentSession({
-    sessionManager: SessionManager.inMemory(),
+    sessionManager,
     authStorage,
     modelRegistry,
     model,

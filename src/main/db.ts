@@ -204,6 +204,15 @@ export function deleteMessage(id: string): void {
   writeStore(store)
 }
 
+export function updateMessage(
+  id: string,
+  updates: Partial<Pick<DbMessage, 'tool_status' | 'tool_output' | 'content'>>
+): void {
+  const store = readStore()
+  store.messages = store.messages.map((m) => m.id === id ? { ...m, ...updates } : m)
+  writeStore(store)
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 export function getSettings(): DbSettings {
