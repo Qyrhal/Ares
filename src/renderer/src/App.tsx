@@ -154,7 +154,14 @@ export default function App(): React.ReactElement {
 
   const handleSelectSession = useCallback((id: string) => {
     const session = useAppStore.getState().sessions.find((s) => s.id === id)
-    if (session) store.openSessionTab(session)
+    if (session) {
+      store.openSessionTab(session)
+      // Switch to session's workspace if it has one
+      if (session.workspacePath) {
+        el.workspace.setPath(session.workspacePath)
+        el.fs.readDir(session.workspacePath).then((nodes) => store.setWorkspace(session.workspacePath!, nodes))
+      }
+    }
   }, [])
 
   const handleDeleteSession = useCallback(async (id: string) => {
@@ -406,7 +413,13 @@ export default function App(): React.ReactElement {
     store.setWorkspace(p, nodes)
     store.setActiveView('explorer')
     el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
-  }, [])
+    // Save workspace to current session
+    const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
+    if (sess) {
+      await el.db.updateSession(sess.id, { workspace_path: p })
+      store.updateSession(sess.id, { workspacePath: p })
+    }
+  }, [activeSession])
 
   const handleSelectProject = useCallback(async (path: string) => {
     await el.workspace.setPath(path)

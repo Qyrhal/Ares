@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
-import { SparklesIcon } from '@animateicons/react/lucide'
+import { Loader2, Diamond } from 'lucide-react'
 import { Message } from '@/types'
 import { MessageItem } from './MessageItem'
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
@@ -68,7 +67,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion }: Ch
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-8">
         <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10 border border-primary/20">
-          <SparklesIcon className="size-8 text-primary" />
+          <Diamond className="size-7 text-primary rotate-45" />
         </div>
         <div>
           <h2 className="text-lg font-semibold text-foreground">{sessionTitle}</h2>

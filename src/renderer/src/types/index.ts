@@ -36,6 +36,7 @@ export interface Session {
   pinned?: boolean
   effort?: EffortLevel
   permissionMode?: PermissionMode
+  workspacePath?: string
 }
 
 export type PermissionMode = 'ask' | 'auto' | 'yolo'
