@@ -10,6 +10,7 @@ import {
 import { Marker, MarkerIcon, MarkerContent } from '@/components/ui/marker'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
+import remarkGfm from 'remark-gfm'
 
 interface MessageItemProps {
   message: Message
@@ -171,7 +172,7 @@ export function MessageItem({ message }: MessageItemProps): React.ReactElement {
 
 function MessageContent({ content }: { content: string }): React.ReactElement {
   return (
-    <ReactMarkdown rehypePlugins={[rehypeHighlight]}>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
       {content}
     </ReactMarkdown>
   )

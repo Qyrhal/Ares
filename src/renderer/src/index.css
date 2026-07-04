@@ -90,11 +90,15 @@ code:not(pre code) {
   @apply my-4 border-none border-t border-border;
 }
 .markdown-content table {
-  @apply my-[0.5em] w-full border-collapse text-sm;
+  @apply my-[0.75em] w-full border-collapse text-sm;
+  display: block;
+  overflow-x: auto;
 }
 .markdown-content th,
 .markdown-content td {
-  @apply border border-border px-3 py-[0.4em] text-left;
+  @apply border border-border px-3 py-[0.4em] text-left whitespace-nowrap;
 }
-.markdown-content th { @apply bg-muted font-semibold; }
+.markdown-content td { @apply text-muted-foreground; }
+.markdown-content th { @apply bg-muted font-semibold text-foreground; }
+.markdown-content tbody tr:hover td { @apply bg-accent/40; }
 .markdown-content pre { @apply my-[0.5em]; }
