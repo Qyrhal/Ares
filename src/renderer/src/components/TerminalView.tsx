@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import '@xterm/xterm/css/xterm.css'
-import { PlusIcon, XIcon, ChevronDownIcon } from '@animateicons/react/lucide'
+import { PlusIcon, XIcon, ChevronDownIcon, GripHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface TerminalTab {
@@ -103,6 +103,7 @@ export function TerminalView({ cwd, onClose }: TerminalViewProps): React.ReactEl
   const [activeId, setActiveId] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const creating = useRef(false)
+  const [height, setHeight] = useState<number | null>(null)
 
   // Per-terminal write callbacks set by TerminalInstance on mount.
   const writeCallbacks = useRef<Record<string, WriteFn>>({})
@@ -187,7 +188,33 @@ export function TerminalView({ cwd, onClose }: TerminalViewProps): React.ReactEl
   useEffect(() => () => { tabsRef.current.forEach((t) => window.electron.terminal.kill(t.id)) }, [])
 
   return (
-    <div className="flex h-full flex-col bg-background">
+    <div className="flex h-full flex-col bg-background" style={height ? { height: `${height}px` } : undefined}>
+      {/* Drag handle */}
+      <div
+        className="group flex h-2 shrink-0 cursor-row-resize items-center justify-center bg-transparent hover:bg-primary/10 transition-colors"
+        onMouseDown={(e) => {
+          e.preventDefault()
+          const startY = e.clientY
+          const startH = height ?? 224
+          const onMove = (ev: MouseEvent) => {
+            const dy = ev.clientY - startY
+            setHeight(Math.max(80, Math.min(600, startH - dy)))
+          }
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove)
+            document.removeEventListener('mouseup', onUp)
+            document.body.style.cursor = ''
+            document.body.style.userSelect = ''
+          }
+          document.addEventListener('mousemove', onMove)
+          document.addEventListener('mouseup', onUp)
+          document.body.style.cursor = 'row-resize'
+          document.body.style.userSelect = 'none'
+        }}
+      >
+        <GripHorizontal className="size-3 text-muted-foreground/30 group-hover:text-primary/50 transition-colors" />
+      </div>
+
       <div className="flex items-center border-b border-border bg-card px-2 py-1 gap-0.5 shrink-0">
         {tabs.map((tab) => (
           <div

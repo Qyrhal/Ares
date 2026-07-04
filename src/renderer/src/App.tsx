@@ -12,6 +12,7 @@ import { SkillsPanel } from '@/components/SkillsPanel'
 import { PluginsPanel } from '@/components/PluginsPanel'
 import { HooksPanel } from '@/components/HooksPanel'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
+import { StatusBar } from '@/components/StatusBar'
 import { TerminalView } from '@/components/TerminalView'
 import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
@@ -486,6 +487,7 @@ export default function App(): React.ReactElement {
               <FileEditor
                 path={activeTab.path}
                 onDirtyChange={(dirty) => store.setTabDirty(activeTab.path, dirty)}
+                onClose={(p) => { store.closeTab(p); store.removeTabsByPath(p, false) }}
               />
             ) : activeTab?.type === 'session' && activeSession ? (
               <>
@@ -553,6 +555,11 @@ export default function App(): React.ReactElement {
           )}
         </div>
       </div>
+      <StatusBar
+        workspacePath={store.workspacePath}
+        currentModel={activeSession?.model ?? store.settings.defaultModel}
+        sessionCount={store.sessions.length}
+      />
       <Toaster />
     </div>
   )

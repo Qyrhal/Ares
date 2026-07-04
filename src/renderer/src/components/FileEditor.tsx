@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import { Loader2, Save } from 'lucide-react'
+import { Loader2, Save, Copy, FileDown, ExternalLink, Trash2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface FileEditorProps {
   path: string
   onDirtyChange?: (isDirty: boolean) => void
+  onClose?: (path: string) => void
 }
 
 const LANG_MAP: Record<string, string> = {
@@ -22,21 +23,21 @@ const LANG_MAP: Record<string, string> = {
   toml: 'ini', env: 'ini',
 }
 
-function detectLanguage(path: string): string {
-  const ext = path.split('.').pop()?.toLowerCase() ?? ''
+function detectLanguage(p: string): string {
+  const ext = p.split('.').pop()?.toLowerCase() ?? ''
   return LANG_MAP[ext] ?? 'plaintext'
 }
 
 const el = window.electron
 
-export function FileEditor({ path, onDirtyChange }: FileEditorProps): React.ReactElement {
+export function FileEditor({ path, onDirtyChange, onClose }: FileEditorProps): React.ReactElement {
   const [content, setContent] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
 
-  // Load file content
   useEffect(() => {
     setLoading(true)
     setIsDirty(false)
@@ -62,13 +63,10 @@ export function FileEditor({ path, onDirtyChange }: FileEditorProps): React.Reac
     setContent(value)
     setIsDirty(true)
     onDirtyChange?.(true)
-
-    // Auto-save after 800ms idle
     if (saveTimer.current) clearTimeout(saveTimer.current)
     saveTimer.current = setTimeout(() => save(value), 800)
   }, [save])
 
-  // Cmd+S to save immediately
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
       if ((e.metaKey || e.ctrlKey) && e.key === 's') {
@@ -83,6 +81,28 @@ export function FileEditor({ path, onDirtyChange }: FileEditorProps): React.Reac
     return () => window.removeEventListener('keydown', handler)
   }, [content, save])
 
+  const handleDuplicate = useCallback(async () => {
+    const dot = path.lastIndexOf('.')
+    const newPath = dot !== -1
+      ? path.slice(0, dot) + '-copy' + path.slice(dot)
+      : path + '-copy'
+    if (content !== null) {
+      await el.fs.writeFile(newPath, content)
+      el.fs.readDir(newPath.substring(0, newPath.lastIndexOf('/'))).then(() => {})
+    }
+  }, [path, content])
+
+  const handleCopyPath = useCallback(() => {
+    navigator.clipboard.writeText(path)
+  }, [path])
+
+  const handleDelete = useCallback(async () => {
+    if (window.confirm(`Delete "${path.split('/').pop()}"?`)) {
+      await el.fs.delete(path)
+      onClose?.(path)
+    }
+  }, [path, onClose])
+
   if (loading) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -95,18 +115,44 @@ export function FileEditor({ path, onDirtyChange }: FileEditorProps): React.Reac
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {/* File path breadcrumb */}
-      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border bg-card/50 px-4">
-        <span className="text-xs text-muted-foreground truncate flex-1">{path}</span>
-        {saving && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
-        {isDirty && !saving && (
+      {/* File header with actions */}
+      <div className="flex h-8 shrink-0 items-center gap-2 border-b border-border bg-card/50 px-3 relative">
+        <span className="text-xs text-muted-foreground truncate flex-1 font-mono">{path}</span>
+
+        <div className="flex items-center gap-1">
+          {/* Quick actions */}
           <button
-            onClick={() => content !== null && save(content)}
-            className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300"
+            title="Copy path"
+            onClick={handleCopyPath}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent"
           >
-            <Save className="size-3" /> Unsaved
+            <Copy className="size-3" />
           </button>
-        )}
+          <button
+            title="Duplicate"
+            onClick={handleDuplicate}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent"
+          >
+            <FileDown className="size-3" />
+          </button>
+          <button
+            title="Delete file"
+            onClick={handleDelete}
+            className="rounded p-0.5 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+          >
+            <Trash2 className="size-3" />
+          </button>
+
+          {saving && <Loader2 className="size-3 animate-spin text-muted-foreground" />}
+          {isDirty && !saving && (
+            <button
+              onClick={() => content !== null && save(content)}
+              className="flex items-center gap-1 text-[10px] text-amber-400 hover:text-amber-300"
+            >
+              <Save className="size-3" /> Unsaved
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-hidden">

@@ -7,6 +7,7 @@ import * as nodeModule from 'module'
 import fs from 'fs'
 import path from 'path'
 import { getAgentConfig } from './db'
+import { createCheckpoint } from './checkpoints'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
 // markAsUncloneable was added in Node.js 22; Electron 33 ships Node.js 20.
@@ -313,6 +314,10 @@ export async function handlePiSend(
   })
 
   try {
+    // Auto-checkpoint before AI operations (snapshot the workspace)
+    if (cwd) {
+      try { createCheckpoint(cwd, `Before: ${message.slice(0, 60).trim()}`) } catch { /* best-effort */ }
+    }
     await session.prompt(message)
   } catch (err) {
     unsub()
