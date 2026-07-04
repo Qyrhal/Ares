@@ -13,6 +13,7 @@ export interface DbSession {
   pinned?: boolean
   effort?: string
   permissionMode?: string
+  workspace_path?: string
 }
 
 export interface DbMessage {
@@ -141,7 +142,7 @@ export function createSession(title: string, model = 'gpt-4o-mini'): DbSession {
   return session
 }
 
-export function updateSession(id: string, updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned'>>): void {
+export function updateSession(id: string, updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'workspace_path'>>): void {
   const store = readStore()
   store.sessions = store.sessions.map((s) =>
     s.id === id ? { ...s, ...updates, updated_at: Date.now() } : s

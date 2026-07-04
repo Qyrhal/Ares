@@ -132,6 +132,11 @@ function SessionsPane({
       <MessageSquare className="mt-0.5 size-3.5 shrink-0 opacity-60" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium leading-snug">{truncate(s.title, 32)}</p>
+        {s.workspacePath && (
+          <p className="truncate text-[9px] text-muted-foreground/40 mt-0.5" title={s.workspacePath}>
+            {s.workspacePath.split('/').filter(Boolean).slice(-3).join('/')}
+          </p>
+        )}
         <p className="mt-0.5 text-[10px] text-muted-foreground/60">
           {timeAgo(s.updatedAt)} · {s.messageCount ?? 0} msg
         </p>

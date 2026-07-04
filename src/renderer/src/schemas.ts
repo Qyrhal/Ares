@@ -13,6 +13,7 @@ export const RawSessionSchema = z.object({
   pinned: z.boolean().optional().default(false),
   effort: z.enum(['low', 'medium', 'high']).optional(),
   permissionMode: z.enum(['ask', 'auto', 'yolo']).optional(),
+  workspace_path: z.string().nullable().optional(),
 })
 
 export const RawMessageSchema = z.object({
@@ -52,6 +53,7 @@ export function parseSession(raw: unknown): Session {
     pinned: r.pinned,
     effort: r.effort,
     permissionMode: r.permissionMode,
+    workspacePath: r.workspace_path ?? undefined,
   }
 }
 
