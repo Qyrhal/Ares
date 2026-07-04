@@ -71,6 +71,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    title: 'Ares',
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0a0a0a',
     icon: join(__dirname, '../../resources/icon.svg'),
