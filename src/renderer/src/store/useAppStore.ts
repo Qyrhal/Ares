@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Session, Message, AppSettings, FileNode, Tab, ActivityView, GitCommit } from '@/types'
+import type { Session, Message, AppSettings, FileNode, Tab, ActivityView, GitCommit, Todo } from '@/types'
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
@@ -39,6 +39,9 @@ interface AppStore {
   workspacePath: string | null
   fileNodes: FileNode[]
   recentProjects: string[]
+
+  // ── Todos ────────────────────────────────────────────────────────────────────
+  todos: Todo[]
 
   // ── Settings ────────────────────────────────────────────────────────────────
   settings: AppSettings
@@ -83,6 +86,11 @@ interface AppStore {
   setRecentProjects: (paths: string[]) => void
 
   setSettings: (s: AppSettings) => void
+
+  setTodos: (todos: Todo[]) => void
+  addTodo: (todo: Todo) => void
+  updateTodo: (id: string, patch: Partial<Todo>) => void
+  removeTodo: (id: string) => void
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -108,6 +116,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   recentProjects: [],
 
   settings: DEFAULT_SETTINGS,
+  todos: [],
 
   // ── UI actions ───────────────────────────────────────────────────────────────
   setActiveView: (v) => set({ activeView: v }),
@@ -249,4 +258,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Settings actions ─────────────────────────────────────────────────────────
   setSettings: (s) => set({ settings: s }),
+
+  // ── Todo actions ─────────────────────────────────────────────────────────────
+  setTodos: (todos) => set({ todos }),
+  addTodo: (todo) => set((s) => ({ todos: [...s.todos, todo] })),
+  updateTodo: (id, patch) => set((s) => ({ todos: s.todos.map((t) => t.id === id ? { ...t, ...patch } : t) })),
+  removeTodo: (id) => set((s) => ({ todos: s.todos.filter((t) => t.id !== id) })),
 }))

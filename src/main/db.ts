@@ -14,6 +14,8 @@ export interface DbSession {
   effort?: string
   permissionMode?: string
   workspace_path?: string
+  parent_id?: string | null
+  agent_status?: string
 }
 
 export interface DbMessage {
@@ -27,6 +29,14 @@ export interface DbMessage {
   tool_input: string | null
   tool_output: string | null
   thinking: string | null
+  created_at: number
+}
+
+export interface DbTodo {
+  id: string
+  session_id: string
+  text: string
+  completed: 0 | 1
   created_at: number
 }
 
@@ -88,6 +98,7 @@ const DEFAULT_AGENT_CONFIG: DbAgentConfig = {
 interface Store {
   sessions: DbSession[]
   messages: DbMessage[]
+  todos: DbTodo[]
   settings: DbSettings
   workspacePath: string | null
   recentProjects: string[]
@@ -109,9 +120,10 @@ function getStorePath(): string {
 
 function readStore(): Store {
   try {
-    return JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
+    const raw = JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
+    return { todos: [], ...raw }
   } catch {
-    return { sessions: [], messages: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
+    return { sessions: [], messages: [], todos: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
   }
 }
 
@@ -132,17 +144,24 @@ export function getSessions(): DbSession[] {
     })
 }
 
-export function createSession(title: string, model = 'gpt-4o-mini'): DbSession {
+export function createSession(title: string, model = 'gpt-4o-mini', parentId?: string | null): DbSession {
   const store = readStore()
   const id = uuidv4()
   const now = Date.now()
-  const session: DbSession = { id, title, model, created_at: now, updated_at: now }
+  const session: DbSession = {
+    id, title, model, created_at: now, updated_at: now,
+    parent_id: parentId ?? null,
+    agent_status: 'idle',
+  }
   store.sessions.unshift(session)
   writeStore(store)
   return session
 }
 
-export function updateSession(id: string, updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'workspace_path'>>): void {
+export function updateSession(
+  id: string,
+  updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'workspace_path' | 'effort' | 'permissionMode' | 'agent_status'>>
+): void {
   const store = readStore()
   store.sessions = store.sessions.map((s) =>
     s.id === id ? { ...s, ...updates, updated_at: Date.now() } : s
@@ -154,6 +173,7 @@ export function deleteSession(id: string): void {
   const store = readStore()
   store.sessions = store.sessions.filter((s) => s.id !== id)
   store.messages = store.messages.filter((m) => m.session_id !== id)
+  store.todos = (store.todos ?? []).filter((t) => t.session_id !== id)
   writeStore(store)
 }
 
@@ -211,6 +231,48 @@ export function updateMessage(
 ): void {
   const store = readStore()
   store.messages = store.messages.map((m) => m.id === id ? { ...m, ...updates } : m)
+  writeStore(store)
+}
+
+// ── Todos ─────────────────────────────────────────────────────────────────────
+
+export function getTodos(sessionId: string): DbTodo[] {
+  const store = readStore()
+  return (store.todos ?? [])
+    .filter((t) => t.session_id === sessionId)
+    .sort((a, b) => a.created_at - b.created_at)
+}
+
+export function addTodo(sessionId: string, text: string): DbTodo {
+  const store = readStore()
+  const todo: DbTodo = {
+    id: uuidv4(),
+    session_id: sessionId,
+    text,
+    completed: 0,
+    created_at: Date.now(),
+  }
+  store.todos = [...(store.todos ?? []), todo]
+  writeStore(store)
+  return todo
+}
+
+export function updateTodo(id: string, updates: { text?: string; completed?: boolean }): void {
+  const store = readStore()
+  store.todos = (store.todos ?? []).map((t) => {
+    if (t.id !== id) return t
+    return {
+      ...t,
+      ...(updates.text !== undefined ? { text: updates.text } : {}),
+      ...(updates.completed !== undefined ? { completed: updates.completed ? 1 : 0 as 0 | 1 } : {}),
+    }
+  })
+  writeStore(store)
+}
+
+export function deleteTodo(id: string): void {
+  const store = readStore()
+  store.todos = (store.todos ?? []).filter((t) => t.id !== id)
   writeStore(store)
 }
 

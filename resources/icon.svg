@@ -1,39 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#1a0a0a"/>
-      <stop offset="100%" stop-color="#2d0a0a"/>
+      <stop offset="0%" stop-color="#0d1117"/>
+      <stop offset="100%" stop-color="#161b22"/>
     </linearGradient>
-    <linearGradient id="diamond" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" stop-color="#ef4444"/>
-      <stop offset="50%" stop-color="#dc2626"/>
-      <stop offset="100%" stop-color="#b91c1c"/>
-    </linearGradient>
-    <linearGradient id="diamond-shine" x1="0%" y1="0%" x2="50%" y2="100%">
-      <stop offset="0%" stop-color="#fca5a5" stop-opacity="0.6"/>
-      <stop offset="100%" stop-color="#fca5a5" stop-opacity="0"/>
-    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
   </defs>
 
-  <!-- Outer circle -->
-  <circle cx="256" cy="256" r="248" fill="url(#bg)" stroke="#ef4444" stroke-width="8"/>
+  <!-- Rounded square background (macOS app icon) -->
+  <rect x="0" y="0" width="512" height="512" rx="115" ry="115" fill="url(#bg)"/>
 
-  <!-- Inner ring -->
-  <circle cx="256" cy="256" r="230" fill="none" stroke="#ef4444" stroke-width="1" stroke-opacity="0.3"/>
+  <!-- Circle outline -->
+  <circle cx="256" cy="256" r="215" fill="none" stroke="#ef4444" stroke-width="14" stroke-opacity="0.9" filter="url(#glow)"/>
 
-  <!-- Diamond shape -->
-  <polygon points="256,80 400,256 256,432 112,256" fill="url(#diamond)" stroke="#fca5a5" stroke-width="2" stroke-opacity="0.4"/>
+  <!-- Outer square outline -->
+  <rect x="106" y="106" width="300" height="300" rx="28" ry="28"
+        fill="none" stroke="#ef4444" stroke-width="14" stroke-opacity="0.9"
+        filter="url(#glow)"/>
 
-  <!-- Diamond inner shine -->
-  <polygon points="256,120 360,256 256,392 152,256" fill="url(#diamond-shine)"/>
-
-  <!-- Diamond highlight edge -->
-  <polygon points="256,80 400,256 256,432 112,256" fill="none" stroke="url(#diamond-shine)" stroke-width="1.5" stroke-opacity="0.5"/>
-
-  <!-- Subtle glow -->
-  <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-    <stop offset="70%" stop-color="#ef4444" stop-opacity="0"/>
-    <stop offset="100%" stop-color="#ef4444" stop-opacity="0.15"/>
-  </radialGradient>
-  <circle cx="256" cy="256" r="256" fill="url(#glow)"/>
+  <!-- Inner diamond (square rotated 45°) outline -->
+  <rect x="150" y="150" width="212" height="212" rx="22" ry="22"
+        fill="none" stroke="#ef4444" stroke-width="14" stroke-opacity="0.9"
+        transform="rotate(45 256 256)"
+        filter="url(#glow)"/>
 </svg>

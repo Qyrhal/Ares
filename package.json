@@ -34,7 +34,13 @@
         "from": "resources/",
         "to": "resources/"
       }
-    ]
+    ],
+    "mac": {
+      "icon": "build/icon.icns"
+    },
+    "win": {
+      "icon": "build/icon.icns"
+    }
   },
   "dependencies": {
     "@animateicons/react": "^0.3.4",

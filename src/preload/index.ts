@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
 const db = {
   getSessions: () => ipcRenderer.invoke('db:getSessions'),
-  createSession: (title: string, model?: string) => ipcRenderer.invoke('db:createSession', title, model),
+  createSession: (title: string, model?: string, parentId?: string | null) => ipcRenderer.invoke('db:createSession', title, model, parentId),
   updateSession: (id: string, updates: object) => ipcRenderer.invoke('db:updateSession', id, updates),
   deleteSession: (id: string) => ipcRenderer.invoke('db:deleteSession', id),
   getMessages: (sessionId: string) => ipcRenderer.invoke('db:getMessages', sessionId),
@@ -10,6 +10,10 @@ const db = {
     ipcRenderer.invoke('db:addMessage', sessionId, role, content, opts ?? {}),
   deleteMessage: (id: string) => ipcRenderer.invoke('db:deleteMessage', id),
   updateMessage: (id: string, updates: object) => ipcRenderer.invoke('db:updateMessage', id, updates),
+  getTodos: (sessionId: string) => ipcRenderer.invoke('db:getTodos', sessionId),
+  addTodo: (sessionId: string, text: string) => ipcRenderer.invoke('db:addTodo', sessionId, text),
+  updateTodo: (id: string, updates: object) => ipcRenderer.invoke('db:updateTodo', id, updates),
+  deleteTodo: (id: string) => ipcRenderer.invoke('db:deleteTodo', id),
 }
 
 const settings = {
