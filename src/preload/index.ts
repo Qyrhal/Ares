@@ -142,6 +142,12 @@ const piApi = {
     ipcRenderer.on('pi:agent-status', listener)
     return () => ipcRenderer.off('pi:agent-status', listener)
   },
+  onSessionComplete: (cb: (sessionId: string, title: string, summary: string, childIds: string[]) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, sessionId: string, title: string, summary: string, childIds: string[]): void =>
+      cb(sessionId, title, summary, childIds)
+    ipcRenderer.on('pi:session-complete', listener)
+    return () => ipcRenderer.off('pi:session-complete', listener)
+  },
 }
 
 const nativeTools = {
