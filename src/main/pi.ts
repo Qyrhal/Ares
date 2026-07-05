@@ -6,7 +6,7 @@ import { app, BrowserWindow } from 'electron'
 import * as nodeModule from 'module'
 import fs from 'fs'
 import path from 'path'
-import { getAgentConfig } from './db'
+import { getAgentConfig, replaceTodos } from './db'
 import { createCheckpoint } from './checkpoints'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
@@ -200,6 +200,7 @@ async function buildMcpTools(): Promise<{ tools: any[]; clients: McpClientType[]
 }
 
 async function getOrCreate(
+  win: BrowserWindow,
   sessionId: string,
   apiBaseUrl: string,
   apiKey: string,
@@ -258,6 +259,37 @@ async function getOrCreate(
     if (sessionFile) recordPiSessionFile(sessionId, sessionFile)
   }
 
+  const setTodosTool = {
+    name: 'setTodos',
+    description: 'Set the task plan for the current session. Call this at the start to outline your steps, then call again to mark items complete as you progress.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        todos: {
+          type: 'array' as const,
+          description: 'The complete list of tasks',
+          items: {
+            type: 'object' as const,
+            properties: {
+              text: { type: 'string' as const, description: 'Task description' },
+              completed: { type: 'boolean' as const, description: 'Whether the task is done', default: false },
+            },
+            required: ['text'],
+          },
+        },
+      },
+      required: ['todos'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { todos } = params as { todos: { text: string; completed?: boolean }[] }
+      const saved = replaceTodos(sessionId, todos)
+      if (!win.isDestroyed()) {
+        win.webContents.send('pi:todos-update', sessionId, saved)
+      }
+      return { content: [{ type: 'text', text: `Plan updated: ${todos.length} task${todos.length !== 1 ? 's' : ''}.` }] }
+    },
+  }
+
   const { session } = await createAgentSession({
     sessionManager,
     authStorage,
@@ -266,7 +298,7 @@ async function getOrCreate(
     cwd: effectiveCwd,
     tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
     resourceLoader,
-    customTools: mcpTools,
+    customTools: [...mcpTools, setTodosTool],
   })
 
   sessions.set(sessionId, { session, settingsKey: key, mcpClients })
@@ -297,7 +329,7 @@ export async function handlePiSend(
 ): Promise<void> {
   let session: AgentSession
   try {
-    session = await getOrCreate(sessionId, apiBaseUrl, apiKey, model, cwd)
+    session = await getOrCreate(win, sessionId, apiBaseUrl, apiKey, model, cwd)
   } catch (err) {
     if (!win.isDestroyed()) win.webContents.send('pi:error', reqId, (err as Error).message)
     return

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Loader2, CheckCircle2, XCircle, Circle, ChevronRight, ChevronDown, Plus } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle, Circle, ChevronRight, ChevronDown } from 'lucide-react'
 import { cn, truncate } from '@/lib/utils'
 import type { Session, AgentStatus } from '@/types'
 
@@ -7,7 +7,6 @@ interface AgentTreeProps {
   sessions: Session[]
   activeSessionId: string | null
   onSelectSession: (id: string) => void
-  onSpawnAgent: () => void
 }
 
 interface TreeNode {
@@ -109,33 +108,23 @@ function TreeNodeView({
   )
 }
 
-export function AgentTree({ sessions, activeSessionId, onSelectSession, onSpawnAgent }: AgentTreeProps): React.ReactElement {
+export function AgentTree({ sessions, activeSessionId, onSelectSession }: AgentTreeProps): React.ReactElement {
   const roots = buildTree(sessions)
   const runningCount = sessions.filter((s) => s.agentStatus === 'running').length
 
   return (
     <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex h-9 shrink-0 items-center justify-between px-3 border-b border-border">
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-            Agent Tree
+      <div className="flex h-9 shrink-0 items-center px-3 border-b border-border gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Agent Tree
+        </span>
+        {runningCount > 0 && (
+          <span className="flex items-center gap-1 text-[9px] text-primary">
+            <Loader2 className="size-2.5 animate-spin" />
+            {runningCount} running
           </span>
-          {runningCount > 0 && (
-            <span className="flex items-center gap-1 text-[9px] text-primary">
-              <Loader2 className="size-2.5 animate-spin" />
-              {runningCount} running
-            </span>
-          )}
-        </div>
-        <button
-          onClick={onSpawnAgent}
-          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
-          title="Spawn new agent"
-        >
-          <Plus className="size-3" />
-          Spawn
-        </button>
+        )}
       </div>
 
       {/* Tree */}
@@ -143,12 +132,9 @@ export function AgentTree({ sessions, activeSessionId, onSelectSession, onSpawnA
         {roots.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center px-4">
             <p className="text-xs text-muted-foreground">No agents yet.</p>
-            <button
-              onClick={onSpawnAgent}
-              className="text-xs text-primary hover:underline"
-            >
-              Spawn your first agent
-            </button>
+            <p className="text-[10px] text-muted-foreground/50">
+              Agents are spawned automatically by the orchestrator.
+            </p>
           </div>
         ) : (
           roots.map((node) => (
