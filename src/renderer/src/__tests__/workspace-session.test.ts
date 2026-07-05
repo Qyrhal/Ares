@@ -187,3 +187,64 @@ describe('New session — workspace inheritance', () => {
     expect(currentWp).toBe('/project/a')
   })
 })
+
+describe('parseSession — parentId and agentStatus', () => {
+  const base = {
+    id: 's1', title: 'Test', model: 'gpt-4o',
+    created_at: 100, updated_at: 200, message_count: 0,
+  }
+
+  it('defaults parentId to null when parent_id absent', () => {
+    const s = parseSession(base)
+    expect(s.parentId).toBeNull()
+  })
+
+  it('defaults parentId to null when parent_id is null', () => {
+    const s = parseSession({ ...base, parent_id: null })
+    expect(s.parentId).toBeNull()
+  })
+
+  it('parses parent_id into parentId', () => {
+    const s = parseSession({ ...base, parent_id: 'root-session' })
+    expect(s.parentId).toBe('root-session')
+  })
+
+  it('distinguishes root sessions (null parentId) from child sessions', () => {
+    const root = parseSession(base)
+    const child = parseSession({ ...base, id: 'child', parent_id: 's1' })
+    expect(root.parentId).toBeNull()
+    expect(child.parentId).toBe('s1')
+  })
+
+  it('defaults agentStatus to idle when agent_status absent', () => {
+    const s = parseSession(base)
+    expect(s.agentStatus).toBe('idle')
+  })
+
+  it('parses agent_status running', () => {
+    const s = parseSession({ ...base, agent_status: 'running' })
+    expect(s.agentStatus).toBe('running')
+  })
+
+  it('parses agent_status done', () => {
+    const s = parseSession({ ...base, agent_status: 'done' })
+    expect(s.agentStatus).toBe('done')
+  })
+
+  it('parses agent_status error', () => {
+    const s = parseSession({ ...base, agent_status: 'error' })
+    expect(s.agentStatus).toBe('error')
+  })
+
+  it('agentStatus and parentId coexist with workspacePath', () => {
+    const s = parseSession({
+      ...base,
+      workspace_path: '/project',
+      parent_id: 'parent-id',
+      agent_status: 'running',
+    })
+    expect(s.workspacePath).toBe('/project')
+    expect(s.parentId).toBe('parent-id')
+    expect(s.agentStatus).toBe('running')
+  })
+})
