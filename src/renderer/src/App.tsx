@@ -413,7 +413,8 @@ export default function App(): React.ReactElement {
         const aMsg = rawA
           ? parseMessage(rawA)
           : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false }
-        store.upsertMessage(streamingId, aMsg)
+        store.removeMessage(streamingId)
+        store.appendMessage(aMsg)
         const current = useAppStore.getState().sessions.find((s) => s.id === sess.id)
         store.updateSession(sess.id, { messageCount: (current?.messageCount ?? 0) + 1 })
         store.setLoading(false)
@@ -433,7 +434,8 @@ export default function App(): React.ReactElement {
         }
       },
       (err) => {
-        store.upsertMessage(streamingId, { ...streamingMsg, content: `**Error:** ${err.message}`, isStreaming: false })
+        store.removeMessage(streamingId)
+        store.appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
         store.setLoading(false)
       },
       (sess.permissionMode ?? store.settings.permissionMode) as PermissionMode,

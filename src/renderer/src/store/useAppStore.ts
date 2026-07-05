@@ -73,6 +73,7 @@ interface AppStore {
 
   setMessages: (msgs: Message[]) => void
   appendMessage: (msg: Message) => void
+  removeMessage: (id: string) => void
   upsertMessage: (id: string, msg: Message) => void
   updateRunningTool: (patch: Partial<Message>) => void
   setLoading: (v: boolean) => void
@@ -227,6 +228,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setMessages: (msgs) => set({ messages: msgs }),
 
   appendMessage: (msg) => set((s) => ({ messages: [...s.messages, msg] })),
+
+  removeMessage: (id) => set((s) => ({ messages: s.messages.filter((m) => m.id !== id) })),
 
   upsertMessage: (id, msg) => set((s) => {
     const exists = s.messages.some((m) => m.id === id)
