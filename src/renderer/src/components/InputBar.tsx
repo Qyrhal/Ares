@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug } from 'lucide-react'
+import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand } from '@/types'
@@ -41,6 +41,7 @@ interface InputBarProps {
   onCommand?: (command: string, args: string) => void
   onRevealInExplorer?: () => void
   disabled?: boolean
+  onCancel?: () => void
   placeholder?: string
   workspacePath?: string | null
   fileNodes?: FileNode[]
@@ -152,7 +153,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
@@ -685,15 +686,27 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, plac
           {/* model picker is rendered outside this div — see below */}
         </div>
 
-        <button
-          type="button"
-          onClick={handleSend}
-          disabled={!canSend}
-          className={cn('mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md transition-colors', canSend ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
-          aria-label="Send message"
-        >
-          <SendIcon className="size-3.5" />
-        </button>
+        {disabled ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+            aria-label="Stop generation (Ctrl+C)"
+            title="Stop generation (Ctrl+C)"
+          >
+            <Square className="size-3 fill-current" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            onClick={handleSend}
+            disabled={!canSend}
+            className={cn('mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md transition-colors', canSend ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
+            aria-label="Send message"
+          >
+            <SendIcon className="size-3.5" />
+          </button>
+        )}
 
       </div>
 

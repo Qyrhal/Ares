@@ -250,6 +250,10 @@ export default function App(): React.ReactElement {
   // Keyboard shortcuts — reads store state directly to avoid stale closures
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
+      // Abort: Escape or Ctrl+C when agent is running
+      if (e.key === 'Escape' && useAppStore.getState().isLoading) { e.preventDefault(); handleAbort(); return }
+      if (e.ctrlKey && e.key === 'c' && useAppStore.getState().isLoading) { e.preventDefault(); handleAbort(); return }
+
       if (!(e.metaKey || e.ctrlKey)) return
       const { tabs, activeTabId } = useAppStore.getState()
 
@@ -359,6 +363,16 @@ export default function App(): React.ReactElement {
     if (!workspacePath) return
     const nodes = await el.fs.readDir(workspacePath)
     store.setFileNodes(nodes)
+  }, [])
+
+  // ── Abort ────────────────────────────────────────────────────────────────────
+  const handleAbort = useCallback(() => {
+    const sess = useAppStore.getState().sessions.find(
+      (s) => s.id === useAppStore.getState().activeTabId
+    )
+    if (!sess) return
+    el.pi.abort(sess.id)
+    useAppStore.getState().setLoading(false)
   }, [])
 
   // ── Send message ─────────────────────────────────────────────────────────────
@@ -604,6 +618,7 @@ export default function App(): React.ReactElement {
                   )}
                   <InputBar
                     onSend={handleSend}
+                    onCancel={handleAbort}
                     onCommand={handleCommand}
                     onRevealInExplorer={() => {
                       if (store.workspacePath) store.setActiveView('explorer')
