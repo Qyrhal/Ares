@@ -6,7 +6,7 @@ import { app, BrowserWindow } from 'electron'
 import * as nodeModule from 'module'
 import fs from 'fs'
 import path from 'path'
-import { getAgentConfig, replaceTodos, createSession, updateSession, addMessage } from './db'
+import { getAgentConfig, getSettings, replaceTodos, createSession, updateSession, addMessage } from './db'
 import { createCheckpoint } from './checkpoints'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
@@ -143,6 +143,7 @@ async function buildResourceLoader(cwd: string) {
   const enabledExtPaths = config.extensions.filter((e) => e.enabled).map((e) => e.path)
 
   const settingsManager = SettingsManager.create(cwd, agentDir)
+  const { systemPrompt } = getSettings()
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir,
@@ -150,6 +151,7 @@ async function buildResourceLoader(cwd: string) {
     additionalSkillPaths: config.skills.length > 0 ? [skillsDir] : [],
     additionalExtensionPaths: enabledExtPaths,
     noContextFiles: true,
+    ...(systemPrompt.trim() ? { appendSystemPrompt: [systemPrompt.trim()] } : {}),
   })
   await loader.reload()
   return loader
