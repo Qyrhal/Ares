@@ -11,6 +11,10 @@ const electronMock = {
     addMessage: vi.fn().mockResolvedValue(null),
     deleteMessage: vi.fn().mockResolvedValue(undefined),
     updateMessage: vi.fn().mockResolvedValue(undefined),
+    getTodos: vi.fn().mockResolvedValue([]),
+    addTodo: vi.fn().mockResolvedValue({ id: 't1', session_id: 's1', text: 'todo', completed: 0, created_at: Date.now() }),
+    updateTodo: vi.fn().mockResolvedValue(undefined),
+    deleteTodo: vi.fn().mockResolvedValue(undefined),
   },
   settings: {
     get: vi.fn().mockResolvedValue({ apiKey: 'sk-test', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
