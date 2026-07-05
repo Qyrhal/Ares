@@ -150,7 +150,14 @@ export default function App(): React.ReactElement {
       useAppStore.getState().updateSession(sessionId, { agentStatus: status as import('@/types').AgentStatus })
     })
 
-    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus() }
+    const offSessionComplete = el.pi.onSessionComplete((_, title, summary, childIds) => {
+      for (const id of childIds) {
+        useAppStore.getState().removeSession(id)
+      }
+      toast.success(title, { description: summary, duration: 10_000 })
+    })
+
+    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offSessionComplete() }
   }, [])
 
   // Load messages and todos when active session changes

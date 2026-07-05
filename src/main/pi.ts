@@ -273,6 +273,9 @@ async function getOrCreate(
     if (sessionFile) recordPiSessionFile(sessionId, sessionFile)
   }
 
+  // Tracks child session IDs so notifyComplete can clean them up
+  const childSessionIds: string[] = []
+
   const askUserTool = {
     name: 'askUser',
     description: 'Ask the user one or more questions with optional multiple-choice chips. Use this when you need clarification before proceeding. The user sees an interactive form; the call blocks until they submit.',
@@ -327,6 +330,7 @@ async function getOrCreate(
       const { task, title } = params as { task: string; title: string }
 
       const childDb = createSession(title, modelId, sessionId)
+      childSessionIds.push(childDb.id)
       addMessage(childDb.id, 'user', task)
       updateSession(childDb.id, { agent_status: 'running' })
 
@@ -357,6 +361,97 @@ async function getOrCreate(
         if (!win.isDestroyed()) win.webContents.send('pi:agent-status', childDb.id, 'error')
         return { content: [{ type: 'text' as const, text: `Sub-agent failed: ${(err as Error).message}` }] }
       }
+    },
+  }
+
+  const spawnAgentsTool = {
+    name: 'spawnAgents',
+    description: 'Spawn multiple sub-agents concurrently. All run in parallel; blocks until all finish. Use for independent subtasks that can be done simultaneously.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        agents: {
+          type: 'array' as const,
+          description: 'Sub-agents to spawn in parallel',
+          items: {
+            type: 'object' as const,
+            properties: {
+              task:  { type: 'string' as const, description: 'Full task description for this sub-agent' },
+              title: { type: 'string' as const, description: 'Short title shown in the Agent Tree (≤40 chars)' },
+            },
+            required: ['task', 'title'],
+          },
+        },
+      },
+      required: ['agents'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { agents } = params as { agents: Array<{ task: string; title: string }> }
+
+      // Create all child sessions upfront so they appear immediately in the Agent Tree
+      const children = agents.map(({ task, title }) => {
+        const childDb = createSession(title, modelId, sessionId)
+        childSessionIds.push(childDb.id)
+        addMessage(childDb.id, 'user', task)
+        updateSession(childDb.id, { agent_status: 'running' })
+        if (!win.isDestroyed()) {
+          win.webContents.send('pi:agent-spawned', childDb)
+          win.webContents.send('pi:agent-status', childDb.id, 'running')
+        }
+        return { childDb, task }
+      })
+
+      // Run all in parallel
+      const results = await Promise.all(
+        children.map(async ({ childDb, task }) => {
+          let accumulated = ''
+          try {
+            const childPiSession = await getOrCreate(win, childDb.id, apiBaseUrl, apiKey, modelId, cwd)
+            const unsub = childPiSession.subscribe((event: any) => {
+              if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
+                accumulated += event.assistantMessageEvent.delta
+              }
+            })
+            try {
+              await childPiSession.prompt(task)
+            } finally {
+              unsub()
+            }
+            if (accumulated) addMessage(childDb.id, 'assistant', accumulated)
+            updateSession(childDb.id, { agent_status: 'done' })
+            if (!win.isDestroyed()) win.webContents.send('pi:agent-status', childDb.id, 'done')
+            return { title: childDb.title, result: accumulated || 'Completed.', ok: true }
+          } catch (err) {
+            updateSession(childDb.id, { agent_status: 'error' })
+            if (!win.isDestroyed()) win.webContents.send('pi:agent-status', childDb.id, 'error')
+            return { title: childDb.title, result: (err as Error).message, ok: false }
+          }
+        })
+      )
+
+      const text = results.map((r) => `[${r.ok ? '✓' : '✗'} ${r.title}]\n${r.result}`).join('\n\n')
+      return { content: [{ type: 'text' as const, text }] }
+    },
+  }
+
+  const notifyCompleteTool = {
+    name: 'notifyComplete',
+    description: 'Call when the entire goal is fully accomplished. Shows a completion toast to the user and removes sub-agent sessions from the Agent Tree.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        title:   { type: 'string' as const, description: 'Short completion label (e.g. "Website built", "Refactor done")' },
+        summary: { type: 'string' as const, description: '2–4 sentence overview of what was accomplished' },
+      },
+      required: ['title', 'summary'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { title, summary } = params as { title: string; summary: string }
+      if (!win.isDestroyed()) {
+        win.webContents.send('pi:session-complete', sessionId, title, summary, [...childSessionIds])
+      }
+      childSessionIds.length = 0
+      return { content: [{ type: 'text' as const, text: `Completion notified: ${title}` }] }
     },
   }
 
@@ -399,7 +494,7 @@ async function getOrCreate(
     cwd: effectiveCwd,
     tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
     resourceLoader,
-    customTools: [...mcpTools, askUserTool, spawnAgentTool, setTodosTool],
+    customTools: [...mcpTools, askUserTool, spawnAgentTool, spawnAgentsTool, notifyCompleteTool, setTodosTool],
   })
 
   sessions.set(sessionId, { session, settingsKey: key, mcpClients })
