@@ -253,6 +253,7 @@ export default function App(): React.ReactElement {
       if (!(e.metaKey || e.ctrlKey)) return
       const { tabs, activeTabId } = useAppStore.getState()
 
+      if (e.key === ',') { e.preventDefault(); useAppStore.getState().setActiveView('settings'); return }
       if (e.key === 'n' || e.key === 't') { e.preventDefault(); handleNewSession(); return }
       if (e.key === 'w') {
         e.preventDefault()
