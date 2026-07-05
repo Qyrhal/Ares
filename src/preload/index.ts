@@ -123,6 +123,25 @@ const piApi = {
     ipcRenderer.on('pi:todos-update', listener)
     return () => ipcRenderer.off('pi:todos-update', listener)
   },
+  onAskUser: (cb: (sessionId: string, questionId: string, questionsJson: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, sessionId: string, questionId: string, questionsJson: string): void =>
+      cb(sessionId, questionId, questionsJson)
+    ipcRenderer.on('pi:ask-user', listener)
+    return () => ipcRenderer.off('pi:ask-user', listener)
+  },
+  sendUserAnswer: (questionId: string, answers: Record<string, string>): void => {
+    ipcRenderer.send('pi:user-response', questionId, JSON.stringify(answers))
+  },
+  onAgentSpawned: (cb: (session: unknown) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, session: unknown): void => cb(session)
+    ipcRenderer.on('pi:agent-spawned', listener)
+    return () => ipcRenderer.off('pi:agent-spawned', listener)
+  },
+  onAgentStatus: (cb: (sessionId: string, status: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, sessionId: string, status: string): void => cb(sessionId, status)
+    ipcRenderer.on('pi:agent-status', listener)
+    return () => ipcRenderer.off('pi:agent-status', listener)
+  },
 }
 
 const nativeTools = {

@@ -206,6 +206,15 @@ export interface Keybind {
   when?: string // optional scope constraint, e.g. 'chat' | 'editor' | 'terminal'
 }
 
+// ── Agent question ──────────────────────────────────────────────────────────
+
+export interface AgentQuestion {
+  question: string
+  header: string
+  options?: string[]
+  multiSelect?: boolean
+}
+
 // ── Hook ────────────────────────────────────────────────────────────────────
 
 export type HookEvent = 'preTool' | 'postTool' | 'preSend' | 'postSend' | 'onError'
