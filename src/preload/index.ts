@@ -118,6 +118,11 @@ const piApi = {
     ipcRenderer.on('pi:error', listener)
     return () => ipcRenderer.off('pi:error', listener)
   },
+  onTodosUpdate: (cb: (sessionId: string, todos: unknown[]) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, sessionId: string, todos: unknown[]): void => cb(sessionId, todos)
+    ipcRenderer.on('pi:todos-update', listener)
+    return () => ipcRenderer.off('pi:todos-update', listener)
+  },
 }
 
 const nativeTools = {

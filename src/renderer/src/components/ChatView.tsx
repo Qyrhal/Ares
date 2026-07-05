@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { Loader2, Bot } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { Message, Todo } from '@/types'
 import { MessageItem } from './MessageItem'
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
@@ -46,14 +46,9 @@ interface ChatViewProps {
   isLoading: boolean
   onSuggestion?: (text: string) => void
   todos?: Todo[]
-  onAddTodo?: (text: string) => void
-  onToggleTodo?: (id: string, completed: boolean) => void
-  onDeleteTodo?: (id: string) => void
-  onSpawnAgent?: () => void
-  isSubAgent?: boolean
 }
 
-export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todos, onAddTodo, onToggleTodo, onDeleteTodo, onSpawnAgent, isSubAgent }: ChatViewProps): React.ReactElement {
+export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todos }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const [verbIdx, setVerbIdx] = useState(() => Math.floor(Math.random() * SHIMMER_VERBS.length))
@@ -73,49 +68,30 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
   if (messages.length === 0 && !isLoading) {
     return (
       <div className="flex flex-1 flex-col">
-        {todos !== undefined && onAddTodo && onToggleTodo && onDeleteTodo && (
-          <TodoPanel todos={todos} onAdd={onAddTodo} onToggle={onToggleTodo} onDelete={onDeleteTodo} />
-        )}
+        {todos !== undefined && <TodoPanel todos={todos} />}
         <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-8">
-          {isSubAgent ? (
-            <Bot className="size-10 text-primary/40" />
-          ) : (
-            <svg viewBox="0 0 64 64" className="size-20" fill="none" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="32" cy="32" r="29" stroke="#ef4444" strokeWidth="2" strokeOpacity="0.9" />
-              <rect x="13" y="13" width="38" height="38" rx="4" stroke="#ef4444" strokeWidth="2.2" />
-              <rect x="18.5" y="18.5" width="27" height="27" rx="3" stroke="#ef4444" strokeWidth="2.2" transform="rotate(45 32 32)" />
-            </svg>
-          )}
+          <svg viewBox="0 0 64 64" className="size-20" fill="none" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="32" cy="32" r="29" stroke="#ef4444" strokeWidth="2" strokeOpacity="0.9" />
+            <rect x="13" y="13" width="38" height="38" rx="4" stroke="#ef4444" strokeWidth="2.2" />
+            <rect x="18.5" y="18.5" width="27" height="27" rx="3" stroke="#ef4444" strokeWidth="2.2" transform="rotate(45 32 32)" />
+          </svg>
           <div>
             <h2 className="text-lg font-semibold text-foreground">{sessionTitle}</h2>
             <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-              {isSubAgent
-                ? 'Sub-agent ready. Send a task to get started.'
-                : 'Start a conversation. Ask questions, write code, analyze files, or brainstorm ideas.'}
+              Start a conversation. Ask questions, write code, analyze files, or brainstorm ideas.
             </p>
           </div>
-          {!isSubAgent && onSpawnAgent && (
-            <button
-              onClick={onSpawnAgent}
-              className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:bg-accent hover:text-foreground transition-colors"
-            >
-              <Bot className="size-3.5" />
-              Spawn sub-agent
-            </button>
-          )}
-          {!isSubAgent && (
-            <div className="grid grid-cols-2 gap-2 w-full max-w-sm mt-2">
-              {SUGGESTIONS.map((s) => (
-                <button
-                  key={s}
-                  onClick={() => onSuggestion?.(s)}
-                  className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:bg-accent hover:text-foreground transition-colors text-left"
-                >
-                  {s}
-                </button>
-              ))}
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-2 w-full max-w-sm mt-2">
+            {SUGGESTIONS.map((s) => (
+              <button
+                key={s}
+                onClick={() => onSuggestion?.(s)}
+                className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:bg-accent hover:text-foreground transition-colors text-left"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
     )
@@ -123,20 +99,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
-      {todos !== undefined && onAddTodo && onToggleTodo && onDeleteTodo && (
-        <TodoPanel todos={todos} onAdd={onAddTodo} onToggle={onToggleTodo} onDelete={onDeleteTodo} />
-      )}
-      {onSpawnAgent && (
-        <div className="flex items-center justify-end px-4 py-1 border-b border-border bg-card/30">
-          <button
-            onClick={onSpawnAgent}
-            className="flex items-center gap-1.5 rounded px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          >
-            <Bot className="size-3" />
-            Spawn agent
-          </button>
-        </div>
-      )}
+      {todos !== undefined && <TodoPanel todos={todos} />}
     <ScrollArea className="flex-1" viewportRef={viewportRef}>
       <div className="py-4">
          {messages.filter((m) => !m.isStreaming).map((msg) => (

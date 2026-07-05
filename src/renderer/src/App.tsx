@@ -19,7 +19,6 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PermissionPrompt } from '@/components/PermissionPrompt'
 import { AgentTree } from '@/components/AgentTree'
 import { AgentDashboard } from '@/components/AgentDashboard'
-import { SpawnAgentDialog } from '@/components/SpawnAgentDialog'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
@@ -40,7 +39,6 @@ export default function App(): React.ReactElement {
   const [gitBadge, setGitBadge] = useState(0)
   const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
   const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
-  const [spawnDialogOpen, setSpawnDialogOpen] = useState(false)
 
   // ── Permission prompt ───────────────────────────────────────────────────────
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
@@ -101,7 +99,7 @@ export default function App(): React.ReactElement {
 
     el.agentConfig.get().then(refreshAgentConfig)
 
-    return el.agentConfig.onScanResult(({ skills, extensions, mcpServers, commands }) => {
+    const offScan = el.agentConfig.onScanResult(({ skills, extensions, mcpServers, commands }) => {
       const total = skills + extensions + mcpServers + commands
       if (total === 0) return
       const parts: string[] = []
@@ -115,6 +113,14 @@ export default function App(): React.ReactElement {
       })
       el.agentConfig.get().then(refreshAgentConfig)
     })
+
+    const offTodos = el.pi.onTodosUpdate((sessionId, raw) => {
+      const activeTabId = useAppStore.getState().activeTabId
+      if (sessionId !== activeTabId) return
+      useAppStore.getState().setTodos((raw as any[]).map(parseTodo))
+    })
+
+    return () => { offScan(); offTodos() }
   }, [])
 
   // Load messages and todos when active session changes
@@ -192,68 +198,6 @@ export default function App(): React.ReactElement {
     store.togglePinSession(id)
   }, [])
 
-  // ── Todo handlers ────────────────────────────────────────────────────────────
-  const handleAddTodo = useCallback(async (text: string) => {
-    const { activeTabId } = useAppStore.getState()
-    if (!activeTabId) return
-    const raw = await el.db.addTodo(activeTabId, text)
-    store.addTodo(parseTodo(raw))
-  }, [])
-
-  const handleToggleTodo = useCallback(async (id: string, completed: boolean) => {
-    await el.db.updateTodo(id, { completed })
-    store.updateTodo(id, { completed })
-  }, [])
-
-  const handleDeleteTodo = useCallback(async (id: string) => {
-    await el.db.deleteTodo(id)
-    store.removeTodo(id)
-  }, [])
-
-  // ── Agent spawn ───────────────────────────────────────────────────────────────
-  const handleSpawnAgent = useCallback(async (task: string, title: string) => {
-    const state = useAppStore.getState()
-    const { settings } = state
-    const parentSession = state.sessions.find((s) => s.id === state.activeTabId)
-
-    const raw = await el.db.createSession(title, parentSession?.model ?? settings.defaultModel, parentSession?.id ?? null)
-    const childSession = parseSession(raw)
-    store.addSession(childSession)
-
-    // Add task as user message
-    await el.db.addMessage(childSession.id, 'user', task, {})
-    await el.db.updateSession(childSession.id, { agent_status: 'running' })
-    store.updateSession(childSession.id, { agentStatus: 'running' })
-
-    // Set up background streaming for this sub-agent
-    const reqId = uuidv4()
-    let accumulated = ''
-
-    const offDelta = el.pi.onDelta(({ reqId: r, delta }: { reqId: string; delta: string }) => {
-      if (r !== reqId) return
-      accumulated += delta
-    })
-
-    const offDone = el.pi.onDone(async ({ reqId: r }: { reqId: string }) => {
-      if (r !== reqId) return
-      offDelta(); offDone(); offError()
-      if (accumulated) await el.db.addMessage(childSession.id, 'assistant', accumulated, {})
-      await el.db.updateSession(childSession.id, { agent_status: 'done' })
-      store.updateSession(childSession.id, { agentStatus: 'done', messageCount: (childSession.messageCount ?? 0) + 2 })
-    })
-
-    const offError = el.pi.onError(async ({ reqId: r }: { reqId: string }) => {
-      if (r !== reqId) return
-      offDelta(); offDone(); offError()
-      await el.db.updateSession(childSession.id, { agent_status: 'error' })
-      store.updateSession(childSession.id, { agentStatus: 'error' })
-    })
-
-    await el.pi.send(reqId, childSession.id, task, childSession.model, settings.apiBaseUrl, settings.apiKey, parentSession?.workspacePath ?? null)
-
-    toast(`Agent spawned: ${title}`, { description: 'Running in background…', duration: 3000 })
-    setSpawnDialogOpen(false)
-  }, [])
 
   // Close a tab: session tabs also remove from sidebar + delete from DB.
   const handleCloseTab = useCallback(async (id: string) => {
@@ -549,7 +493,6 @@ export default function App(): React.ReactElement {
                   sessions={store.sessions}
                   activeSessionId={activeSessionTab?.id ?? null}
                   onSelectSession={handleSelectSession}
-                  onSpawnAgent={() => setSpawnDialogOpen(true)}
                 />
               </aside>
             ) : (
@@ -675,11 +618,6 @@ export default function App(): React.ReactElement {
                   isLoading={store.isLoading}
                   onSuggestion={(text) => handleSend(text, [])}
                   todos={store.todos}
-                  onAddTodo={handleAddTodo}
-                  onToggleTodo={handleToggleTodo}
-                  onDeleteTodo={handleDeleteTodo}
-                  onSpawnAgent={() => setSpawnDialogOpen(true)}
-                  isSubAgent={!!activeSession.parentId}
                 />
                 {pendingPerm && (
                   <PermissionPrompt
@@ -749,12 +687,6 @@ export default function App(): React.ReactElement {
         sessionCount={store.sessions.length}
       />
       <Toaster />
-      {spawnDialogOpen && (
-        <SpawnAgentDialog
-          onSpawn={handleSpawnAgent}
-          onClose={() => setSpawnDialogOpen(false)}
-        />
-      )}
     </div>
   )
 }

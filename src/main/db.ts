@@ -276,6 +276,22 @@ export function deleteTodo(id: string): void {
   writeStore(store)
 }
 
+export function replaceTodos(sessionId: string, items: { text: string; completed?: boolean }[]): DbTodo[] {
+  const store = readStore()
+  store.todos = (store.todos ?? []).filter((t) => t.session_id !== sessionId)
+  const now = Date.now()
+  const newTodos: DbTodo[] = items.map((item, i) => ({
+    id: uuidv4(),
+    session_id: sessionId,
+    text: item.text,
+    completed: item.completed ? 1 : 0,
+    created_at: now + i,
+  }))
+  store.todos = [...store.todos, ...newTodos]
+  writeStore(store)
+  return newTodos
+}
+
 // ── Settings ──────────────────────────────────────────────────────────────────
 
 export function getSettings(): DbSettings {

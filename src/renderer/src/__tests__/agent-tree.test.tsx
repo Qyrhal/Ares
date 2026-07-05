@@ -16,7 +16,6 @@ const DEFAULT_PROPS = {
   sessions: [] as Session[],
   activeSessionId: null as string | null,
   onSelectSession: vi.fn(),
-  onSpawnAgent: vi.fn(),
 }
 
 beforeEach(() => {
@@ -29,16 +28,14 @@ describe('AgentTree — empty state', () => {
     expect(screen.getByText('No agents yet.')).toBeInTheDocument()
   })
 
-  it('shows "Spawn your first agent" link in empty state', () => {
+  it('shows informational message that agents are spawned automatically', () => {
     render(<AgentTree {...DEFAULT_PROPS} />)
-    expect(screen.getByText('Spawn your first agent')).toBeInTheDocument()
+    expect(screen.getByText(/spawned automatically/i)).toBeInTheDocument()
   })
 
-  it('calls onSpawnAgent when "Spawn your first agent" is clicked', () => {
-    const onSpawnAgent = vi.fn()
-    render(<AgentTree {...DEFAULT_PROPS} onSpawnAgent={onSpawnAgent} />)
-    fireEvent.click(screen.getByText('Spawn your first agent'))
-    expect(onSpawnAgent).toHaveBeenCalledOnce()
+  it('does not show a spawn button in empty state', () => {
+    render(<AgentTree {...DEFAULT_PROPS} />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })
 
@@ -48,16 +45,9 @@ describe('AgentTree — header', () => {
     expect(screen.getByText('Agent Tree')).toBeInTheDocument()
   })
 
-  it('renders Spawn button in header', () => {
+  it('does not render a Spawn button in the header', () => {
     render(<AgentTree {...DEFAULT_PROPS} />)
-    expect(screen.getByTitle('Spawn new agent')).toBeInTheDocument()
-  })
-
-  it('header Spawn button calls onSpawnAgent', () => {
-    const onSpawnAgent = vi.fn()
-    render(<AgentTree {...DEFAULT_PROPS} onSpawnAgent={onSpawnAgent} />)
-    fireEvent.click(screen.getByTitle('Spawn new agent'))
-    expect(onSpawnAgent).toHaveBeenCalledOnce()
+    expect(screen.queryByTitle('Spawn new agent')).not.toBeInTheDocument()
   })
 
   it('shows running count badge when agents are running', () => {
