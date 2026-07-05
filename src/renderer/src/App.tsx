@@ -17,9 +17,12 @@ import { TerminalView } from '@/components/TerminalView'
 import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PermissionPrompt } from '@/components/PermissionPrompt'
+import { AgentTree } from '@/components/AgentTree'
+import { AgentDashboard } from '@/components/AgentDashboard'
+import { SpawnAgentDialog } from '@/components/SpawnAgentDialog'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
-import { parseSession, parseMessage, parseSettings } from '@/schemas'
+import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme } from '@/lib/theme'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
@@ -37,6 +40,7 @@ export default function App(): React.ReactElement {
   const [gitBadge, setGitBadge] = useState(0)
   const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
   const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
+  const [spawnDialogOpen, setSpawnDialogOpen] = useState(false)
 
   // ── Permission prompt ───────────────────────────────────────────────────────
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
@@ -113,9 +117,9 @@ export default function App(): React.ReactElement {
     })
   }, [])
 
-  // Load messages when active session changes
+  // Load messages and todos when active session changes
   useEffect(() => {
-    if (!activeSessionTab) { store.setMessages([]); return }
+    if (!activeSessionTab) { store.setMessages([]); store.setTodos([]); return }
     el.db.getMessages(activeSessionTab.id).then((raw) => {
       const msgs = raw.map(parseMessage)
       // Any tool message still 'running' is orphaned from a previous session —
@@ -125,6 +129,9 @@ export default function App(): React.ReactElement {
       store.setMessages(msgs.map((m) =>
         m.role === 'tool' && m.toolStatus === 'running' ? { ...m, toolStatus: 'done' } : m
       ))
+    })
+    el.db.getTodos(activeSessionTab.id).then((raw) => {
+      store.setTodos(raw.map(parseTodo))
     })
   }, [activeSessionTab?.id])
 
@@ -183,6 +190,69 @@ export default function App(): React.ReactElement {
     if (!s) return
     await el.db.updateSession(id, { pinned: !s.pinned })
     store.togglePinSession(id)
+  }, [])
+
+  // ── Todo handlers ────────────────────────────────────────────────────────────
+  const handleAddTodo = useCallback(async (text: string) => {
+    const { activeTabId } = useAppStore.getState()
+    if (!activeTabId) return
+    const raw = await el.db.addTodo(activeTabId, text)
+    store.addTodo(parseTodo(raw))
+  }, [])
+
+  const handleToggleTodo = useCallback(async (id: string, completed: boolean) => {
+    await el.db.updateTodo(id, { completed })
+    store.updateTodo(id, { completed })
+  }, [])
+
+  const handleDeleteTodo = useCallback(async (id: string) => {
+    await el.db.deleteTodo(id)
+    store.removeTodo(id)
+  }, [])
+
+  // ── Agent spawn ───────────────────────────────────────────────────────────────
+  const handleSpawnAgent = useCallback(async (task: string, title: string) => {
+    const state = useAppStore.getState()
+    const { settings } = state
+    const parentSession = state.sessions.find((s) => s.id === state.activeTabId)
+
+    const raw = await el.db.createSession(title, parentSession?.model ?? settings.defaultModel, parentSession?.id ?? null)
+    const childSession = parseSession(raw)
+    store.addSession(childSession)
+
+    // Add task as user message
+    await el.db.addMessage(childSession.id, 'user', task, {})
+    await el.db.updateSession(childSession.id, { agent_status: 'running' })
+    store.updateSession(childSession.id, { agentStatus: 'running' })
+
+    // Set up background streaming for this sub-agent
+    const reqId = uuidv4()
+    let accumulated = ''
+
+    const offDelta = el.pi.onDelta(({ reqId: r, delta }: { reqId: string; delta: string }) => {
+      if (r !== reqId) return
+      accumulated += delta
+    })
+
+    const offDone = el.pi.onDone(async ({ reqId: r }: { reqId: string }) => {
+      if (r !== reqId) return
+      offDelta(); offDone(); offError()
+      if (accumulated) await el.db.addMessage(childSession.id, 'assistant', accumulated, {})
+      await el.db.updateSession(childSession.id, { agent_status: 'done' })
+      store.updateSession(childSession.id, { agentStatus: 'done', messageCount: (childSession.messageCount ?? 0) + 2 })
+    })
+
+    const offError = el.pi.onError(async ({ reqId: r }: { reqId: string }) => {
+      if (r !== reqId) return
+      offDelta(); offDone(); offError()
+      await el.db.updateSession(childSession.id, { agent_status: 'error' })
+      store.updateSession(childSession.id, { agentStatus: 'error' })
+    })
+
+    await el.pi.send(reqId, childSession.id, task, childSession.model, settings.apiBaseUrl, settings.apiKey, parentSession?.workspacePath ?? null)
+
+    toast(`Agent spawned: ${title}`, { description: 'Running in background…', duration: 3000 })
+    setSpawnDialogOpen(false)
   }, [])
 
   // Close a tab: session tabs also remove from sidebar + delete from DB.
@@ -469,32 +539,44 @@ export default function App(): React.ReactElement {
             terminalOpen={store.terminalOpen}
             onToggleTerminal={store.toggleTerminal}
             gitBadge={gitBadge}
+            agentBadge={store.sessions.filter((s) => s.agentStatus === 'running').length}
           />
 
           {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && store.activeView !== 'hooks' && store.activeView !== 'checkpoints' && (
-            <Sidebar
-              mode={store.activeView}
-              sessions={store.sessions}
-              activeSessionId={activeSessionTab?.id ?? null}
-              onNewSession={handleNewSession}
-              onSelectSession={handleSelectSession}
-              onDeleteSession={handleDeleteSession}
-              onTogglePinSession={handleTogglePinSession}
-              fileNodes={store.fileNodes}
-              workspacePath={store.workspacePath}
-              selectedFilePath={store.activeTabId}
-              onOpenFile={store.openFileTab}
-              onOpenFolder={handleOpenFolder}
-              onFsCreateFile={handleFsCreateFile}
-              onFsCreateFolder={handleFsCreateFolder}
-              onFsRename={handleFsRename}
-              onFsDelete={handleFsDelete}
-            />
+            store.activeView === 'agents' ? (
+              <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
+                <AgentTree
+                  sessions={store.sessions}
+                  activeSessionId={activeSessionTab?.id ?? null}
+                  onSelectSession={handleSelectSession}
+                  onSpawnAgent={() => setSpawnDialogOpen(true)}
+                />
+              </aside>
+            ) : (
+              <Sidebar
+                mode={store.activeView}
+                sessions={store.sessions}
+                activeSessionId={activeSessionTab?.id ?? null}
+                onNewSession={handleNewSession}
+                onSelectSession={handleSelectSession}
+                onDeleteSession={handleDeleteSession}
+                onTogglePinSession={handleTogglePinSession}
+                fileNodes={store.fileNodes}
+                workspacePath={store.workspacePath}
+                selectedFilePath={store.activeTabId}
+                onOpenFile={store.openFileTab}
+                onOpenFolder={handleOpenFolder}
+                onFsCreateFile={handleFsCreateFile}
+                onFsCreateFolder={handleFsCreateFolder}
+                onFsRename={handleFsRename}
+                onFsDelete={handleFsDelete}
+              />
+            )
           )}
         </>)}
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && store.activeView !== 'hooks' && store.activeView !== 'checkpoints' && (
+          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && store.activeView !== 'hooks' && store.activeView !== 'checkpoints' && store.activeView !== 'agents' && (
             <TabBar
               tabs={store.tabs}
               activeTabId={store.activeTabId}
@@ -515,6 +597,68 @@ export default function App(): React.ReactElement {
               <HooksPanel />
             ) : store.activeView === 'checkpoints' ? (
               <CheckpointPanel workspacePath={store.workspacePath} />
+            ) : store.activeView === 'agents' ? (
+              activeTab?.type === 'session' && activeSession ? (
+                <>
+                  <ChatView
+                    messages={store.messages}
+                    sessionTitle={activeSession.title}
+                    isLoading={store.isLoading}
+                    onSuggestion={(text) => handleSend(text, [])}
+                    todos={store.todos}
+                    onAddTodo={handleAddTodo}
+                    onToggleTodo={handleToggleTodo}
+                    onDeleteTodo={handleDeleteTodo}
+                    onSpawnAgent={() => setSpawnDialogOpen(true)}
+                    isSubAgent={!!activeSession.parentId}
+                  />
+                  {pendingPerm && (
+                    <PermissionPrompt
+                      toolName={pendingPerm.toolName}
+                      toolArgs={pendingPerm.toolArgs}
+                      onApprove={handlePermApprove}
+                      onDeny={handlePermDeny}
+                    />
+                  )}
+                  <InputBar
+                    onSend={handleSend}
+                    onCommand={handleCommand}
+                    onRevealInExplorer={() => {
+                      if (store.workspacePath) store.setActiveView('explorer')
+                      else handleOpenFolder()
+                    }}
+                    disabled={store.isLoading}
+                    placeholder={`Ask ${activeSession.model || store.settings.defaultModel}…`}
+                    workspacePath={store.workspacePath}
+                    fileNodes={store.fileNodes}
+                    apiBaseUrl={store.settings.apiBaseUrl}
+                    apiKey={store.settings.apiKey}
+                    recentProjects={store.recentProjects}
+                    onSelectProject={handleSelectProject}
+                    onOpenFinder={handleOpenFolder}
+                    currentModel={activeSession.model || store.settings.defaultModel}
+                    messages={store.messages}
+                    effort={activeSession.effort ?? 'medium'}
+                    onEffortChange={(e) => {
+                      store.updateSession(activeSession.id, { effort: e as EffortLevel })
+                      el.db.updateSession(activeSession.id, { effort: e })
+                    }}
+                    permissionMode={activeSession.permissionMode ?? store.settings.permissionMode}
+                    onPermissionModeChange={(m) => {
+                      store.updateSession(activeSession.id, { permissionMode: m })
+                      el.db.updateSession(activeSession.id, { permissionMode: m })
+                    }}
+                    pluginSkills={agentSkills}
+                    pluginCommands={agentCommands}
+                  />
+                </>
+              ) : (
+                <AgentDashboard
+                  sessions={store.sessions}
+                  activeSessionId={activeSessionTab?.id ?? null}
+                  onSelectSession={handleSelectSession}
+                />
+              )
             ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (
               <ErrorBoundary key="commit-detail"><CommitDetail /></ErrorBoundary>
             ) : activeTab?.type === 'file' ? (
@@ -530,6 +674,12 @@ export default function App(): React.ReactElement {
                   sessionTitle={activeSession.title}
                   isLoading={store.isLoading}
                   onSuggestion={(text) => handleSend(text, [])}
+                  todos={store.todos}
+                  onAddTodo={handleAddTodo}
+                  onToggleTodo={handleToggleTodo}
+                  onDeleteTodo={handleDeleteTodo}
+                  onSpawnAgent={() => setSpawnDialogOpen(true)}
+                  isSubAgent={!!activeSession.parentId}
                 />
                 {pendingPerm && (
                   <PermissionPrompt
@@ -599,6 +749,12 @@ export default function App(): React.ReactElement {
         sessionCount={store.sessions.length}
       />
       <Toaster />
+      {spawnDialogOpen && (
+        <SpawnAgentDialog
+          onSpawn={handleSpawnAgent}
+          onClose={() => setSpawnDialogOpen(false)}
+        />
+      )}
     </div>
   )
 }

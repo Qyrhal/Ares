@@ -25,6 +25,7 @@ export interface Message {
 }
 
 export type EffortLevel = 'low' | 'medium' | 'high'
+export type AgentStatus = 'idle' | 'running' | 'done' | 'error'
 
 export interface Session {
   id: string
@@ -37,6 +38,16 @@ export interface Session {
   effort?: EffortLevel
   permissionMode?: PermissionMode
   workspacePath?: string
+  parentId?: string | null
+  agentStatus?: AgentStatus
+}
+
+export interface Todo {
+  id: string
+  sessionId: string
+  text: string
+  completed: boolean
+  createdAt: number
 }
 
 export type PermissionMode = 'ask' | 'auto' | 'yolo'
@@ -61,7 +72,7 @@ export type Tab =
   | { type: 'session'; id: string; title: string }
   | { type: 'file'; path: string; name: string; isDirty: boolean }
 
-export type ActivityView = 'chat' | 'explorer' | 'git' | 'skills' | 'plugins' | 'settings' | 'hooks' | 'checkpoints'
+export type ActivityView = 'chat' | 'explorer' | 'git' | 'skills' | 'plugins' | 'settings' | 'hooks' | 'checkpoints' | 'agents'
 
 export interface PiSkill {
   id: string

@@ -7,6 +7,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
   getSessions, createSession, updateSession, deleteSession,
   getMessages, addMessage, deleteMessage, updateMessage,
+  getTodos, addTodo, updateTodo, deleteTodo,
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
 } from './db'
@@ -74,7 +75,7 @@ function createWindow(): void {
     title: 'Ares',
     titleBarStyle: 'hiddenInset',
     backgroundColor: '#0a0a0a',
-    icon: join(__dirname, '../../resources/icon.svg'),
+    icon: join(__dirname, '../../resources/icon.png'),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -118,6 +119,9 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.ares.app')
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(join(__dirname, '../../resources/icon.png'))
+  }
   app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w))
   registerIpcHandlers()
   createWindow()
@@ -136,7 +140,7 @@ app.commandLine.appendSwitch('disable-web-security')
 function registerIpcHandlers(): void {
   // DB – sessions
   ipcMain.handle('db:getSessions', () => getSessions())
-  ipcMain.handle('db:createSession', (_, title: string, model?: string) => createSession(title, model))
+  ipcMain.handle('db:createSession', (_, title: string, model?: string, parentId?: string | null) => createSession(title, model, parentId))
   ipcMain.handle('db:updateSession', (_, id: string, updates: object) =>
     updateSession(id, updates as Parameters<typeof updateSession>[1]))
   ipcMain.handle('db:deleteSession', (_, id: string) => {
@@ -150,6 +154,12 @@ function registerIpcHandlers(): void {
     addMessage(sessionId, role, content, opts as Parameters<typeof addMessage>[3]))
   ipcMain.handle('db:deleteMessage', (_, id: string) => deleteMessage(id))
   ipcMain.handle('db:updateMessage', (_, id: string, updates: object) => updateMessage(id, updates as any))
+
+  // DB – todos
+  ipcMain.handle('db:getTodos', (_, sessionId: string) => getTodos(sessionId))
+  ipcMain.handle('db:addTodo', (_, sessionId: string, text: string) => addTodo(sessionId, text))
+  ipcMain.handle('db:updateTodo', (_, id: string, updates: object) => updateTodo(id, updates as { text?: string; completed?: boolean }))
+  ipcMain.handle('db:deleteTodo', (_, id: string) => deleteTodo(id))
 
   // Settings
   ipcMain.handle('settings:get', () => getSettings())

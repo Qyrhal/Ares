@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { Session, Message, AppSettings } from '@/types'
+import type { Session, Message, AppSettings, Todo } from '@/types'
 
 // ── IPC wire types ─────────────────────────────────────────────────────────────
 
@@ -14,6 +14,16 @@ export const RawSessionSchema = z.object({
   effort: z.enum(['low', 'medium', 'high']).optional(),
   permissionMode: z.enum(['ask', 'auto', 'yolo']).optional(),
   workspace_path: z.string().nullable().optional(),
+  parent_id: z.string().nullable().optional(),
+  agent_status: z.enum(['idle', 'running', 'done', 'error']).optional(),
+})
+
+export const RawTodoSchema = z.object({
+  id: z.string(),
+  session_id: z.string(),
+  text: z.string(),
+  completed: z.union([z.literal(0), z.literal(1)]),
+  created_at: z.number(),
 })
 
 export const RawMessageSchema = z.object({
@@ -54,6 +64,19 @@ export function parseSession(raw: unknown): Session {
     effort: r.effort,
     permissionMode: r.permissionMode,
     workspacePath: r.workspace_path ?? undefined,
+    parentId: r.parent_id ?? null,
+    agentStatus: r.agent_status ?? 'idle',
+  }
+}
+
+export function parseTodo(raw: unknown): Todo {
+  const r = RawTodoSchema.parse(raw)
+  return {
+    id: r.id,
+    sessionId: r.session_id,
+    text: r.text,
+    completed: r.completed === 1,
+    createdAt: r.created_at,
   }
 }
 
