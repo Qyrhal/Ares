@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel } from '@/types'
+import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TabBar } from '@/components/TabBar'
@@ -19,6 +19,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PermissionPrompt } from '@/components/PermissionPrompt'
 import { AgentTree } from '@/components/AgentTree'
 import { AgentDashboard } from '@/components/AgentDashboard'
+import { AgentQuestionCard } from '@/components/AgentQuestionCard'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
@@ -39,6 +40,19 @@ export default function App(): React.ReactElement {
   const [gitBadge, setGitBadge] = useState(0)
   const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
   const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
+
+  // ── Agent question prompt ───────────────────────────────────────────────────
+  const [pendingQuestion, setPendingQuestion] = useState<{
+    sessionId: string
+    questionId: string
+    questions: AgentQuestion[]
+  } | null>(null)
+
+  const handleQuestionSubmit = useCallback((answers: Record<string, string>) => {
+    if (!pendingQuestion) return
+    el.pi.sendUserAnswer(pendingQuestion.questionId, answers)
+    setPendingQuestion(null)
+  }, [pendingQuestion])
 
   // ── Permission prompt ───────────────────────────────────────────────────────
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
@@ -120,7 +134,23 @@ export default function App(): React.ReactElement {
       useAppStore.getState().setTodos((raw as any[]).map(parseTodo))
     })
 
-    return () => { offScan(); offTodos() }
+    const offAskUser = el.pi.onAskUser((sessionId, questionId, questionsJson) => {
+      try {
+        const questions = JSON.parse(questionsJson) as AgentQuestion[]
+        setPendingQuestion({ sessionId, questionId, questions })
+      } catch { /* ignore malformed */ }
+    })
+
+    const offAgentSpawned = el.pi.onAgentSpawned((rawSession) => {
+      const session = parseSession(rawSession)
+      useAppStore.getState().addSession(session)
+    })
+
+    const offAgentStatus = el.pi.onAgentStatus((sessionId, status) => {
+      useAppStore.getState().updateSession(sessionId, { agentStatus: status as import('@/types').AgentStatus })
+    })
+
+    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus() }
   }, [])
 
   // Load messages and todos when active session changes
@@ -549,11 +579,6 @@ export default function App(): React.ReactElement {
                     isLoading={store.isLoading}
                     onSuggestion={(text) => handleSend(text, [])}
                     todos={store.todos}
-                    onAddTodo={handleAddTodo}
-                    onToggleTodo={handleToggleTodo}
-                    onDeleteTodo={handleDeleteTodo}
-                    onSpawnAgent={() => setSpawnDialogOpen(true)}
-                    isSubAgent={!!activeSession.parentId}
                   />
                   {pendingPerm && (
                     <PermissionPrompt
@@ -561,6 +586,12 @@ export default function App(): React.ReactElement {
                       toolArgs={pendingPerm.toolArgs}
                       onApprove={handlePermApprove}
                       onDeny={handlePermDeny}
+                    />
+                  )}
+                  {pendingQuestion?.sessionId === activeSession.id && (
+                    <AgentQuestionCard
+                      questions={pendingQuestion.questions}
+                      onSubmit={handleQuestionSubmit}
                     />
                   )}
                   <InputBar
@@ -625,6 +656,12 @@ export default function App(): React.ReactElement {
                     toolArgs={pendingPerm.toolArgs}
                     onApprove={handlePermApprove}
                     onDeny={handlePermDeny}
+                  />
+                )}
+                {pendingQuestion?.sessionId === activeSession.id && (
+                  <AgentQuestionCard
+                    questions={pendingQuestion.questions}
+                    onSubmit={handleQuestionSubmit}
                   />
                 )}
                 <InputBar

@@ -11,7 +11,7 @@ import {
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
 } from './db'
-import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions, getMcpStatus } from './pi'
+import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions, getMcpStatus, resolveUserQuestion } from './pi'
 import { runBackgroundScan } from './scanner'
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
@@ -326,4 +326,7 @@ function registerIpcHandlers(): void {
   })
   ipcMain.on('pi:abort', (_, sessionId: string) => { handlePiAbort(sessionId).catch(() => {}) })
   ipcMain.on('pi:cleanup', (_, sessionId: string) => { cleanupPiSession(sessionId) })
+  ipcMain.on('pi:user-response', (_, questionId: string, answersJson: string) => {
+    try { resolveUserQuestion(questionId, JSON.parse(answersJson)) } catch { /* ignore malformed */ }
+  })
 }

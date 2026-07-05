@@ -6,7 +6,7 @@ import { app, BrowserWindow } from 'electron'
 import * as nodeModule from 'module'
 import fs from 'fs'
 import path from 'path'
-import { getAgentConfig, replaceTodos } from './db'
+import { getAgentConfig, replaceTodos, createSession, updateSession, addMessage } from './db'
 import { createCheckpoint } from './checkpoints'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
@@ -55,6 +55,18 @@ type SessionEntry = {
 }
 
 const sessions = new Map<string, SessionEntry>()
+
+// ── askUser pending resolvers ─────────────────────────────────────────────────
+
+const pendingQuestions = new Map<string, (answers: Record<string, string>) => void>()
+
+export function resolveUserQuestion(questionId: string, answers: Record<string, string>): void {
+  const resolver = pendingQuestions.get(questionId)
+  if (resolver) {
+    resolver(answers)
+    pendingQuestions.delete(questionId)
+  }
+}
 
 // ── MCP connection status ─────────────────────────────────────────────────────
 
@@ -259,6 +271,93 @@ async function getOrCreate(
     if (sessionFile) recordPiSessionFile(sessionId, sessionFile)
   }
 
+  const askUserTool = {
+    name: 'askUser',
+    description: 'Ask the user one or more questions with optional multiple-choice chips. Use this when you need clarification before proceeding. The user sees an interactive form; the call blocks until they submit.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        questions: {
+          type: 'array' as const,
+          description: 'The questions to ask (1-4)',
+          items: {
+            type: 'object' as const,
+            properties: {
+              question:    { type: 'string' as const, description: 'Full question text' },
+              header:      { type: 'string' as const, description: 'Short chip label (≤12 chars)' },
+              options:     { type: 'array' as const, items: { type: 'string' as const }, description: '2-4 choice options (omit for free-text only)' },
+              multiSelect: { type: 'boolean' as const, description: 'Allow selecting multiple options', default: false },
+            },
+            required: ['question', 'header'],
+          },
+        },
+      },
+      required: ['questions'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { questions } = params as { questions: Array<{ question: string; header: string; options?: string[]; multiSelect?: boolean }> }
+      const questionId = crypto.randomUUID()
+
+      return new Promise<{ content: [{ type: 'text'; text: string }] }>((resolve) => {
+        pendingQuestions.set(questionId, (answers) => {
+          const formatted = Object.entries(answers).map(([k, v]) => `${k}: ${v}`).join('\n')
+          resolve({ content: [{ type: 'text', text: formatted }] })
+        })
+        if (!win.isDestroyed()) {
+          win.webContents.send('pi:ask-user', sessionId, questionId, JSON.stringify(questions))
+        }
+      })
+    },
+  }
+
+  const spawnAgentTool = {
+    name: 'spawnAgent',
+    description: 'Spawn a sub-agent to handle a focused subtask. The sub-agent runs with the same model, tools, and workspace. This call blocks until the sub-agent finishes and returns its response. The sub-agent appears in the Agent Tree.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        task:  { type: 'string' as const, description: 'Full task description for the sub-agent' },
+        title: { type: 'string' as const, description: 'Short title shown in the Agent Tree (≤40 chars)' },
+      },
+      required: ['task', 'title'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { task, title } = params as { task: string; title: string }
+
+      const childDb = createSession(title, modelId, sessionId)
+      addMessage(childDb.id, 'user', task)
+      updateSession(childDb.id, { agent_status: 'running' })
+
+      if (!win.isDestroyed()) {
+        win.webContents.send('pi:agent-spawned', childDb)
+        win.webContents.send('pi:agent-status', childDb.id, 'running')
+      }
+
+      let accumulated = ''
+      try {
+        const childPiSession = await getOrCreate(win, childDb.id, apiBaseUrl, apiKey, modelId, cwd)
+        const unsub = childPiSession.subscribe((event: any) => {
+          if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
+            accumulated += event.assistantMessageEvent.delta
+          }
+        })
+        try {
+          await childPiSession.prompt(task)
+        } finally {
+          unsub()
+        }
+        if (accumulated) addMessage(childDb.id, 'assistant', accumulated)
+        updateSession(childDb.id, { agent_status: 'done' })
+        if (!win.isDestroyed()) win.webContents.send('pi:agent-status', childDb.id, 'done')
+        return { content: [{ type: 'text' as const, text: accumulated || 'Sub-agent completed with no output.' }] }
+      } catch (err) {
+        updateSession(childDb.id, { agent_status: 'error' })
+        if (!win.isDestroyed()) win.webContents.send('pi:agent-status', childDb.id, 'error')
+        return { content: [{ type: 'text' as const, text: `Sub-agent failed: ${(err as Error).message}` }] }
+      }
+    },
+  }
+
   const setTodosTool = {
     name: 'setTodos',
     description: 'Set the task plan for the current session. Call this at the start to outline your steps, then call again to mark items complete as you progress.',
@@ -298,7 +397,7 @@ async function getOrCreate(
     cwd: effectiveCwd,
     tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
     resourceLoader,
-    customTools: [...mcpTools, setTodosTool],
+    customTools: [...mcpTools, askUserTool, spawnAgentTool, setTodosTool],
   })
 
   sessions.set(sessionId, { session, settingsKey: key, mcpClients })
@@ -368,11 +467,15 @@ export async function handlePiSend(
 
     if (event.type === 'agent_end' && !event.willRetry) {
       unsub()
+      updateSession(sessionId, { agent_status: 'done' })
+      if (!win.isDestroyed()) win.webContents.send('pi:agent-status', sessionId, 'done')
       win.webContents.send('pi:done', reqId, accumulated, thinkingAccumulated || undefined)
     }
   })
 
   try {
+    updateSession(sessionId, { agent_status: 'running' })
+    if (!win.isDestroyed()) win.webContents.send('pi:agent-status', sessionId, 'running')
     // Auto-checkpoint before AI operations (snapshot the workspace)
     if (cwd) {
       try { createCheckpoint(cwd, `Before: ${message.slice(0, 60).trim()}`) } catch { /* best-effort */ }
@@ -380,7 +483,11 @@ export async function handlePiSend(
     await session.prompt(message)
   } catch (err) {
     unsub()
-    if (!win.isDestroyed()) win.webContents.send('pi:error', reqId, (err as Error).message)
+    updateSession(sessionId, { agent_status: 'error' })
+    if (!win.isDestroyed()) {
+      win.webContents.send('pi:agent-status', sessionId, 'error')
+      win.webContents.send('pi:error', reqId, (err as Error).message)
+    }
   }
 }
 
