@@ -110,7 +110,7 @@ const DEFAULT_SETTINGS: DbSettings = {
   apiBaseUrl: '',
   defaultModel: '',
   themeId: 'red',
-  systemPrompt: '',
+  systemPrompt: 'After completing a task or reaching a goal, always provide a concise recap: what you did, what changed, and what the user should know next.',
   permissionMode: 'ask',
 }
 
