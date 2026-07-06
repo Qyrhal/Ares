@@ -1,12 +1,11 @@
 import React, { useState, useCallback } from 'react'
-import { MessageSquare, Pin, Download, Upload, Search, X } from 'lucide-react'
-import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
 import { FileTree, FileTreeProps } from './FileTree'
 import { GitPane } from './GitPane'
 import { ErrorBoundary } from './ErrorBoundary'
 import { toast } from 'sonner'
+import { MessageSquare, Pin, Download, Upload, Search, X, Trash2Icon } from '@/lib/icons'
 
 const el = window.electron
 

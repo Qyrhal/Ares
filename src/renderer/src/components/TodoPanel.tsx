@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { CheckSquare, Square, ChevronDown, ChevronUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Todo } from '@/types'
+import { CheckSquare, Square, ChevronDown, ChevronUp } from '@/lib/icons'
 
 interface TodoPanelProps {
   todos: Todo[]

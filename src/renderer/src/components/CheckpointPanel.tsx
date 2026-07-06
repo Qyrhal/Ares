@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { RotateCcw, History, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Play, Undo2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Checkpoint } from '@/types'
 import { useAppStore } from '@/store/useAppStore'
+import { RotateCcw, History, AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Play, Undo2 } from '@/lib/icons'
 
 const el = window.electron
 

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { Loader2, CheckCircle2, XCircle, Circle, ChevronRight, ChevronDown } from 'lucide-react'
 import { cn, truncate } from '@/lib/utils'
 import type { Session, AgentStatus } from '@/types'
+import { Loader2, CheckCircle2, XCircle, Circle, ChevronRight, ChevronDown } from '@/lib/icons'
 
 interface AgentTreeProps {
   sessions: Session[]

@@ -1,15 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Loader2, RefreshCw, RotateCcw, AlertCircle, Archive, Plus, Trash2, FileCode, File } from 'lucide-react'
-import {
-  GitBranchIcon, PlusIcon, MinusIcon,
-  ChevronDownIcon, ChevronRightIcon, GitCommitHorizontalIcon,
-  GitMergeIcon, CheckIcon, XIcon
-} from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import { GitFile, GitStatus, GitBranches, GitCommit } from '@/types'
 import { Button } from '@/components/ui/button'
 import { GitHistory } from '@/components/GitHistory'
 import { useAppStore } from '@/store/useAppStore'
+import { ArrowDown, ArrowUp, Loader2, RefreshCw, RotateCcw, AlertCircle, Archive, Plus, Trash2, FileCode, File, GitBranchIcon, PlusIcon, MinusIcon, ChevronDownIcon, ChevronRightIcon, GitCommitHorizontalIcon, GitMergeIcon, CheckIcon, XIcon } from '@/lib/icons'
 
 const el = window.electron
 

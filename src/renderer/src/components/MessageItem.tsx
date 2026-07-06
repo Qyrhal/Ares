@@ -1,6 +1,4 @@
 import React from 'react'
-import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown } from 'lucide-react'
-import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { Message } from '@/types'
 import {
@@ -13,6 +11,7 @@ import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 import { toast } from 'sonner'
+import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown, ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@/lib/icons'
 
 interface MessageItemProps {
   message: Message

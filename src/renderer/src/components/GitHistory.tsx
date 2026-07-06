@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react'
 import { GitCommit } from '@/types'
 import { cn } from '@/lib/utils'
-import { GitCommitHorizontalIcon } from '@animateicons/react/lucide'
+import { GitCommitHorizontalIcon } from '@/lib/icons'
 
 const COL_WIDTH = 10
 const ROW_HEIGHT = 18

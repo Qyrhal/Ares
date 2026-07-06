@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
-import { FileCode, FileText, Image, FolderOpen, File } from 'lucide-react'
+import { FileCode, FileText, Image, FolderOpen, File } from '@/lib/icons'
 
 interface QuickFileOpenProps {
   open: boolean

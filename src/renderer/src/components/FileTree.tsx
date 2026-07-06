@@ -1,12 +1,8 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
-import {
-  ChevronRight, File, FileCode, FileJson, FileText,
-  FilePlus, FolderClosed, FolderPlus, Pencil, Trash2
-} from 'lucide-react'
-import { FolderOpenIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import { FileNode } from '@/types'
 import { ContextMenu, ContextMenuEntry } from './ui/context-menu'
+import { ChevronRight, File, FileCode, FileJson, FileText, FilePlus, FolderClosed, FolderPlus, Pencil, Trash2, FolderOpenIcon } from '@/lib/icons'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import React from 'react'
-import { AlertTriangle, File } from 'lucide-react'
 import { formatBytes } from '@/lib/utils'
+import { AlertTriangle, File } from '@/lib/icons'
 
 interface LargeFileBannerProps {
   fileName: string
