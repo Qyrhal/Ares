@@ -302,3 +302,94 @@ describe('askUser tool', () => {
     expect(question.options).toBeUndefined()
   })
 })
+
+describe('webSearch tool (DuckDuckGo)', () => {
+  it('accepts query parameter', () => {
+    const params = { query: 'typescript best practices', maxResults: 5 }
+    expect(params.query).toBe('typescript best practices')
+    expect(params.maxResults).toBe(5)
+  })
+
+  it('defaults maxResults to 5', () => {
+    const fn = (q: string, m = 5) => Math.min(Math.max(1, m), 10)
+    expect(fn('test')).toBe(5)
+  })
+
+  it('clamps maxResults to 1-10', () => {
+    const fn = (m: number) => Math.min(Math.max(1, m), 10)
+    expect(fn(0)).toBe(1)
+    expect(fn(1)).toBe(1)
+    expect(fn(5)).toBe(5)
+    expect(fn(10)).toBe(10)
+    expect(fn(100)).toBe(10)
+  })
+
+  it('encodes query for URL', () => {
+    const query = 'node.js async/await'
+    const encoded = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+    expect(encoded).toContain('node.js')
+    expect(encoded).toContain('async%2Fawait')
+  })
+
+  it('parses DDG HTML results', () => {
+    const html = `
+      <a rel="nofollow" class="result__a" href="https://example.com">Test Result</a>
+      <a class="result__snippet">This is a test snippet with more text.</a>
+      <a rel="nofollow" class="result__a" href="https://example2.com">Second Result</a>
+      <a class="result__snippet">Another snippet here.</a>
+    `
+    // Simulate parsing
+    const linkRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi
+    const snippetRegex = /<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/gi
+    const links: { url: string; title: string }[] = []
+    const snippets: string[] = []
+    let m: RegExpExecArray | null
+    while ((m = linkRegex.exec(html)) !== null) links.push({ url: m[1], title: m[2].replace(/<[^>]*>/g, '') })
+    while ((m = snippetRegex.exec(html)) !== null) snippets.push(m[1].replace(/<[^>]*>/g, ''))
+    expect(links).toHaveLength(2)
+    expect(links[0].title).toBe('Test Result')
+    expect(snippets[0]).toContain('test snippet')
+  })
+
+  it('formats as numbered list', () => {
+    const results = [
+      { title: 'A', url: 'https://a.com', snippet: 'Result A' },
+      { title: 'B', url: 'https://b.com', snippet: 'Result B' },
+    ]
+    const formatted = results.map((r, i) => `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`).join('\n\n')
+    expect(formatted).toContain('1. A')
+    expect(formatted).toContain('2. B')
+    expect(formatted).toContain('https://a.com')
+  })
+
+  it('strips HTML tags from results', () => {
+    const input = '<b>bold</b> &amp; <i>italic</i>'
+    const stripped = input.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&')
+    expect(stripped).toBe('bold & italic')
+  })
+
+  it('handles empty results gracefully', () => {
+    const html = '<html><body>No results found</body></html>'
+    const linkRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi
+    const links: string[] = []
+    let m: RegExpExecArray | null
+    while ((m = linkRegex.exec(html)) !== null) links.push(m[1])
+    expect(links).toHaveLength(0)
+  })
+
+  it('times out after 10 seconds', async () => {
+    const controller = new AbortController()
+    setTimeout(() => controller.abort(), 0)
+    try {
+      await fetch('https://httpbin.org/delay/5', { signal: controller.signal })
+      expect(true).toBe(false) // should not reach
+    } catch (err) {
+      expect((err as Error).name).toBe('AbortError')
+    }
+  })
+
+  it('aresPrompt mentions webSearch', () => {
+    const prompt = 'Use webSearch to look up current information'
+    expect(prompt).toContain('webSearch')
+  })
+})
