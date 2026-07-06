@@ -546,7 +546,8 @@ async function getOrCreate(
     modelRegistry,
     model,
     cwd: effectiveCwd,
-    tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
+    tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls',
+            'spawnAgent', 'spawnAgents', 'askUser', 'setTodos', 'notifyComplete', 'webSearch'],
     resourceLoader,
     customTools: [...mcpTools, askUserTool, spawnAgentTool, spawnAgentsTool, notifyCompleteTool, setTodosTool, webSearchTool],
   })
