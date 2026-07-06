@@ -5,6 +5,9 @@ import { ActivityBar } from '@/components/ActivityBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TabBar } from '@/components/TabBar'
 import { ChatView } from '@/components/ChatView'
+import { CommandPalette, type CommandEntry } from '@/components/CommandPalette'
+import { TabSwitcher } from '@/components/TabSwitcher'
+import { QuickFileOpen } from '@/components/QuickFileOpen'
 import { InputBar } from '@/components/InputBar'
 import { FileEditor } from '@/components/FileEditor'
 import { SettingsPanel } from '@/components/SettingsPanel'
@@ -43,6 +46,13 @@ export default function App(): React.ReactElement {
 
   // ── Reply-to state ───────────────────────────────────────────────────────────
   const [replyTo, setReplyTo] = useState<Message | null>(null)
+
+  // ── Modal overlays ────────────────────────────────────────────────────────────
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
+  const [quickFileOpenOpen, setQuickFileOpenOpen] = useState(false)
+  const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false)
+
+  const paletteCommands = React.useMemo(() => usePaletteCommands(store), [store])
 
   // ── Agent question prompt ───────────────────────────────────────────────────
   const [pendingQuestion, setPendingQuestion] = useState<{
@@ -259,6 +269,10 @@ export default function App(): React.ReactElement {
 
       if (!(e.metaKey || e.ctrlKey)) return
       const { tabs, activeTabId } = useAppStore.getState()
+
+      if (e.shiftKey && e.key === 'P') { e.preventDefault(); setCommandPaletteOpen(true); return }
+      if (e.shiftKey && e.key === 'O') { e.preventDefault(); setTabSwitcherOpen(true); return }
+      if (!e.shiftKey && e.key === 'p') { e.preventDefault(); setQuickFileOpenOpen(true); return }
 
       if (e.key === ',') { e.preventDefault(); useAppStore.getState().setActiveView('settings'); return }
       if (e.key === 'n' || e.key === 't') { e.preventDefault(); handleNewSession(); return }
@@ -833,8 +847,60 @@ export default function App(): React.ReactElement {
         sessionCount={store.sessions.length}
       />
       <Toaster />
+
+      {/* ── Modal overlays ──────────────────────────────────────────────────────── */}
+      <CommandPalette
+        open={commandPaletteOpen}
+        onClose={() => setCommandPaletteOpen(false)}
+        commands={paletteCommands}
+      />
+      <TabSwitcher
+        open={tabSwitcherOpen}
+        onClose={() => setTabSwitcherOpen(false)}
+        tabs={store.tabs}
+        activeTabId={store.activeTabId}
+        onSelectTab={handleSelectTab}
+      />
+      <QuickFileOpen
+        open={quickFileOpenOpen}
+        onClose={() => setQuickFileOpenOpen(false)}
+        workspacePath={store.workspacePath}
+        onOpenFile={(path) => {
+          const node = findFileNode(store.fileNodes, path)
+          if (node) store.openFileTab(node)
+        }}
+      />
     </div>
   )
+}
+
+// ── Command palette entries ───────────────────────────────────────────────────
+function usePaletteCommands(store: ReturnType<typeof useAppStore.getState>): CommandEntry[] {
+  return [
+    { id: 'new-session', label: 'New session', description: 'Create a new chat session', category: 'General', action: () => store.openSessionTab({ id: crypto.randomUUID(), title: 'New session', model: store.settings.defaultModel, createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 }) },
+    { id: 'toggle-terminal', label: 'Toggle terminal', description: 'Open or close the terminal panel', shortcut: 'Ctrl+`', category: 'View', action: () => store.toggleTerminal() },
+    { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => store.toggleZenMode() },
+    { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => store.setActiveView('settings') },
+    { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => store.setActiveView('explorer') },
+    { id: 'git', label: 'Open git panel', description: 'View git status and history', category: 'View', action: () => store.setActiveView('git') },
+    { id: 'skills', label: 'Open skills panel', description: 'View and manage agent skills', category: 'View', action: () => store.setActiveView('skills') },
+    { id: 'plugins', label: 'Open plugins panel', description: 'View and manage plugins', category: 'View', action: () => store.setActiveView('plugins') },
+    { id: 'agents', label: 'Open agent dashboard', description: 'View and manage agents', category: 'View', action: () => store.setActiveView('agents') },
+    { id: 'checkpoints', label: 'Open checkpoints', description: 'View and restore checkpoints', category: 'View', action: () => store.setActiveView('checkpoints') },
+    { id: 'hooks', label: 'Open hooks panel', description: 'Configure lifecycle hooks', category: 'View', action: () => store.setActiveView('hooks') },
+  ]
+}
+
+// ── File tree helpers ─────────────────────────────────────────────────────────
+function findFileNode(nodes: import('@/types').FileNode[], path: string): import('@/types').FileNode | null {
+  for (const n of nodes) {
+    if (n.path === path) return n
+    if (n.children) {
+      const found = findFileNode(n.children, path)
+      if (found) return found
+    }
+  }
+  return null
 }
 
 function EmptyMain({
