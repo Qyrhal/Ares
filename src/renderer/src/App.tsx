@@ -424,6 +424,8 @@ export default function App(): React.ReactElement {
 
     store.setLoading(true)
     const streamingId = uuidv4()
+    const streamStartTime = Date.now()
+    let streamTotalChars = 0
     let streamingMsg = {
       id: streamingId, sessionId: sess.id, role: 'assistant' as const,
       content: '', thinking: undefined as string | undefined, isStreaming: true, createdAt: Date.now(),
@@ -434,13 +436,16 @@ export default function App(): React.ReactElement {
       expandedMessages,
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
+        streamTotalChars = chunk.length
         store.upsertMessage(streamingId, streamingMsg)
       },
       async (fullText, thinking) => {
+        const duration = Date.now() - streamStartTime
+        const tokenCount = Math.round(fullText.length / 4)
         const rawA = await el.db.addMessage(sess.id, 'assistant', fullText, { thinking })
         const aMsg = rawA
-          ? parseMessage(rawA)
-          : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false }
+          ? { ...parseMessage(rawA), tokenCount, duration }
+          : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false, tokenCount, duration }
         store.removeMessage(streamingId)
         store.appendMessage(aMsg)
         const current = useAppStore.getState().sessions.find((s) => s.id === sess.id)
