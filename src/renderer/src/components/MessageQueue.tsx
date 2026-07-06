@@ -1,5 +1,5 @@
 import React, { useCallback } from 'react'
-import { GripVertical, X, Play, ArrowUp, ArrowDown } from 'lucide-react'
+import { GripVertical, X, Play, ArrowUp, ArrowDown } from '@/lib/icons'
 
 export interface QueueItem {
   id: string

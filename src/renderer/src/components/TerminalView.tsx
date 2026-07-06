@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
-import { PlusIcon, XIcon, ChevronDownIcon } from '@animateicons/react/lucide'
-import { GripHorizontal } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PlusIcon, XIcon, ChevronDownIcon, GripHorizontal } from '@/lib/icons'
 
 interface TerminalTab {
   id: string
@@ -73,6 +73,10 @@ function TerminalInstance({
     term.loadAddon(fitAddon)
     term.open(el)
     term.focus()
+
+    const webglAddon = new WebglAddon()
+    webglAddon.onContextLoss(() => webglAddon.dispose()) // fall back to DOM renderer if GPU context is lost
+    term.loadAddon(webglAddon)
 
     const doFit = (): void => { try { fitAddon.fit() } catch { /* noop */ } }
     requestAnimationFrame(doFit)

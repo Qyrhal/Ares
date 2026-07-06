@@ -245,5 +245,14 @@ export interface Hook {
 
 // ── ActivityView extension ─────────────────────────────────────────────────
 
-export interface TokenUsage {\n  input: number\n  output: number\n  total: number\n  cost: number\n  duration: number\n  tokensPerSecond: number\n}\n\nexport type ExtendedActivityView = ActivityView | 'checkpoints'
+export interface TokenUsage {
+  input: number
+  output: number
+  total: number
+  cost: number
+  duration: number
+  tokensPerSecond: number
+}
+
+export type ExtendedActivityView = ActivityView | 'checkpoints'
 

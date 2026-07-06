@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import Editor from '@monaco-editor/react'
-import { Loader2, Save, Copy, FileDown, ExternalLink, Trash2, AlertTriangle } from 'lucide-react'
 import { cn, formatBytes } from '@/lib/utils'
+import { Loader2, Save, Copy, FileDown, ExternalLink, Trash2, AlertTriangle } from '@/lib/icons'
 
 interface FileEditorProps {
   path: string

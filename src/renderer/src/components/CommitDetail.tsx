@@ -1,6 +1,6 @@
 import React, { Fragment, useMemo } from 'react'
-import { XIcon, GitCommitHorizontalIcon } from '@animateicons/react/lucide'
 import { useAppStore } from '@/store/useAppStore'
+import { XIcon, GitCommitHorizontalIcon } from '@/lib/icons'
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleString(undefined, {

@@ -1,9 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, Plug, Plus, Trash2, Zap } from 'lucide-react'
-import { ChevronDownIcon, ChevronRightIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import { Hook, HookEvent, HookAction } from '@/types'
 import { v4 as uuidv4 } from 'uuid'
+import { CheckCircle2, Plug, Plus, Trash2, Zap, ChevronDownIcon, ChevronRightIcon } from '@/lib/icons'
 
 const el = window.electron
 

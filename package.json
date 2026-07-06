@@ -8,7 +8,14 @@
     "type": "git",
     "url": "https://github.com/Qyrhal/Ares.git"
   },
-  "keywords": ["ai", "coding-assistant", "electron", "pi-agent", "mcp", "openai"],
+  "keywords": [
+    "ai",
+    "coding-assistant",
+    "electron",
+    "pi-agent",
+    "mcp",
+    "openai"
+  ],
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -16,6 +23,7 @@
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
     "rebuild": "electron-rebuild -f -w node-pty",
+    "postinstall": "electron-rebuild -f -w node-pty",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:ui": "vitest --ui"
@@ -43,17 +51,17 @@
     }
   },
   "dependencies": {
-    "@animateicons/react": "^0.3.4",
     "@earendil-works/pi-coding-agent": "^0.80.3",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@monaco-editor/react": "^4.7.0",
+    "@tabler/icons-react": "^3.44.0",
     "@xterm/addon-fit": "^0.11.0",
+    "@xterm/addon-webgl": "^0.19.0",
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "highlight.js": "^11.11.1",
-    "lucide-react": "^1.23.0",
     "node-pty": "^1.1.0",
     "openai": "^6.45.0",
     "react": "^19.2.7",

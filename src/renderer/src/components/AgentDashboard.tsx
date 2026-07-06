@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
-import { Loader2, CheckCircle2, XCircle, Circle, Bot, MessageSquare, Plus } from 'lucide-react'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import type { Session, AgentStatus } from '@/types'
 import { SpawnAgentDialog } from '@/components/SpawnAgentDialog'
+import { Loader2, CheckCircle2, XCircle, Circle, Bot, MessageSquare, Plus } from '@/lib/icons'
 
 interface AgentDashboardProps {
   sessions: Session[]

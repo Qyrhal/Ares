@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
-import { History, FolderOpen, Cpu, Plug, PlugZap } from 'lucide-react'
 import { Checkpoint } from '@/types'
 import { cn } from '@/lib/utils'
+import { History, FolderOpen, Cpu, Plug, PlugZap } from '@/lib/icons'
 
 const el = window.electron
 

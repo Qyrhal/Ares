@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Bot } from 'lucide-react'
+import { X, Bot } from '@/lib/icons'
 
 interface SpawnAgentDialogProps {
   onSpawn: (task: string, title: string) => void

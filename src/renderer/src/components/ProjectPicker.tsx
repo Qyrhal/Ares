@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ChevronDown, FolderOpen, FolderIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { ChevronDown, FolderOpen, FolderIcon } from '@/lib/icons'
 
 interface ProjectPickerProps {
   workspacePath: string | null

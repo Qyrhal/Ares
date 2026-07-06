@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react'
-import { Loader2, ArrowDown } from 'lucide-react'
 import { Message, Todo } from '@/types'
 import { MessageItem } from './MessageItem'
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { TodoPanel } from './TodoPanel'
 import { cn } from '@/lib/utils'
+import { Loader2, ArrowDown } from '@/lib/icons'
 
 const SHIMMER_VERBS = [
   'Accomplishing', 'Actioning', 'Actualizing', 'Architecting', 'Baking', 'Beaming', 'Beboppin\'',
