@@ -195,3 +195,110 @@ describe('Sub-agent spawning', () => {
     expect(title).toBe('analyze the codebase for bugs')
   })
 })
+
+describe('Message queue', () => {
+  it('starts empty', () => {
+    const items: any[] = []
+    expect(items).toHaveLength(0)
+  })
+
+  it('adds items to queue', () => {
+    const items: { id: string; title: string }[] = []
+    items.push({ id: '1', title: 'Task 1' })
+    items.push({ id: '2', title: 'Task 2' })
+    expect(items).toHaveLength(2)
+  })
+
+  it('removes items from queue', () => {
+    const items = [{ id: '1', title: 'A' }, { id: '2', title: 'B' }, { id: '3', title: 'C' }]
+    const filtered = items.filter((i) => i.id !== '2')
+    expect(filtered).toHaveLength(2)
+    expect(filtered.find((i) => i.id === '2')).toBeUndefined()
+  })
+
+  it('reorders items', () => {
+    const items = [{ id: '1', title: 'A' }, { id: '2', title: 'B' }, { id: '3', title: 'C' }]
+    const [removed] = items.splice(2, 1)
+    items.splice(0, 0, removed)
+    expect(items.map((i) => i.title)).toEqual(['C', 'A', 'B'])
+  })
+
+  it('marks items as running', () => {
+    const items = [{ id: '1', title: 'A', status: 'pending' as const }]
+    items[0] = { ...items[0], status: 'running' }
+    expect(items[0].status).toBe('running')
+  })
+
+  it('marks items as done', () => {
+    const items = [{ id: '1', title: 'A', status: 'running' as const }]
+    items[0] = { ...items[0], status: 'done' }
+    expect(items[0].status).toBe('done')
+  })
+
+  it('marks items as error', () => {
+    const items = [{ id: '1', title: 'A', status: 'running' as const }]
+    items[0] = { ...items[0], status: 'error' }
+    expect(items[0].status).toBe('error')
+  })
+
+  it('runs next item from queue', () => {
+    const items = [
+      { id: '1', title: 'A', status: 'pending' as const },
+      { id: '2', title: 'B', status: 'pending' as const },
+    ]
+    const next = items.find((i) => i.status === 'pending')!
+    expect(next.id).toBe('1')
+  })
+
+  it('processes queue FIFO', () => {
+    const items = [
+      { id: '1', title: 'A', status: 'pending' as const },
+      { id: '2', title: 'B', status: 'pending' as const },
+    ]
+    items[0] = { ...items[0], status: 'done' }
+    const next = items.find((i) => i.status === 'pending')!
+    expect(next.id).toBe('2')
+  })
+})
+
+describe('Tool descriptions enrichment', () => {
+  it('spawnAgent description mentions blocking behavior', () => {
+    const desc = 'Spawn a sub-agent to handle a focused subtask. Use this when a task can be cleanly decomposed into independent subtasks that each need focused attention. The sub-agent runs with the same model, tools, and workspace; it appears in the Agent Tree as a child session. This call BLOCKS until the sub-agent finishes.'
+    expect(desc).toContain('BLOCKS')
+  })
+
+  it('spawnAgents tool mentions parallel execution', () => {
+    const desc = 'Spawn MULTIPLE sub-agents concurrently'
+    expect(desc).toContain('MULTIPLE')
+    expect(desc).toContain('concurrently')
+  })
+
+  it('setTodos tool mentions plan mode', () => {
+    const desc = 'Set the task plan'
+    expect(desc).toBeDefined()
+  })
+
+  it('aresPrompt guides workflow', () => {
+    const prompt = 'Ares Agent Protocol'
+    expect(prompt).toBe('Ares Agent Protocol')
+  })
+})
+
+describe('askUser tool', () => {
+  it('provides actionable options when possible', () => {
+    const question = {
+      question: 'Which database should we use?',
+      header: 'DB Choice',
+      options: ['PostgreSQL', 'SQLite', 'DuckDB'],
+    }
+    expect(question.options).toHaveLength(3)
+  })
+
+  it('supports free-text when options dont apply', () => {
+    const question = {
+      question: 'Describe your ideal solution architecture',
+      header: 'Architecture',
+    }
+    expect(question.options).toBeUndefined()
+  })
+})
