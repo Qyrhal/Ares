@@ -152,6 +152,9 @@ async function buildResourceLoader(cwd: string) {
     '### setTodos — Plan Mode',
     'ALWAYS call setTodos at the start of any multi-step task. Show your plan as a checklist. Update it as you progress (mark items completed: true). The user sees this as a live progress tracker.',
     '',
+    '### webSearch — Web Search',
+    'Use webSearch to look up current information, docs, APIs, news, or anything outside your training data. Results come from DuckDuckGo. Always cite sources.',
+    '',
     '### spawnAgent / spawnAgents — Sub-agents',
     'Decompose complex work into independent subtasks and use spawnAgent (sequential) or spawnAgents (parallel) to delegate. Each sub-agent gets its own session and appears in the Agent Tree. Use spawnAgents only for truly independent subtasks.',
     '',
@@ -512,6 +515,31 @@ async function getOrCreate(
     },
   }
 
+  // ── Web Search via DuckDuckGo ──────────────────────────────────────────────
+
+  const webSearchTool = {
+    name: 'webSearch',
+    description: 'Search the web using DuckDuckGo. Use this when you need current information, documentation, news, or anything outside your training data. Returns up to 10 results with title, URL, and snippet. Results are not guaranteed to be accurate — always cite sources and verify critical information.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        query: { type: 'string' as const, description: 'The search query. Be specific — use site:domain to restrict to a domain, "exact phrase" for precise matches.' },
+        maxResults: { type: 'number' as const, description: 'Max results to return (1-10, default 5).', default: 5 },
+      },
+      required: ['query'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { query, maxResults = 5 } = params as { query: string; maxResults?: number }
+      const count = Math.min(Math.max(1, maxResults), 10)
+      try {
+        const results = await searchDuckDuckGo(query, count)
+        return { content: [{ type: 'text' as const, text: results }] }
+      } catch (err) {
+        return { content: [{ type: 'text' as const, text: `Web search failed: ${(err as Error).message}` }] }
+      }
+    },
+  }
+
   const { session } = await createAgentSession({
     sessionManager,
     authStorage,
@@ -520,7 +548,7 @@ async function getOrCreate(
     cwd: effectiveCwd,
     tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls'],
     resourceLoader,
-    customTools: [...mcpTools, askUserTool, spawnAgentTool, spawnAgentsTool, notifyCompleteTool, setTodosTool],
+    customTools: [...mcpTools, askUserTool, spawnAgentTool, spawnAgentsTool, notifyCompleteTool, setTodosTool, webSearchTool],
   })
 
   sessions.set(sessionId, { session, settingsKey: key, mcpClients })
@@ -625,4 +653,72 @@ export function cleanupPiSession(sessionId: string): void {
     disposeEntry(entry)
     sessions.delete(sessionId)
   }
+}
+
+// ── Web Search (DuckDuckGo) ───────────────────────────────────────────────────
+
+interface SearchResult {
+  title: string
+  url: string
+  snippet: string
+}
+
+async function searchDuckDuckGo(query: string, maxResults: number): Promise<string> {
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+
+  try {
+    const res = await fetch(url, {
+      signal: controller.signal,
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; AresBot/1.0)' },
+    })
+    const html = await res.text()
+    const results = parseDdgHtml(html, maxResults)
+
+    if (results.length === 0) return 'No results found.'
+
+    return results.map((r, i) =>
+      `${i + 1}. ${r.title}\n   ${r.url}\n   ${r.snippet}`
+    ).join('\n\n')
+  } catch (err) {
+    if ((err as Error).name === 'AbortError') return 'Search timed out after 10s.'
+    throw err
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+function parseDdgHtml(html: string, maxResults: number): SearchResult[] {
+  const results: SearchResult[] = []
+
+  // Match result blocks: <a rel="nofollow" class="result__a" href="...">title</a>
+  const linkRegex = /<a[^>]*class="result__a"[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi
+  // Match snippet blocks: <a class="result__snippet"[^>]*>(.*?)</a>
+  const snippetRegex = /<a[^>]*class="result__snippet"[^>]*>(.*?)<\/a>/gi
+
+  const links: { url: string; title: string }[] = []
+  let m: RegExpExecArray | null
+  while ((m = linkRegex.exec(html)) !== null && links.length < maxResults) {
+    links.push({ url: m[1], title: stripTags(m[2]) })
+  }
+
+  const snippets: string[] = []
+  while ((m = snippetRegex.exec(html)) !== null && snippets.length < maxResults) {
+    snippets.push(stripTags(m[1]))
+  }
+
+  for (let i = 0; i < Math.min(links.length, maxResults); i++) {
+    results.push({
+      title: links[i]?.title ?? '',
+      url: links[i]?.url ?? '',
+      snippet: snippets[i] ?? '',
+    })
+  }
+
+  return results
+}
+
+function stripTags(html: string): string {
+  return html.replace(/<[^>]*>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#x27;/g, "'").trim()
 }
