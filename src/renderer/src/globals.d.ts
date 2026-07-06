@@ -11,6 +11,7 @@ export interface RawMessage {
   attachments: string | null; tool_name: string | null
   tool_status: string | null; tool_input: string | null
   tool_output: string | null; created_at: number
+  reply_to: string | null; reactions: string | null
 }
 
 export interface McpStatus {

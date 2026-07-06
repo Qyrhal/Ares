@@ -29,6 +29,8 @@ export interface DbMessage {
   tool_input: string | null
   tool_output: string | null
   thinking: string | null
+  reply_to: string | null
+  reactions: string | null
   created_at: number
 }
 
@@ -232,6 +234,8 @@ export function addMessage(
     toolInput?: string
     toolOutput?: string
     thinking?: string
+    replyTo?: { id: string; content: string; role: string }
+    reactions?: { up: boolean | null }
   } = {}
 ): DbMessage {
   const store = readStore()
@@ -245,6 +249,8 @@ export function addMessage(
     tool_input: opts.toolInput ?? null,
     tool_output: opts.toolOutput ?? null,
     thinking: opts.thinking ?? null,
+    reply_to: opts.replyTo ? JSON.stringify(opts.replyTo) : null,
+    reactions: opts.reactions ? JSON.stringify(opts.reactions) : null,
     created_at: now
   }
   store.messages.push(msg)
@@ -263,7 +269,7 @@ export function deleteMessage(id: string): void {
 
 export function updateMessage(
   id: string,
-  updates: Partial<Pick<DbMessage, 'tool_status' | 'tool_output' | 'content'>>
+  updates: Partial<Pick<DbMessage, 'tool_status' | 'tool_output' | 'content' | 'reactions' | 'reply_to'>>
 ): void {
   const store = readStore()
   store.messages = store.messages.map((m) => m.id === id ? { ...m, ...updates } : m)

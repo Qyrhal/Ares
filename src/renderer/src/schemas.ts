@@ -37,6 +37,8 @@ export const RawMessageSchema = z.object({
   tool_input: z.string().nullable().optional(),
   tool_output: z.string().nullable().optional(),
   thinking: z.string().nullable().optional(),
+  reply_to: z.string().nullable().optional(),
+  reactions: z.string().nullable().optional(),
   created_at: z.number(),
 })
 
@@ -93,6 +95,8 @@ export function parseMessage(raw: unknown): Message {
     toolInput: r.tool_input ?? undefined,
     toolOutput: r.tool_output ?? undefined,
     thinking: r.thinking ?? undefined,
+    replyTo: r.reply_to ? JSON.parse(r.reply_to) : undefined,
+    reactions: r.reactions ? JSON.parse(r.reactions) : undefined,
     createdAt: r.created_at,
   }
 }

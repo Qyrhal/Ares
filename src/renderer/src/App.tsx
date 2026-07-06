@@ -41,6 +41,9 @@ export default function App(): React.ReactElement {
   const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
   const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
 
+  // ── Reply-to state ───────────────────────────────────────────────────────────
+  const [replyTo, setReplyTo] = useState<Message | null>(null)
+
   // ── Agent question prompt ───────────────────────────────────────────────────
   const [pendingQuestion, setPendingQuestion] = useState<{
     sessionId: string
@@ -381,10 +384,21 @@ export default function App(): React.ReactElement {
     const sess = activeSession
     if (!sess || isLoading) return
 
-    const rawUser = await el.db.addMessage(sess.id, 'user', text, { attachments })
+    // Build replyTo data for persistence
+    const replyToData = replyTo
+      ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role }
+      : undefined
+
+    const rawUser = await el.db.addMessage(sess.id, 'user', text, {
+      attachments,
+      replyTo: replyToData,
+    })
     if (!rawUser) return
     const userMsg = parseMessage(rawUser)
     store.appendMessage(userMsg)
+
+    // Clear reply after sending
+    setReplyTo(null)
 
     if (messages.length === 0 && text.trim()) {
       const title = text.slice(0, 100).replace(/@\S+\s*/g, '').trim() || text.slice(0, 40)
@@ -447,8 +461,66 @@ export default function App(): React.ReactElement {
         store.upsertMessage(streamingId, streamingMsg)
       },
     )
-  }, [activeSession, sendMessage, expandMentions, onToolPermission, refreshTree])
+  }, [activeSession, replyTo, sendMessage, expandMentions, onToolPermission, refreshTree])
 
+  // ── Edit message ─────────────────────────────────────────────────────────────
+  const handleEditMessage = useCallback(async (id: string, content: string) => {
+    await el.db.updateMessage(id, { content })
+    store.upsertMessage(id, { ...useAppStore.getState().messages.find((m) => m.id === id)!, content })
+  }, [])
+
+  // ── Delete message with undo ────────────────────────────────────────────────
+  const lastDeletedRef = useRef<Message | null>(null)
+
+  const handleDeleteMessage = useCallback(async (msg: Message) => {
+    lastDeletedRef.current = msg
+    await el.db.deleteMessage(msg.id)
+    store.removeMessage(msg.id)
+
+    toast('Message deleted', {
+      action: {
+        label: 'Undo',
+        onClick: () => {
+          const deleted = lastDeletedRef.current
+          if (!deleted) return
+          el.db.addMessage(deleted.sessionId, deleted.role, deleted.content, {
+            attachments: deleted.attachments,
+            toolName: deleted.toolName,
+            toolStatus: deleted.toolStatus,
+            toolInput: deleted.toolInput,
+            toolOutput: deleted.toolOutput,
+            thinking: deleted.thinking,
+            replyTo: deleted.replyTo ? { id: deleted.replyTo.id, content: deleted.replyTo.content, role: deleted.replyTo.role } : undefined,
+          }).then((raw) => {
+            const restored = parseMessage(raw)
+            store.appendMessage(restored)
+          })
+          lastDeletedRef.current = null
+        },
+      },
+      duration: 5000,
+    })
+  }, [])
+
+  // ── Message reactions ────────────────────────────────────────────────────────
+  const handleReact = useCallback(async (id: string, reactions: { up: boolean | null }) => {
+    const msg = useAppStore.getState().messages.find((m) => m.id === id)
+    if (!msg) return
+    const updated = { ...msg, reactions }
+    store.upsertMessage(id, updated)
+    await el.db.updateMessage(id, { reactions: JSON.stringify(reactions) })
+  }, [])
+
+  // ── Reply handler ────────────────────────────────────────────────────────────
+  const handleReply = useCallback((message: Message) => {
+    setReplyTo(message)
+  }, [])
+
+  const handleCancelReply = useCallback(() => {
+    setReplyTo(null)
+  }, [])
+
+  // ── File operations ──────────────────────────────────────────────────────────
   const handleFsCreateFile = useCallback(async (parentPath: string, name: string) => {
     const fullPath = parentPath + '/' + name
     await el.fs.createFile(fullPath)
@@ -603,6 +675,10 @@ export default function App(): React.ReactElement {
                     isLoading={store.isLoading}
                     onSuggestion={(text) => handleSend(text, [])}
                     todos={store.todos}
+                    onReply={handleReply}
+                    onEdit={handleEditMessage}
+                    onDelete={handleDeleteMessage}
+                    onReact={handleReact}
                   />
                   {pendingPerm && (
                     <PermissionPrompt
@@ -649,6 +725,8 @@ export default function App(): React.ReactElement {
                     }}
                     pluginSkills={agentSkills}
                     pluginCommands={agentCommands}
+                    replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
+                    onCancelReply={handleCancelReply}
                   />
                 </>
               ) : (
@@ -674,6 +752,10 @@ export default function App(): React.ReactElement {
                   isLoading={store.isLoading}
                   onSuggestion={(text) => handleSend(text, [])}
                   todos={store.todos}
+                  onReply={handleReply}
+                  onEdit={handleEditMessage}
+                  onDelete={handleDeleteMessage}
+                  onReact={handleReact}
                 />
                 {pendingPerm && (
                   <PermissionPrompt
@@ -722,6 +804,8 @@ export default function App(): React.ReactElement {
                   }}
                   pluginSkills={agentSkills}
                   pluginCommands={agentCommands}
+                  replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
+                  onCancelReply={handleCancelReply}
                 />
               </>
             ) : (
