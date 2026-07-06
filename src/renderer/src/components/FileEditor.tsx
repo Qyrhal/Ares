@@ -34,6 +34,7 @@ const LARGE_FILE_LIMIT = 1 * 1024 * 1024 // 1MB
 
 export function FileEditor({ path, onDirtyChange, onClose }: FileEditorProps): React.ReactElement {
   const [content, setContent] = useState<string | null>(null)
+  const [zoomLevel, setZoomLevel] = useState(14)
   const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
