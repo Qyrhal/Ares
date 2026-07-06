@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 const el = window.electron
 
 interface SidebarProps {
+  onRenameSession?: (id: string, title: string) => void
   mode: ActivityView
   // sessions
   sessions: Session[]

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowDown, ArrowUp, Loader2, RefreshCw, RotateCcw, AlertCircle, Archive, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Loader2, RefreshCw, RotateCcw, AlertCircle, Archive, Plus, Trash2, FileCode, File } from 'lucide-react'
 import {
   GitBranchIcon, PlusIcon, MinusIcon,
   ChevronDownIcon, ChevronRightIcon, GitCommitHorizontalIcon,
