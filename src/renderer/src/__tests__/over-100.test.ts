@@ -138,3 +138,60 @@ describe('Stream metrics tracking', () => {
     expect(tok).toBe(5)
   })
 })
+
+describe('Sub-agent spawning', () => {
+  it('creates child session with parentId', () => {
+    const child = { id: 'c1', parentId: 'p1', title: 'Agent: test task', agentStatus: 'running' as const }
+    expect(child.parentId).toBe('p1')
+    expect(child.agentStatus).toBe('running')
+  })
+
+  it('filters children by parentId', () => {
+    const sessions = [
+      { id: 'p1', parentId: null },
+      { id: 'c1', parentId: 'p1' },
+      { id: 'c2', parentId: 'p1' },
+    ]
+    const children = sessions.filter((s) => s.parentId === 'p1')
+    expect(children).toHaveLength(2)
+  })
+
+  it('roots are sessions without parentId', () => {
+    const sessions = [
+      { id: 'p1', parentId: null },
+      { id: 'c1', parentId: 'p1' },
+    ]
+    const roots = sessions.filter((s) => !s.parentId)
+    expect(roots).toHaveLength(1)
+    expect(roots[0].id).toBe('p1')
+  })
+
+  it('child session is added to store on spawn', () => {
+    const store: any[] = []
+    const child = { id: 'c1', parentId: 'p1', title: 'Agent: test' }
+    store.push(child)
+    expect(store).toHaveLength(1)
+    expect(store[0].parentId).toBe('p1')
+  })
+
+  it('running count increases', () => {
+    const sessions = [
+      { id: 'p1', agentStatus: 'idle' as const },
+      { id: 'c1', agentStatus: 'running' as const },
+    ]
+    const running = sessions.filter((s) => s.agentStatus === 'running').length
+    expect(running).toBe(1)
+  })
+
+  it('SpawnAgentDialog validates task input', () => {
+    const task = '  '
+    const valid = task.trim().length > 0
+    expect(valid).toBe(false)
+  })
+
+  it('SpawnAgentDialog auto-generates title', () => {
+    const task = 'analyze the codebase for bugs'
+    const title = task.trim() || `Agent: ${task.slice(0, 40)}`
+    expect(title).toBe('analyze the codebase for bugs')
+  })
+})

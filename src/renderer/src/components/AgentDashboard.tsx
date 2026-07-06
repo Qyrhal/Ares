@@ -1,12 +1,14 @@
-import React from 'react'
-import { Loader2, CheckCircle2, XCircle, Circle, Bot, MessageSquare } from 'lucide-react'
+import React, { useState } from 'react'
+import { Loader2, CheckCircle2, XCircle, Circle, Bot, MessageSquare, Plus } from 'lucide-react'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import type { Session, AgentStatus } from '@/types'
+import { SpawnAgentDialog } from '@/components/SpawnAgentDialog'
 
 interface AgentDashboardProps {
   sessions: Session[]
   activeSessionId: string | null
   onSelectSession: (id: string) => void
+  onSpawnAgent: (task: string, title: string) => void
 }
 
 function StatusBadge({ status }: { status: AgentStatus | undefined }) {
@@ -85,7 +87,8 @@ function AgentCard({
   )
 }
 
-export function AgentDashboard({ sessions, activeSessionId, onSelectSession }: AgentDashboardProps): React.ReactElement {
+export function AgentDashboard({ sessions, activeSessionId, onSelectSession, onSpawnAgent }: AgentDashboardProps): React.ReactElement {
+  const [showSpawn, setShowSpawn] = useState(false)
   const rootSessions = sessions.filter((s) => !s.parentId)
   const childSessions = sessions.filter((s) => s.parentId)
   const running = sessions.filter((s) => s.agentStatus === 'running').length
@@ -110,7 +113,22 @@ export function AgentDashboard({ sessions, activeSessionId, onSelectSession }: A
             {done} done
           </span>
         )}
+        <div className="flex-1" />
+        <button
+          onClick={() => setShowSpawn(true)}
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+        >
+          <Plus className="size-3.5" />
+          Spawn Agent
+        </button>
       </div>
+
+      {showSpawn && (
+        <SpawnAgentDialog
+          onSpawn={(task, title) => { onSpawnAgent(task, title); setShowSpawn(false) }}
+          onClose={() => setShowSpawn(false)}
+        />
+      )}
 
       <div className="flex-1 overflow-y-auto p-6 space-y-6">
         {/* Orchestrators */}

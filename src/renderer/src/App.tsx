@@ -539,6 +539,14 @@ export default function App(): React.ReactElement {
     setReplyTo(null)
   }, [])
 
+  // ── Spawn agent from UI ───────────────────────────────────────────────────────
+  const handleSpawnAgent = useCallback(async (task: string, title: string) => {
+    const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
+    if (!sess) return
+    console.log('[spawn] spawning agent:', title, 'from session:', sess.id)
+    await el.pi.spawnFromUi(sess.id, task, title)
+  }, [activeSession])
+
   // ── File operations ──────────────────────────────────────────────────────────
   const handleFsCreateFile = useCallback(async (parentPath: string, name: string) => {
     const fullPath = parentPath + '/' + name
@@ -753,6 +761,7 @@ export default function App(): React.ReactElement {
                   sessions={store.sessions}
                   activeSessionId={activeSessionTab?.id ?? null}
                   onSelectSession={handleSelectSession}
+                  onSpawnAgent={handleSpawnAgent}
                 />
               )
             ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (

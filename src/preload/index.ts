@@ -149,6 +149,8 @@ const piApi = {
     ipcRenderer.on('pi:session-complete', listener)
     return () => ipcRenderer.off('pi:session-complete', listener)
   },
+  spawnFromUi: (parentSessionId: string, task: string, title: string) =>
+    ipcRenderer.invoke('pi:spawn-from-ui', parentSessionId, task, title),
 }
 
 const nativeTools = {
