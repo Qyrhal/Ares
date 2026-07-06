@@ -30,8 +30,11 @@ function detectLanguage(p: string): string {
 
 const el = window.electron
 
+const LARGE_FILE_LIMIT = 1 * 1024 * 1024 // 1MB
+
 export function FileEditor({ path, onDirtyChange, onClose }: FileEditorProps): React.ReactElement {
   const [content, setContent] = useState<string | null>(null)
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [isDirty, setIsDirty] = useState(false)
