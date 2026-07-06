@@ -182,7 +182,7 @@ function registerIpcHandlers(): void {
   // Dialog
   ipcMain.handle('dialog:openFolder', async (_event) => {
     const [win] = BrowserWindow.getAllWindows()
-    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory'] })
+    const result = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] })
     return result.canceled ? null : result.filePaths[0]
   })
 
