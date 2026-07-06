@@ -13,6 +13,8 @@ interface McpStatus {
 }
 
 interface StatusBarProps {
+  agentCount?: number
+  contextRemaining?: number
   workspacePath: string | null
   currentModel: string
   sessionCount: number
