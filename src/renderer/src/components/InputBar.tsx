@@ -1,6 +1,4 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply } from 'lucide-react'
-import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand } from '@/types'
 import { ProjectPicker } from '@/components/ProjectPicker'
@@ -9,6 +7,7 @@ import {
   AttachmentDescription, AttachmentActions, AttachmentAction, AttachmentGroup
 } from '@/components/ui/attachment'
 import { v4 as uuidv4 } from 'uuid'
+import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply, PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@/lib/icons'
 
 type PickerKind = 'builtin' | 'skill' | 'command'
 interface PickerItem {
@@ -93,7 +92,7 @@ function ContextDonut({ used, total }: { used: number; total: number }): React.R
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef<HTMLDivElement>(null)
   const pct = total > 0 ? Math.min(used / total, 1) : 0
-  const r = 7
+  const r = 6
   const circ = 2 * Math.PI * r
   const dash = circ * pct
   const colorClass = pct > 0.8 ? 'text-destructive' : pct > 0.5 ? 'text-amber-400' : 'text-muted-foreground'
@@ -114,14 +113,14 @@ function ContextDonut({ used, total }: { used: number; total: number }): React.R
         onClick={() => setOpen((v) => !v)}
         className={cn('flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-accent', colorClass)}
       >
-        <svg width="18" height="18" viewBox="0 0 18 18">
-          <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
+        <svg width="16" height="16" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
           <circle
-            cx="9" cy="9" r={r} fill="none"
+            cx="8" cy="8" r={r} fill="none"
             stroke="currentColor" strokeWidth="2.5"
             strokeDasharray={`${dash} ${circ - dash}`}
             strokeLinecap="round"
-            transform="rotate(-90 9 9)"
+            transform="rotate(-90 8 8)"
           />
         </svg>
       </button>
@@ -418,6 +417,25 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
     setShowModelPicker(false)
   }, [openMentions, openCommands, closeAll, closeMentions, closeCommands])
 
+  // ponytail: large pastes skip the scrollHeight reflow (it's going to hit the
+  // 240px cap anyway) since measuring it forces a full layout of the pasted text.
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData('text/plain')
+    if (pasted.length <= 2000) return
+
+    e.preventDefault()
+    const ta = e.currentTarget
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const next = text.slice(0, start) + pasted + text.slice(end)
+    setText(next)
+    ta.style.height = '240px'
+    requestAnimationFrame(() => {
+      const pos = start + pasted.length
+      ta.setSelectionRange(pos, pos)
+    })
+  }, [text])
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (showMentions) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1)); return }
@@ -534,7 +552,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
   return (
     <div
-      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-4 pt-3 pb-4"
+      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-3 pt-2 pb-2"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
@@ -606,14 +624,14 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       )}
 
       <div className={cn(
-        'flex items-end gap-2 rounded-xl border border-border bg-input px-3 py-2 transition-colors',
+        'flex items-end gap-2 rounded-xl border border-border bg-input px-2.5 py-1.5 transition-colors',
         'focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20'
       )}>
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="mb-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label="Attach file"
         >
           <PaperclipIcon className="size-4" />
@@ -624,6 +642,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             ref={textareaRef}
             value={text}
             onChange={handleChange}
+            onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={placeholder ?? 'Ask anything… (@ to mention files, / for commands)'}
@@ -711,7 +730,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           <button
             type="button"
             onClick={onCancel}
-            className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+            className="mb-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
             aria-label="Stop generation (Ctrl+C)"
             title="Stop generation (Ctrl+C)"
           >
@@ -722,7 +741,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             type="button"
             onClick={handleSend}
             disabled={!canSend}
-            className={cn('mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md transition-colors', canSend ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
+            className={cn('mb-0.5 flex size-6 shrink-0 items-center justify-center rounded-md transition-colors', canSend ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
             aria-label="Send message"
           >
             <SendIcon className="size-3.5" />
@@ -778,7 +797,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       )}
 
       {/* ── Bottom toolbar ─────────────────────────────────────────── */}
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-1.5 flex items-center justify-between">
 
         {/* Left: permission mode */}
         <button
@@ -788,7 +807,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             const next = PERM_MODES[(idx + 1) % PERM_MODES.length]
             onPermissionModeChange?.(next)
           }}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
           title="Click to cycle permission mode"
         >
           <Shield className="size-3 shrink-0" />
@@ -801,7 +820,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           <button
             type="button"
             onClick={() => { fetchModels(); setShowModelPicker(true); setModelSearch(''); setModelHighlight(0); requestAnimationFrame(() => modelSearchRef.current?.focus()) }}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors max-w-[140px]"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors max-w-[140px]"
             title="Change model"
           >
             <span className="truncate">{currentModel || 'No model'}</span>
@@ -815,7 +834,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             <button
               type="button"
               onClick={() => setShowEffortPicker((v) => !v)}
-              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
               title="Effort level"
             >
               <Zap className="size-3 shrink-0" />
