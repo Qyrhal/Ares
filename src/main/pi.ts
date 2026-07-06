@@ -144,6 +144,32 @@ async function buildResourceLoader(cwd: string) {
 
   const settingsManager = SettingsManager.create(cwd, agentDir)
   const { systemPrompt } = getSettings()
+  const aresPrompt = [
+    '## Ares Agent Protocol',
+    '',
+    'You have access to several custom tools. Use them appropriately:',
+    '',
+    '### setTodos — Plan Mode',
+    'ALWAYS call setTodos at the start of any multi-step task. Show your plan as a checklist. Update it as you progress (mark items completed: true). The user sees this as a live progress tracker.',
+    '',
+    '### spawnAgent / spawnAgents — Sub-agents',
+    'Decompose complex work into independent subtasks and use spawnAgent (sequential) or spawnAgents (parallel) to delegate. Each sub-agent gets its own session and appears in the Agent Tree. Use spawnAgents only for truly independent subtasks.',
+    '',
+    '### askUser — Questions',
+    'Ask the user when you need clarification, preferences, or decisions. Provide concrete options when possible. Do NOT ask yes/no questions that the user could infer from context.',
+    '',
+    '### notifyComplete — Done Signal',
+    'Call this ONLY when the ENTIRE goal is satisfied. Not for milestones.',
+    '',
+    '### Workflow',
+    '1. Understand the request',
+    '2. Call setTodos to show your plan',
+    '3. Work through items — use spawnAgent/spawnAgents for subtasks, askUser for clarification',
+    '4. When ALL items are done, call notifyComplete',
+  ].join('\n')
+  const fullSystemPrompt = systemPrompt.trim()
+    ? `${systemPrompt.trim()}\n\n${aresPrompt}`
+    : aresPrompt
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir,
@@ -151,7 +177,7 @@ async function buildResourceLoader(cwd: string) {
     additionalSkillPaths: config.skills.length > 0 ? [skillsDir] : [],
     additionalExtensionPaths: enabledExtPaths,
     noContextFiles: true,
-    ...(systemPrompt.trim() ? { appendSystemPrompt: [systemPrompt.trim()] } : {}),
+    ...(fullSystemPrompt.trim() ? { appendSystemPrompt: [fullSystemPrompt.trim()] } : {}),
   })
   await loader.reload()
   return loader
@@ -317,7 +343,7 @@ async function getOrCreate(
 
   const spawnAgentTool = {
     name: 'spawnAgent',
-    description: 'Spawn a sub-agent to handle a focused subtask. The sub-agent runs with the same model, tools, and workspace. This call blocks until the sub-agent finishes and returns its response. The sub-agent appears in the Agent Tree.',
+    description: 'Spawn a sub-agent to handle a focused subtask. Use this when a task can be cleanly decomposed into independent subtasks that each need focused attention. The sub-agent runs with the same model, tools, and workspace; it appears in the Agent Tree as a child session. This call BLOCKS until the sub-agent finishes. Good candidates: research a specific API, write a self-contained function, analyze one file, draft a section. AVOID: tasks needing ongoing coordination with the parent or access to parent-only context.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -366,7 +392,7 @@ async function getOrCreate(
 
   const spawnAgentsTool = {
     name: 'spawnAgents',
-    description: 'Spawn multiple sub-agents concurrently. All run in parallel; blocks until all finish. Use for independent subtasks that can be done simultaneously.',
+    description: 'Spawn MULTIPLE sub-agents concurrently — ALL run in parallel. Blocks until ALL finish. Use for truly independent subtasks with zero coupling: e.g., research API A while writing function B while drafting doc C. Each gets its own agent session. Returns results from all. WARNING: do NOT use when subtasks share state or depend on each other — use spawnAgent sequentially instead.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -457,7 +483,7 @@ async function getOrCreate(
 
   const setTodosTool = {
     name: 'setTodos',
-    description: 'Set the task plan for the current session. Call this at the start to outline your steps, then call again to mark items complete as you progress.',
+    description: 'Set the task plan (TODO list) for the current session. Call this at the START of any multi-step task to outline your plan. The user sees these as a live checklist. Call AGAIN to mark items complete as you progress. This replaces the ENTIRE list each call — always pass ALL current items. This is your plan mode: before starting complex work, call setTodos first to show the user your intended approach, then work through the list item by item.',
     parameters: {
       type: 'object' as const,
       properties: {
