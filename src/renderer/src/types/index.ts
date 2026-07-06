@@ -34,6 +34,8 @@ export interface Message {
   createdAt: number
   replyTo?: ReplyTo
   reactions?: MessageReactions
+  tokenCount?: number
+  duration?: number
 }
 
 export type EffortLevel = 'low' | 'medium' | 'high'

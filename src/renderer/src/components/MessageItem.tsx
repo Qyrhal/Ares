@@ -445,6 +445,21 @@ export function MessageItem({ message, onReply, onEdit, onDelete, onReact }: Mes
             </button>
           </div>
         )}
+
+        {/* Token summary (non-streaming assistant only) */}
+        {isAssistant && !message.isStreaming && (message.tokenCount !== undefined || message.duration !== undefined) && (
+          <div className="flex items-center gap-2 mt-1.5">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-muted/50 px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              <span>{message.tokenCount?.toLocaleString() ?? '?'} tok</span>
+              {message.duration !== undefined && message.duration > 0 && (
+                <span>· {(message.duration / 1000).toFixed(1)}s</span>
+              )}
+              {message.duration !== undefined && message.duration > 0 && message.tokenCount !== undefined && message.tokenCount > 0 && (
+                <span>· {Math.round(message.tokenCount / (message.duration / 1000))} tok/s</span>
+              )}
+            </span>
+          </div>
+        )}
       </div>
     </div>
   )

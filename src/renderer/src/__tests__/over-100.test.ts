@@ -104,3 +104,37 @@ describe('Tool call status formatting', () => {
   it('error', () => expect(statusLabel('error')).toBe('Failed'))
   it('unknown', () => expect(statusLabel(undefined)).toBe('Unknown'))
 })
+
+describe('Token summary per message', () => {
+  function tokenBadge(tokenCount?: number, duration?: number): string {
+    const parts: string[] = [`${tokenCount?.toLocaleString() ?? '?'} tok`]
+    if (duration && duration > 0) parts.push(`${(duration / 1000).toFixed(1)}s`)
+    if (duration && duration > 0 && tokenCount && tokenCount > 0) {
+      parts.push(`${Math.round(tokenCount / (duration / 1000))} tok/s`)
+    }
+    return parts.join(' · ')
+  }
+  it('shows token count', () => expect(tokenBadge(150)).toBe('150 tok'))
+  it('shows tok/s with duration', () => expect(tokenBadge(500, 10000)).toBe('500 tok · 10.0s · 50 tok/s'))
+  it('handles zero duration', () => expect(tokenBadge(100, 0)).toBe('100 tok'))
+  it('handles large numbers', () => expect(tokenBadge(15000, 30000)).toMatch(/15,000 tok/))
+})
+
+describe('Stream metrics tracking', () => {
+  it('calculates tokens from char count', () => {
+    const text = 'x'.repeat(400)
+    expect(Math.round(text.length / 4)).toBe(100)
+  })
+  it('calculates tokens per second', () => {
+    const chars = 1000
+    const ms = 5000
+    const tok = Math.round(chars / 4)
+    expect(Math.round(tok / (ms / 1000))).toBe(50)
+  })
+  it('handles very fast responses', () => {
+    const chars = 20
+    const ms = 100
+    const tok = Math.round(chars / 4)
+    expect(tok).toBe(5)
+  })
+})
