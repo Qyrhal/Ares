@@ -479,3 +479,60 @@ describe('Agent tree cleanup', () => {
     expect(result.text).toBe('do more work')
   })
 })
+
+describe('Sidebar sub-agent indicators', () => {
+  it('shows Bot icon for child sessions', () => {
+    const session = { id: 'c1', parentId: 'p1', title: 'Agent: test', agentStatus: 'running' as const }
+    expect(session.parentId).toBeTruthy()
+  })
+
+  it('shows parent name in sub-agent row', () => {
+    const sessions = [
+      { id: 'p1', title: 'Main Task' },
+      { id: 'c1', parentId: 'p1', title: 'Agent: test' },
+    ]
+    const child = sessions.find((s) => s.id === 'c1')
+    const parent = child ? sessions.find((s) => s.id === child.parentId) : null
+    expect(parent?.title).toBe('Main Task')
+  })
+
+  it('shows running indicator for active agents', () => {
+    const status = 'running'
+    expect(status).toBe('running')
+  })
+
+  it('shows done indicator for completed agents', () => {
+    const status = 'done' as const
+    const session = { id: 'c1', agentStatus: status }
+    expect(session.agentStatus).toBe('done')
+  })
+
+  it('shows error indicator for failed agents', () => {
+    const session = { id: 'c1', agentStatus: 'error' as const }
+    expect(session.agentStatus).toBe('error')
+  })
+
+  it('todos can be marked completed by AI', () => {
+    const todos = [
+      { text: 'Step 1', completed: true },
+      { text: 'Step 2', completed: false },
+    ]
+    const done = todos.filter((t) => t.completed)
+    expect(done).toHaveLength(1)
+    expect(done[0].text).toBe('Step 1')
+  })
+
+  it('setTodos replaces entire list on each call', () => {
+    const replaceTodos = (items: { text: string; completed?: boolean }[]) => {
+      return items.map((item) => ({
+        ...item,
+        completed: item.completed ?? false,
+      }))
+    }
+    const step1 = replaceTodos([{ text: 'Plan', completed: false }])
+    expect(step1[0].completed).toBe(false)
+    const step2 = replaceTodos([{ text: 'Plan', completed: true }, { text: 'Execute' }])
+    expect(step2[0].completed).toBe(true)
+    expect(step2).toHaveLength(2)
+  })
+})

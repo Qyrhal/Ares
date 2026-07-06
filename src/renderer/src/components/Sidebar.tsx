@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { MessageSquare, Pin, Download, Upload, Search, X } from 'lucide-react'
+import { MessageSquare, Pin, Download, Upload, Search, X, Bot, GitBranch, Loader2 } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
@@ -117,7 +117,10 @@ function SessionsPane({
   const pinned = sessions.filter((s) => s.pinned)
   const unpinned = sessions.filter((s) => !s.pinned)
 
-  const renderSession = (s: Session) => (
+  const renderSession = (s: Session) => {
+    const isSubAgent = !!s.parentId
+    const parent = isSubAgent ? sessions.find((p) => p.id === s.parentId) : null
+    return (
     <button
       key={s.id}
       onClick={() => onSelect(s.id)}
@@ -130,15 +133,38 @@ function SessionsPane({
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
       )}
     >
-      <MessageSquare className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+      {isSubAgent ? (
+        <Bot className={cn('mt-0.5 size-3.5 shrink-0', s.agentStatus === 'running' ? 'text-primary' : s.agentStatus === 'done' ? 'text-green-500' : 'opacity-60')} />
+      ) : (
+        <MessageSquare className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+      )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium leading-snug">{truncate(s.title, 32)}</p>
+        <p className="truncate text-xs font-medium leading-snug">
+          {isSubAgent && <span className="inline-block w-3 mr-0.5 opacity-40">{'└─'}</span>}
+          {truncate(s.title, isSubAgent ? 28 : 32)}
+        </p>
         {s.workspacePath && (
           <p className="truncate text-[9px] text-muted-foreground/40 mt-0.5" title={s.workspacePath}>
             {s.workspacePath.split('/').filter(Boolean).slice(-3).join('/')}
           </p>
         )}
         <p className="mt-0.5 text-[10px] text-muted-foreground/60">
+          {isSubAgent && parent && (
+            <span className="inline-flex items-center gap-0.5 mr-1.5 text-[9px] text-primary/60">
+              <GitBranch className="size-2.5" /> {truncate(parent.title, 16)}
+            </span>
+          )}
+          {s.agentStatus === 'running' && (
+            <span className="inline-flex items-center gap-0.5 mr-1.5 text-[9px] text-primary">
+              <Loader2 className="size-2.5 animate-spin" /> running
+            </span>
+          )}
+          {s.agentStatus === 'done' && (
+            <span className="mr-1.5 text-[9px] text-green-500">done</span>
+          )}
+          {s.agentStatus === 'error' && (
+            <span className="mr-1.5 text-[9px] text-destructive">error</span>
+          )}
           {timeAgo(s.updatedAt)} · {s.messageCount ?? 0} msg
         </p>
       </div>
@@ -166,7 +192,7 @@ function SessionsPane({
         </div>
       )}
     </button>
-  )
+  )}
 
   return (
     <>
