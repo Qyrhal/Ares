@@ -109,6 +109,9 @@ function createWindow(): void {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+  win.webContents.on('will-navigate', (e, url) => {
+    if (url.startsWith('http')) { e.preventDefault(); shell.openExternal(url) }
+  })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     win.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -369,5 +372,9 @@ function registerIpcHandlers(): void {
       if (!win.isDestroyed()) win.webContents.send('pi:error', childDb.id, err.message)
     })
     return { ...childDb, parent_id: parentSessionId }
+  })
+  ipcMain.handle('shell:openExternal', async (_, url: string) => {
+    const { shell } = await import('electron')
+    shell.openExternal(url)
   })
 }

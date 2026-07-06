@@ -472,7 +472,18 @@ function StreamingContent({ content }: { content: string }): React.ReactElement 
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeHighlight]}
-      components={{ code: CodeBlock }}
+      components={{
+        code: CodeBlock,
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            onClick={(e) => { e.preventDefault(); if (href) window.electron.shell.openExternal(href) }}
+            className="text-primary underline hover:text-primary/80 transition-colors cursor-pointer"
+          >
+            {children}
+          </a>
+        ),
+      }}
     >
       {content}
     </ReactMarkdown>
@@ -486,7 +497,18 @@ function MessageContent({ content }: { content: string }): React.ReactElement {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       rehypePlugins={[rehypeHighlight]}
-      components={{ code: CodeBlock }}
+      components={{
+        code: CodeBlock,
+        a: ({ href, children }) => (
+          <a
+            href={href}
+            onClick={(e) => { e.preventDefault(); if (href) window.electron.shell.openExternal(href) }}
+            className="text-primary underline hover:text-primary/80 transition-colors cursor-pointer"
+          >
+            {children}
+          </a>
+        ),
+      }}
     >
       {content}
     </ReactMarkdown>

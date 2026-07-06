@@ -103,6 +103,7 @@ declare global {
         import(): Promise<{ title: string; messages: unknown[] } | { error: string } | null>
       }
       mcp: { status(): Promise<McpStatus[]> }
+      shell: { openExternal(url: string): Promise<void> }
       agentConfig: {
         get(): Promise<import('./types').AgentConfig>
         set(config: object): Promise<void>
