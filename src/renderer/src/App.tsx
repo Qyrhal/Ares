@@ -163,7 +163,20 @@ export default function App(): React.ReactElement {
     })
 
     const offAgentStatus = el.pi.onAgentStatus((sessionId, status) => {
-      useAppStore.getState().updateSession(sessionId, { agentStatus: status as import('@/types').AgentStatus })
+      const store = useAppStore.getState()
+      store.updateSession(sessionId, { agentStatus: status as import('@/types').AgentStatus })
+      // Auto-remove finished child sessions after a brief delay
+      if (status === 'done' || status === 'error') {
+        const session = store.sessions.find((s) => s.id === sessionId)
+        if (session?.parentId) {
+          setTimeout(() => {
+            const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
+            if (current && (current.agentStatus === 'done' || current.agentStatus === 'error')) {
+              useAppStore.getState().removeSession(sessionId)
+            }
+          }, 3000)
+        }
+      }
     })
 
     const offSessionComplete = el.pi.onSessionComplete((_, title, summary, childIds) => {

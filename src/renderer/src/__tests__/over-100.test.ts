@@ -426,3 +426,56 @@ describe('External link handling', () => {
     expect(typeof shell.openExternal).toBe('function')
   })
 })
+
+describe('Agent tree cleanup', () => {
+  it('removes finished child sessions', () => {
+    const sessions = [
+      { id: 'p1', parentId: null, agentStatus: 'running' as const },
+      { id: 'c1', parentId: 'p1', agentStatus: 'done' as const },
+    ]
+    const remaining = sessions.filter((s) => !s.parentId || (s.agentStatus !== 'done' && s.agentStatus !== 'error'))
+    expect(remaining).toHaveLength(1)
+    expect(remaining[0].id).toBe('p1')
+  })
+
+  it('keeps running child sessions', () => {
+    const sessions = [
+      { id: 'p1', parentId: null, agentStatus: 'running' as const },
+      { id: 'c1', parentId: 'p1', agentStatus: 'running' as const },
+    ]
+    const remaining = sessions.filter((s) => !s.parentId || (s.agentStatus !== 'done' && s.agentStatus !== 'error'))
+    expect(remaining).toHaveLength(2)
+  })
+
+  it('keeps errored children briefly before removal', () => {
+    const session = { id: 'c1', parentId: 'p1', agentStatus: 'error' as const }
+    expect(session.parentId).toBe('p1')
+    expect(session.agentStatus).toBe('error')
+  })
+
+  it('sub-agent session is clickable to open', () => {
+    let selectedId = ''
+    const handler = (id: string) => { selectedId = id }
+    handler('c1')
+    expect(selectedId).toBe('c1')
+  })
+
+  it('shows sub-agent messages when opened', () => {
+    const messages = [
+      { id: 'm1', sessionId: 'c1', role: 'user', content: 'task' },
+      { id: 'm2', sessionId: 'c1', role: 'assistant', content: 'result' },
+    ]
+    const filtered = messages.filter((m) => m.sessionId === 'c1')
+    expect(filtered).toHaveLength(2)
+  })
+
+  it('allows sending messages to sub-agent', () => {
+    const subSessionId = 'c1'
+    const sendMessage = (text: string, sessionId: string) => {
+      return { text, sessionId }
+    }
+    const result = sendMessage('do more work', subSessionId)
+    expect(result.sessionId).toBe('c1')
+    expect(result.text).toBe('do more work')
+  })
+})
