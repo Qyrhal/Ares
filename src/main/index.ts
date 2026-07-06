@@ -201,6 +201,23 @@ function registerIpcHandlers(): void {
   ipcMain.handle('fs:delete', (_, p: string) => {
     fs.rmSync(p, { recursive: true, force: true })
   })
+  ipcMain.handle('fs:findFiles', (_, dir: string) => {
+    const results: string[] = []
+    const SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', '__pycache__', '.venv'])
+    function walk(d: string) {
+      let entries: fs.Dirent[]
+      try { entries = fs.readdirSync(d, { withFileTypes: true }) } catch { return }
+      for (const e of entries) {
+        if (SKIP.has(e.name)) continue
+        if (e.name.startsWith('.')) continue
+        const full = d + '/' + e.name
+        if (e.isDirectory()) walk(full)
+        else results.push(full)
+      }
+    }
+    walk(dir)
+    return results.slice(0, 500)
+  })
 
   // Git
   ipcMain.handle('git:status',         (_, cwd: string) => getStatus(cwd))

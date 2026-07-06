@@ -39,6 +39,7 @@ const nativeFs = {
   createFolder: (p: string) => ipcRenderer.invoke('fs:createFolder', p),
   rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
   delete: (p: string) => ipcRenderer.invoke('fs:delete', p),
+  findFiles: (dir: string) => ipcRenderer.invoke('fs:findFiles', dir),
 }
 
 const nativeGit = {

@@ -52,6 +52,7 @@ declare global {
         createFolder(path: string): Promise<void>
         rename(oldPath: string, newPath: string): Promise<void>
         delete(path: string): Promise<void>
+        findFiles(dir: string): Promise<string[]>
       }
       terminal: {
         create(cwd: string): Promise<string>
