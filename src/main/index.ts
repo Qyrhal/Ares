@@ -346,4 +346,28 @@ function registerIpcHandlers(): void {
   ipcMain.on('pi:user-response', (_, questionId: string, answersJson: string) => {
     try { resolveUserQuestion(questionId, JSON.parse(answersJson)) } catch { /* ignore malformed */ }
   })
+  ipcMain.handle('pi:spawn-from-ui', async (_, parentSessionId: string, task: string, title: string) => {
+    const [win] = BrowserWindow.getAllWindows()
+    if (!win) return null
+    const { getSettings } = await import('./db')
+    const { getSession } = await import('./db')
+    const parent = getSession(parentSessionId)
+    if (!parent) return null
+    const { defaultModel, apiBaseUrl, apiKey } = getSettings()
+    const { createSession, addMessage, updateSession } = await import('./db')
+    const childDb = createSession(title, parent.model || defaultModel, parentSessionId)
+    addMessage(childDb.id, 'user', task)
+    updateSession(childDb.id, { agent_status: 'running' })
+    if (!win.isDestroyed()) {
+      win.webContents.send('pi:agent-spawned', childDb)
+      win.webContents.send('pi:agent-status', childDb.id, 'running')
+    }
+    // Run via Pi SDK so it has tools, skills, etc.
+    const { handlePiSend } = await import('./pi')
+    // We do a lightweight version: send the task as a user message
+    handlePiSend(win, childDb.id, childDb.id, task, parent.model || defaultModel, apiBaseUrl, apiKey, null).catch((err: Error) => {
+      if (!win.isDestroyed()) win.webContents.send('pi:error', childDb.id, err.message)
+    })
+    return { ...childDb, parent_id: parentSessionId }
+  })
 }
