@@ -143,8 +143,11 @@ export default function App(): React.ReactElement {
 
     const offTodos = el.pi.onTodosUpdate((sessionId, raw) => {
       const activeTabId = useAppStore.getState().activeTabId
-      if (sessionId !== activeTabId) return
-      useAppStore.getState().setTodos((raw as any[]).map(parseTodo))
+      const parsed = (raw as any[]).map(parseTodo)
+      // Only auto-set todos if they match the active session, otherwise store but don't display
+      if (sessionId === activeTabId) {
+        useAppStore.getState().setTodos(parsed)
+      }
     })
 
     const offAskUser = el.pi.onAskUser((sessionId, questionId, questionsJson) => {
