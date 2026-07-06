@@ -1,11 +1,10 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save } from 'lucide-react'
-import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
 import { AppSettings } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { THEMES, applyTheme, DEFAULT_THEME_ID } from '@/lib/theme'
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save, EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@/lib/icons'
 
 const el = window.electron
 
@@ -67,10 +66,6 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
         setFetchedModels(models)
         setConnStatus('ok')
         setConnMessage(`Connected · ${models.length} model${models.length !== 1 ? 's' : ''} available`)
-
-        if (!form.defaultModel && models.length > 0) {
-          setForm((prev) => ({ ...prev, defaultModel: models[0].value }))
-        }
       } catch (err) {
         if ((err as Error).name === 'AbortError') return
         setConnStatus('error')
@@ -110,15 +105,11 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
       setFetchedModels(models)
       setConnStatus('ok')
       setConnMessage(`Connected · ${models.length} model${models.length !== 1 ? 's' : ''} available`)
-
-      if (!form.defaultModel && models.length > 0) {
-        set('defaultModel', models[0].value)
-      }
     } catch (err) {
       setConnStatus('error')
       setConnMessage((err as Error).message)
     }
-  }, [form.apiBaseUrl, form.apiKey, form.defaultModel])
+  }, [form.apiBaseUrl, form.apiKey])
 
   const modelOptions: SelectOption[] = fetchedModels
   const currentModelInList = modelOptions.some((m) => m.value === form.defaultModel)
