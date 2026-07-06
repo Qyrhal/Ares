@@ -129,17 +129,27 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
           <div>
             <h2 className="text-lg font-semibold text-foreground">{sessionTitle}</h2>
             <p className="mt-1 text-sm text-muted-foreground max-w-sm">
-              Start a conversation. Ask questions, write code, analyze files, or brainstorm ideas.
+              Start a conversation or try one of these capabilities:
             </p>
           </div>
-          <div className="grid grid-cols-2 gap-2 w-full max-w-sm mt-2">
-            {SUGGESTIONS.map((s) => (
+
+          {/* Capability cards */}
+          <div className="grid grid-cols-2 gap-2 w-full max-w-md mt-2">
+            {CAPABILITIES.map((cap) => (
               <button
-                key={s}
-                onClick={() => onSuggestion?.(s)}
-                className="rounded-lg border border-border bg-card px-3 py-2 text-xs text-muted-foreground hover:border-primary/30 hover:bg-accent hover:text-foreground transition-colors text-left"
+                key={cap.label}
+                onClick={() => onSuggestion?.(cap.prompt)}
+                className="group rounded-lg border border-border bg-card p-3 text-left hover:border-primary/30 hover:bg-accent transition-colors"
               >
-                {s}
+                <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
+                  {cap.label}
+                </div>
+                <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">
+                  {cap.description}
+                </div>
+                <div className="mt-1 text-[10px] text-muted-foreground/50 font-mono">
+                  {cap.badge}
+                </div>
               </button>
             ))}
           </div>
@@ -195,9 +205,20 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
   )
 }
 
-const SUGGESTIONS = [
-  'Explain this code',
-  'Write a function',
-  'Debug an error',
-  'Review my PR'
+interface Capability {
+  label: string
+  description: string
+  prompt: string
+  badge: string
+}
+
+const CAPABILITIES: Capability[] = [
+  { label: 'Sub-agents', description: 'Spawn child agents for parallel research, coding, or analysis', prompt: 'Spawn 3 sub-agents. Give agent-1 the task of researching the latest React 19 features, agent-2 the task of comparing Next.js App Router vs Pages Router, and agent-3 the task of listing best practices for TypeScript 5.5. Give me a consolidated report.', badge: 'spawnAgent / spawnAgents' },
+  { label: 'Web Search', description: 'Look up current docs, APIs, news, or anything online', prompt: 'Search the web for the latest Electron v33 features and API changes.', badge: 'webSearch' },
+  { label: 'Plan Mode', description: 'Create a tracked checklist before starting complex work', prompt: 'Plan the implementation of a real-time collaborative code editor. Break it down into phases with specific deliverables.', badge: 'setTodos' },
+  { label: 'Ask Questions', description: 'Interactive forms with multiple-choice or free-text input', prompt: 'Ask me 3 questions to determine the best tech stack for my new project.', badge: 'askUser' },
+  { label: 'Code Analysis', description: 'Read, write, edit, grep, and analyze codebases', prompt: 'Analyze the current workspace and tell me about its structure, languages, and key files.', badge: 'read / grep / bash' },
+  { label: 'File Operations', description: 'Create, edit, rename, delete files and folders', prompt: 'Create a well-structured React component library starter with Storybook and Vitest configured.', badge: 'write / edit / rename' },
+  { label: 'Git Integration', description: 'Status, stage, commit, push, pull, branches, diff, log', prompt: 'Show me the git log and tell me what branch we are on and if there are any uncommitted changes.', badge: 'git status / log / diff' },
+  { label: 'Terminal', description: 'Run commands, install packages, build projects', prompt: 'Check the Node.js version, npm version, and list the top-level dependencies in package.json.', badge: 'bash in terminal' },
 ]
