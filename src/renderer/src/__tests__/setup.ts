@@ -71,6 +71,9 @@ const electronMock = {
     onAgentSpawned: vi.fn().mockReturnValue(() => {}),
     onAgentStatus: vi.fn().mockReturnValue(() => {}),
     onSessionComplete: vi.fn().mockReturnValue(() => {}),
+    onTodosUpdate: vi.fn().mockReturnValue(() => {}),
+    onAskUser: vi.fn().mockReturnValue(() => {}),
+    sendUserAnswer: vi.fn(),
   },
   tools: {
     readFile: vi.fn().mockResolvedValue('file content'),

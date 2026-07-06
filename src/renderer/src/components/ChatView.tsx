@@ -1,10 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react'
-import { Loader2 } from 'lucide-react'
+import React, { useEffect, useRef, useState, useMemo } from 'react'
+import { Loader2, ArrowDown } from 'lucide-react'
 import { Message, Todo } from '@/types'
 import { MessageItem } from './MessageItem'
 import { Marker, MarkerContent, MarkerIcon } from '@/components/ui/marker'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { TodoPanel } from './TodoPanel'
+import { cn } from '@/lib/utils'
 
 const SHIMMER_VERBS = [
   'Accomplishing', 'Actioning', 'Actualizing', 'Architecting', 'Baking', 'Beaming', 'Beboppin\'',
@@ -17,7 +18,7 @@ const SHIMMER_VERBS = [
   'Dilly-dallying', 'Discombobulating', 'Doing', 'Doodling', 'Drizzling', 'Ebbing',
   'Effecting', 'Elucidating', 'Embellishing', 'Enchanting', 'Envisioning', 'Evaporating',
   'Fermenting', 'Fiddle-faddling', 'Finagling', 'Flambeing', 'Flibbertigibbeting', 'Flowing',
-  'Flummoxing', 'Fluttering', 'Forging', 'Forming', 'Frolicking', 'Frosting',
+  'Flummoxing', 'Fluttering', 'Forging', 'Forming', 'Frosting',
   'Gallivanting', 'Galloping', 'Garnishing', 'Generating', 'Germinating', 'Gitifying',
   'Grooving', 'Gusting', 'Harmonizing', 'Hashing', 'Hatching', 'Herding', 'Honking',
   'Hullaballooing', 'Hyperspacing', 'Ideating', 'Imagining', 'Improvising', 'Incubating',
@@ -46,16 +47,27 @@ interface ChatViewProps {
   isLoading: boolean
   onSuggestion?: (text: string) => void
   todos?: Todo[]
+  onReply?: (message: Message) => void
+  onEdit?: (id: string, content: string) => void
+  onDelete?: (message: Message) => void
+  onReact?: (id: string, reactions: { up: boolean | null }) => void
 }
 
-export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todos }: ChatViewProps): React.ReactElement {
+export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todos, onReply, onEdit, onDelete, onReact }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement | null>(null)
   const [verbIdx, setVerbIdx] = useState(() => Math.floor(Math.random() * SHIMMER_VERBS.length))
+  const [isAtBottom, setIsAtBottom] = useState(true)
+  const [showScrollButton, setShowScrollButton] = useState(false)
+  const streamStartRef = useRef<number | null>(null)
 
+  // Auto-scroll when new messages arrive (if user is at bottom)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, isLoading])
+    if (isAtBottom) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [messages, isLoading, isAtBottom])
 
   useEffect(() => {
     if (!isLoading) return
@@ -64,6 +76,45 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
     }, 2000)
     return () => clearInterval(interval)
   }, [isLoading])
+
+  // Track scroll position to show/hide scroll-to-bottom button
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+    scrollContainerRef.current = viewport
+
+    const handleScroll = (): void => {
+      const threshold = 100
+      const atBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight < threshold
+      setIsAtBottom(atBottom)
+      setShowScrollButton(!atBottom && isLoading)
+    }
+
+    viewport.addEventListener('scroll', handleScroll, { passive: true })
+    return () => viewport.removeEventListener('scroll', handleScroll)
+  }, [isLoading])
+
+  // Track streaming start time for tokens/second calculation
+  useEffect(() => {
+    if (isLoading && streamStartRef.current === null) {
+      streamStartRef.current = Date.now()
+    }
+    if (!isLoading) {
+      streamStartRef.current = null
+    }
+  }, [isLoading])
+
+  // Find the streaming message for token counting
+  const streamingMessage = useMemo(() => messages.find((m) => m.isStreaming), [messages])
+  const charCount = streamingMessage?.content?.length ?? 0
+  const elapsed = streamStartRef.current ? (Date.now() - streamStartRef.current) / 1000 : 0
+  const tokensPerSec = elapsed > 0 ? Math.round((charCount / 4) / elapsed) : 0
+
+  const scrollToBottom = (): void => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+    setIsAtBottom(true)
+    setShowScrollButton(false)
+  }
 
   if (messages.length === 0 && !isLoading) {
     return (
@@ -103,7 +154,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
     <ScrollArea className="flex-1" viewportRef={viewportRef}>
       <div className="py-4">
          {messages.filter((m) => !m.isStreaming).map((msg) => (
-          <MessageItem key={msg.id} message={msg} />
+          <MessageItem key={msg.id} message={msg} onReply={onReply} onEdit={onEdit} onDelete={onDelete} onReact={onReact} />
         ))}
         {isLoading && (
           <div className="px-4 py-2">
@@ -116,12 +167,30 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
                   {SHIMMER_VERBS[verbIdx]}…
                 </span>
               </MarkerContent>
+              {charCount > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                  <span>{Math.round(charCount / 4)} tok</span>
+                  {tokensPerSec > 0 && <span>· {tokensPerSec} tok/s</span>}
+                </span>
+              )}
             </Marker>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
     </ScrollArea>
+
+      {/* Scroll-to-bottom button */}
+      {showScrollButton && (
+        <button
+          onClick={scrollToBottom}
+          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-lg hover:bg-accent hover:text-foreground transition-colors z-20 animate-bounce"
+          aria-label="Scroll to bottom"
+        >
+          <ArrowDown className="size-3.5" />
+          <span>New messages</span>
+        </button>
+      )}
     </div>
   )
 }

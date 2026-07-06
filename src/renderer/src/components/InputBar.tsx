@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square } from 'lucide-react'
+import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand } from '@/types'
@@ -37,7 +37,7 @@ const KIND_LABELS: Record<PickerKind, string> = {
 }
 
 interface InputBarProps {
-  onSend: (text: string, attachments: FileAttachment[]) => void
+  onSend: (text: string, attachments: FileAttachment[], replyTo?: { id: string; content: string; role: string }) => void
   onCommand?: (command: string, args: string) => void
   onRevealInExplorer?: () => void
   disabled?: boolean
@@ -59,6 +59,9 @@ interface InputBarProps {
   onEffortChange?: (effort: string) => void
   permissionMode?: PermissionMode
   onPermissionModeChange?: (mode: PermissionMode) => void
+  // reply
+  replyTo?: { id: string; content: string; role: string } | null
+  onCancelReply?: () => void
 }
 
 const PERM_MODES: PermissionMode[] = ['ask', 'auto', 'yolo']
@@ -153,7 +156,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
@@ -468,7 +471,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       if (pickerItem?.content) {
         const expanded = expandTemplate(pickerItem.content, args)
         reset()
-        onSend(expanded, attachments)
+        onSend(expanded, attachments, replyTo ?? undefined)
         return
       }
 
@@ -480,9 +483,9 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       }
     }
 
-    onSend(finalText, attachments)
+    onSend(finalText, attachments, replyTo ?? undefined)
     reset()
-  }, [text, attachments, skillAttachments, onSend, onCommand, closeAll, allPickerItems])
+  }, [text, attachments, skillAttachments, onSend, onCommand, closeAll, allPickerItems, replyTo])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const files = Array.from(e.target.files ?? [])
@@ -581,6 +584,24 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
               </button>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Reply-to chip */}
+      {replyTo && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5">
+          <Reply className="size-3 shrink-0 text-primary" />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Replying to {replyTo.role === 'user' ? 'You' : 'Assistant'}</span>
+            <span className="truncate text-[11px] text-muted-foreground">{replyTo.content}</span>
+          </div>
+          <button
+            onClick={onCancelReply}
+            className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+            aria-label="Cancel reply"
+          >
+            <XIcon className="size-3" />
+          </button>
         </div>
       )}
 

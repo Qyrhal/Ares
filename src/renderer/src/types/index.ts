@@ -9,6 +9,16 @@ export interface FileAttachment {
   path: string
 }
 
+export interface ReplyTo {
+  id: string
+  content: string
+  role: MessageRole
+}
+
+export interface MessageReactions {
+  up: boolean | null
+}
+
 export interface Message {
   id: string
   sessionId: string
@@ -22,6 +32,8 @@ export interface Message {
   thinking?: string
   isStreaming?: boolean
   createdAt: number
+  replyTo?: ReplyTo
+  reactions?: MessageReactions
 }
 
 export type EffortLevel = 'low' | 'medium' | 'high'

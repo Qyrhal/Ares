@@ -43,6 +43,9 @@ interface AppStore {
   // ── Todos ────────────────────────────────────────────────────────────────────
   todos: Todo[]
 
+  // ── Deleted messages (for undo) ─────────────────────────────────────────────
+  lastDeletedMessage: Message | null
+
   // ── Settings ────────────────────────────────────────────────────────────────
   settings: AppSettings
 
@@ -92,6 +95,10 @@ interface AppStore {
   addTodo: (todo: Todo) => void
   updateTodo: (id: string, patch: Partial<Todo>) => void
   removeTodo: (id: string) => void
+
+  // ── Deleted message (for undo) ──────────────────────────────────────────────
+  setLastDeletedMessage: (msg: Message | null) => void
+  clearLastDeletedMessage: () => void
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -118,6 +125,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   settings: DEFAULT_SETTINGS,
   todos: [],
+  lastDeletedMessage: null,
 
   // ── UI actions ───────────────────────────────────────────────────────────────
   setActiveView: (v) => set({ activeView: v }),
@@ -267,4 +275,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   addTodo: (todo) => set((s) => ({ todos: [...s.todos, todo] })),
   updateTodo: (id, patch) => set((s) => ({ todos: s.todos.map((t) => t.id === id ? { ...t, ...patch } : t) })),
   removeTodo: (id) => set((s) => ({ todos: s.todos.filter((t) => t.id !== id) })),
+
+  // ── Deleted message actions ─────────────────────────────────────────────────
+  setLastDeletedMessage: (msg) => set({ lastDeletedMessage: msg }),
+  clearLastDeletedMessage: () => set({ lastDeletedMessage: null }),
 }))
