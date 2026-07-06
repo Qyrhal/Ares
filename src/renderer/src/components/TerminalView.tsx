@@ -78,7 +78,10 @@ function TerminalInstance({
     requestAnimationFrame(doFit)
     const fitTimer = setTimeout(doFit, 200)
 
-    term.onData((data) => window.electron.terminal.write(id, data))
+    term.onData((data) => {
+      if (data === '\x0c') { term.clear(); return } // Ctrl+L clear
+      window.electron.terminal.write(id, data)
+    })
     term.onResize(({ cols, rows }) => window.electron.terminal.resize(id, cols, rows))
 
     const ro = new ResizeObserver(doFit)
@@ -102,6 +105,8 @@ function TerminalInstance({
 
 export function TerminalView({ cwd, onClose, onHeightChange }: TerminalViewProps): React.ReactElement {
   const [tabs, setTabs] = useState<TerminalTab[]>([])
+  const [renamingTab, setRenamingTab] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
   const [activeId, setActiveId] = useState<string | null>(null)
   const [createError, setCreateError] = useState<string | null>(null)
   const creating = useRef(false)
@@ -149,6 +154,19 @@ export function TerminalView({ cwd, onClose, onHeightChange }: TerminalViewProps
   const onDispose = useCallback((id: string) => {
     delete writeCallbacks.current[id]
   }, [])
+
+  const handleRename = useCallback((id: string) => {
+    const current = tabs.find((t) => t.id === id)?.label
+    setRenamingTab(id)
+    setRenameValue(current ?? '')
+  }, [tabs])
+
+  const handleRenameSubmit = useCallback((id: string) => {
+    if (renameValue.trim()) {
+      setTabs((prev) => prev.map((t) => t.id === id ? { ...t, label: renameValue.trim() } : t))
+    }
+    setRenamingTab(null)
+  }, [renameValue])
 
   const createTerminal = useCallback(async () => {
     if (creating.current) return

@@ -222,6 +222,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
     ),
   })),
 
+  clearAllMessages: () => set({ messages: [], isLoading: false }),
+
   removeSession: (id) => set((s) => ({
     sessions: s.sessions.filter((s) => s.id !== id),
   })),
