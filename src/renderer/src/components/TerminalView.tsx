@@ -244,9 +244,9 @@ export function TerminalView({ cwd, onClose, onHeightChange }: TerminalViewProps
             key={tab.id}
             onClick={() => setActiveId(tab.id)}
             className={cn(
-              'group flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs border transition-colors cursor-pointer',
+              'group flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs border transition-all cursor-pointer',
               tab.id === activeId
-                ? 'bg-background text-foreground border-border/60'
+                ? 'bg-background text-foreground border-border/60 shadow-xs'
                 : 'text-muted-foreground border-transparent hover:border-border/40 hover:text-foreground'
             )}
           >

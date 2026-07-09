@@ -21,7 +21,7 @@ export function PermissionPrompt({ toolName, toolArgs, onApprove, onDeny }: Perm
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 mx-4 mb-2">
+    <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 mx-4 mb-2 shadow-sm">
       <AlertTriangle className="size-4 shrink-0 text-amber-400" />
       <div className="flex-1 min-w-0">
         <span className="text-xs font-medium text-amber-300">Allow {toolName}?</span>
