@@ -17,8 +17,6 @@ import { TerminalView } from '@/components/TerminalView'
 import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PermissionPrompt } from '@/components/PermissionPrompt'
-import { AgentTree } from '@/components/AgentTree'
-import { AgentDashboard } from '@/components/AgentDashboard'
 import { AgentQuestionCard } from '@/components/AgentQuestionCard'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
@@ -554,14 +552,6 @@ export default function App(): React.ReactElement {
     setReplyTo(null)
   }, [])
 
-  // ── Spawn agent from UI ───────────────────────────────────────────────────────
-  const handleSpawnAgent = useCallback(async (task: string, title: string) => {
-    const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
-    if (!sess) return
-    console.log('[spawn] spawning agent:', title, 'from session:', sess.id)
-    await el.pi.spawnFromUi(sess.id, task, title)
-  }, [activeSession])
-
   // ── File operations ──────────────────────────────────────────────────────────
   const handleFsCreateFile = useCallback(async (parentPath: string, name: string) => {
     const fullPath = parentPath + '/' + name
@@ -660,39 +650,29 @@ export default function App(): React.ReactElement {
           />
 
           {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
-            store.activeView === 'agents' ? (
-              <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
-                <AgentTree
-                  sessions={store.sessions}
-                  activeSessionId={activeSessionTab?.id ?? null}
-                  onSelectSession={handleSelectSession}
-                />
-              </aside>
-            ) : (
-              <Sidebar
-                mode={store.activeView}
-                sessions={store.sessions}
-                activeSessionId={activeSessionTab?.id ?? null}
-                onNewSession={handleNewSession}
-                onSelectSession={handleSelectSession}
-                onDeleteSession={handleDeleteSession}
-                onTogglePinSession={handleTogglePinSession}
-                fileNodes={store.fileNodes}
-                workspacePath={store.workspacePath}
-                selectedFilePath={store.activeTabId}
-                onOpenFile={store.openFileTab}
-                onOpenFolder={handleOpenFolder}
-                onFsCreateFile={handleFsCreateFile}
-                onFsCreateFolder={handleFsCreateFolder}
-                onFsRename={handleFsRename}
-                onFsDelete={handleFsDelete}
-              />
-            )
+            <Sidebar
+              mode={store.activeView}
+              sessions={store.sessions}
+              activeSessionId={activeSessionTab?.id ?? null}
+              onNewSession={handleNewSession}
+              onSelectSession={handleSelectSession}
+              onDeleteSession={handleDeleteSession}
+              onTogglePinSession={handleTogglePinSession}
+              fileNodes={store.fileNodes}
+              workspacePath={store.workspacePath}
+              selectedFilePath={store.activeTabId}
+              onOpenFile={store.openFileTab}
+              onOpenFolder={handleOpenFolder}
+              onFsCreateFile={handleFsCreateFile}
+              onFsCreateFolder={handleFsCreateFolder}
+              onFsRename={handleFsRename}
+              onFsDelete={handleFsDelete}
+            />
           )}
         </>)}
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          {store.activeView !== 'settings' && store.activeView !== 'extensions' && store.activeView !== 'agents' && (
+          {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
             <TabBar
               tabs={store.tabs}
               activeTabId={store.activeTabId}
@@ -712,77 +692,6 @@ export default function App(): React.ReactElement {
               />
             ) : store.activeView === 'extensions' ? (
               <ExtensionsPanel />
-            ) : store.activeView === 'agents' ? (
-              activeTab?.type === 'session' && activeSession ? (
-                <>
-                  <ChatView
-                    messages={store.messages}
-                    sessionTitle={activeSession.title}
-                    isLoading={store.isLoading}
-                    onSuggestion={(text) => handleSend(text, [])}
-                    todos={store.todos}
-                    onReply={handleReply}
-                    onEdit={handleEditMessage}
-                    onDelete={handleDeleteMessage}
-                    onReact={handleReact}
-                  />
-                  {pendingPerm && (
-                    <PermissionPrompt
-                      toolName={pendingPerm.toolName}
-                      toolArgs={pendingPerm.toolArgs}
-                      onApprove={handlePermApprove}
-                      onDeny={handlePermDeny}
-                    />
-                  )}
-                  {pendingQuestion?.sessionId === activeSession.id && (
-                    <AgentQuestionCard
-                      questions={pendingQuestion.questions}
-                      onSubmit={handleQuestionSubmit}
-                    />
-                  )}
-                  <InputBar
-                    onSend={handleSend}
-                    onCancel={handleAbort}
-                    onCommand={handleCommand}
-                    onRevealInExplorer={() => {
-                      if (store.workspacePath) store.setActiveView('explorer')
-                      else handleOpenFolder()
-                    }}
-                    disabled={store.isLoading}
-                    placeholder={`Ask ${activeSession.model || store.settings.defaultModel}…`}
-                    workspacePath={store.workspacePath}
-                    fileNodes={store.fileNodes}
-                    apiBaseUrl={store.settings.apiBaseUrl}
-                    apiKey={store.settings.apiKey}
-                    recentProjects={store.recentProjects}
-                    onSelectProject={handleSelectProject}
-                    onOpenFinder={handleOpenFolder}
-                    currentModel={activeSession.model || store.settings.defaultModel}
-                    messages={store.messages}
-                    effort={activeSession.effort ?? 'medium'}
-                    onEffortChange={(e) => {
-                      store.updateSession(activeSession.id, { effort: e as EffortLevel })
-                      el.db.updateSession(activeSession.id, { effort: e })
-                    }}
-                    permissionMode={activeSession.permissionMode ?? store.settings.permissionMode}
-                    onPermissionModeChange={(m) => {
-                      store.updateSession(activeSession.id, { permissionMode: m })
-                      el.db.updateSession(activeSession.id, { permissionMode: m })
-                    }}
-                    pluginSkills={agentSkills}
-                    pluginCommands={agentCommands}
-                    replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
-                    onCancelReply={handleCancelReply}
-                  />
-                </>
-              ) : (
-                <AgentDashboard
-                  sessions={store.sessions}
-                  activeSessionId={activeSessionTab?.id ?? null}
-                  onSelectSession={handleSelectSession}
-                  onSpawnAgent={handleSpawnAgent}
-                />
-              )
             ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (
               <ErrorBoundary key="commit-detail"><CommitDetail /></ErrorBoundary>
             ) : activeTab?.type === 'file' ? (
@@ -917,7 +826,6 @@ function usePaletteCommands(store: ReturnType<typeof useAppStore.getState>): Com
     { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => store.setActiveView('explorer') },
     { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => store.setActiveView('git') },
     { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => store.setActiveView('extensions') },
-    { id: 'agents', label: 'Open agent dashboard', description: 'View and manage agents', category: 'View', action: () => store.setActiveView('agents') },
   ]
 }
 

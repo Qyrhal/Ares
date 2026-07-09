@@ -1,5 +1,5 @@
 import React from 'react'
-import { MessageSquare, SquareTerminal, Plug, Network } from 'lucide-react'
+import { MessageSquare, SquareTerminal, Plug } from 'lucide-react'
 import { FolderOpenIcon, GitBranchIcon, SettingsIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import type { ActivityView } from '@/types'
@@ -17,8 +17,7 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
   return (
     <div className="flex w-12 shrink-0 flex-col items-center border-r border-border bg-card py-2 gap-1">
       {([
-        { view: 'chat'       as ActivityView, icon: MessageSquare,   label: 'Chat',           badge: 0 },
-        { view: 'agents'     as ActivityView, icon: Network,         label: 'Orchestrator',   badge: agentBadge },
+        { view: 'chat'       as ActivityView, icon: MessageSquare,   label: 'Chat',           badge: agentBadge },
         { view: 'explorer'   as ActivityView, icon: FolderOpenIcon,  label: 'Explorer',       badge: 0 },
         { view: 'git'        as ActivityView, icon: GitBranchIcon,   label: 'Source Control', badge: gitBadge },
         { view: 'extensions' as ActivityView, icon: Plug,            label: 'Extensions',     badge: 0 },
