@@ -42,6 +42,15 @@ export interface DbTodo {
   created_at: number
 }
 
+export interface DbTeamNote {
+  id: string
+  root_session_id: string
+  from_session_id: string
+  from_title: string
+  note: string
+  created_at: number
+}
+
 export interface DbSettings {
   apiKey: string
   apiBaseUrl: string
@@ -101,6 +110,7 @@ interface Store {
   sessions: DbSession[]
   messages: DbMessage[]
   todos: DbTodo[]
+  teamNotes: DbTeamNote[]
   settings: DbSettings
   workspacePath: string | null
   recentProjects: string[]
@@ -118,19 +128,21 @@ const DEFAULT_SETTINGS: DbSettings = {
 
 1. **Clarify first** — use askUser before starting any non-trivial task. Ask 1–3 focused questions. Use chip options where the answer space is bounded. Do not ask mid-task.
 
-2. **Plan immediately** — call setTodos right after clarifying, before doing any work. List every step. Update it as you go, marking items complete. The plan is always visible to the user.
+2. **Plan immediately** — call setTodos right after clarifying, before doing any work. List every step. As you finish EACH item, immediately call setTodos again marking just that item completed:true before moving to the next — never batch multiple completions into one call at the end. If you start a genuinely new, unrelated plan, call setTodos with ONLY the new items — this fully replaces the old list, so don't carry stale items forward. The plan is always visible to the user.
 
-3. **Delegate in parallel** — break the work into independent subtasks and spawn them concurrently with spawnAgents. Give each sub-agent a complete, self-contained brief — all context it needs to finish without asking back.
+3. **Delegate in parallel** — break the work into independent subtasks and spawn them concurrently with spawnAgents. Give each sub-agent a complete, self-contained brief — all context it needs to finish without asking back. Use shareWithTeam to broadcast anything other agents in the tree should know (conventions, blockers, findings); check getTeamNotes before starting work if you suspect a teammate already found something relevant.
 
-4. **Finish with notifyComplete** — after all work is done, write a concise recap in your message then call notifyComplete. This shows a completion toast and cleans up the Agent Tree.
+4. **Recover from sub-agent failures** — if a spawned sub-agent errors, you'll get its recent activity and its agentId in the result. Use messageAgent({ agentId, message }) to send corrective instructions and resume that same sub-agent, rather than starting over from scratch. Sub-agents' own clarifying questions are answered automatically on your behalf — you won't be interrupted for them.
+
+5. **Finish with notifyComplete** — after all work is done, write a concise recap in your message then call notifyComplete. This shows a completion toast and cleans up the Agent Tree.
 
 ## Tool reference
 
 **setTodos({ todos: [{ text, completed }] })**
-Set or update the task plan shown above the chat. Call at the very start of every task and update as items complete. Always call this before doing any work.
+Set or update the task plan shown above the chat. Call at the very start of every task. Mark items complete one at a time, immediately after finishing each — don't wait until the end. Starting an unrelated plan? Pass only its items; this replaces the whole list.
 
 **askUser({ questions: [{ question, header, options?, multiSelect? }] })**
-Ask the user questions via an interactive chip form. Blocks until submitted. Use at the start — never mid-task. header must be ≤12 chars.
+Ask the user questions via an interactive chip form. Blocks until submitted. Use at the start — never mid-task. header must be ≤12 chars. (Only reaches a human for top-level sessions — a sub-agent's askUser is answered automatically by the orchestrator's context, no human involved.)
 
 **spawnAgent({ task, title })**
 Spawn one sub-agent for a sequential subtask. Blocks until finished, returns its output.
@@ -138,15 +150,22 @@ Spawn one sub-agent for a sequential subtask. Blocks until finished, returns its
 **spawnAgents({ agents: [{ task, title }] })**
 Spawn multiple sub-agents in parallel. All run concurrently; blocks until all finish. Prefer this over repeated spawnAgent calls when tasks are independent.
 
+**messageAgent({ agentId, message })**
+Send a follow-up message to a sub-agent you spawned and get its response — use this to correct and resume one that errored, or to keep directing a specific sub-agent instead of spawning a new one.
+
+**shareWithTeam({ note })** / **getTeamNotes({})**
+Broadcast a finding to every agent in the current task tree (orchestrator + all sub-agents), or read what's been shared so far. New sub-agents automatically receive existing team notes in their task briefing.
+
 **notifyComplete({ title, summary })**
 Call when the entire goal is accomplished. Shows a completion toast. title is a short label; summary is 2–4 sentences of what was done. Always call this at the end.
 
 ## Rules
 
-- Always call setTodos before starting any work.
+- Always call setTodos before starting any work, and mark each item done immediately as you finish it — not in a batch at the end.
 - Always use askUser when the request is ambiguous — before spawning agents.
 - Prefer spawnAgents for independent subtasks (frontend + backend + tests in parallel).
-- Sub-agents should be self-contained — give them everything they need upfront.
+- Sub-agents should be self-contained — give them everything they need upfront; use shareWithTeam for anything siblings should also know.
+- If a sub-agent errors, use messageAgent to correct and resume it before giving up on it.
 - Always end a completed orchestration with notifyComplete.
 - Write your recap in the assistant message, then call notifyComplete.`,
   permissionMode: 'ask',
@@ -159,9 +178,9 @@ function getStorePath(): string {
 function readStore(): Store {
   try {
     const raw = JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
-    return { todos: [], ...raw }
+    return { todos: [], teamNotes: [], ...raw }
   } catch {
-    return { sessions: [], messages: [], todos: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
+    return { sessions: [], messages: [], todos: [], teamNotes: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
   }
 }
 
@@ -212,6 +231,7 @@ export function deleteSession(id: string): void {
   store.sessions = store.sessions.filter((s) => s.id !== id)
   store.messages = store.messages.filter((m) => m.session_id !== id)
   store.todos = (store.todos ?? []).filter((t) => t.session_id !== id)
+  store.teamNotes = (store.teamNotes ?? []).filter((n) => n.root_session_id !== id && n.from_session_id !== id)
   writeStore(store)
 }
 
@@ -332,6 +352,32 @@ export function replaceTodos(sessionId: string, items: { text: string; completed
   store.todos = [...store.todos, ...newTodos]
   writeStore(store)
   return newTodos
+}
+
+// ── Team notes ────────────────────────────────────────────────────────────────
+// Shared scratchpad for an orchestration tree (root session + all its
+// descendants), so sub-agents can pass information to each other and back
+// to the orchestrator without needing a live connection between them.
+
+export function addTeamNote(rootSessionId: string, fromSessionId: string, fromTitle: string, note: string): DbTeamNote {
+  const store = readStore()
+  const entry: DbTeamNote = {
+    id: uuidv4(),
+    root_session_id: rootSessionId,
+    from_session_id: fromSessionId,
+    from_title: fromTitle,
+    note,
+    created_at: Date.now(),
+  }
+  store.teamNotes = [...(store.teamNotes ?? []), entry]
+  writeStore(store)
+  return entry
+}
+
+export function getTeamNotes(rootSessionId: string): DbTeamNote[] {
+  return (readStore().teamNotes ?? [])
+    .filter((n) => n.root_session_id === rootSessionId)
+    .sort((a, b) => a.created_at - b.created_at)
 }
 
 // ── Settings ──────────────────────────────────────────────────────────────────
