@@ -231,6 +231,7 @@ export function deleteSession(id: string): void {
   store.sessions = store.sessions.filter((s) => s.id !== id)
   store.messages = store.messages.filter((m) => m.session_id !== id)
   store.todos = (store.todos ?? []).filter((t) => t.session_id !== id)
+  store.teamNotes = (store.teamNotes ?? []).filter((n) => n.root_session_id !== id && n.from_session_id !== id)
   writeStore(store)
 }
 
