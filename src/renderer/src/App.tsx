@@ -172,6 +172,7 @@ export default function App(): React.ReactElement {
           setTimeout(() => {
             const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
             if (current && (current.agentStatus === 'done' || current.agentStatus === 'error')) {
+              el.db.deleteSession(sessionId).catch(() => {})
               useAppStore.getState().removeSession(sessionId)
             }
           }, 3000)
@@ -181,6 +182,7 @@ export default function App(): React.ReactElement {
 
     const offSessionComplete = el.pi.onSessionComplete((_, title, summary, childIds) => {
       for (const id of childIds) {
+        el.db.deleteSession(id).catch(() => {})
         useAppStore.getState().removeSession(id)
       }
       toast.success(title, { description: summary, duration: 10_000 })
