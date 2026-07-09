@@ -86,7 +86,7 @@ export type Tab =
   | { type: 'session'; id: string; title: string }
   | { type: 'file'; path: string; name: string; isDirty: boolean }
 
-export type ActivityView = 'chat' | 'explorer' | 'git' | 'skills' | 'plugins' | 'settings' | 'hooks' | 'checkpoints' | 'agents'
+export type ActivityView = 'chat' | 'explorer' | 'git' | 'extensions' | 'settings' | 'agents'
 
 export interface PiSkill {
   id: string
@@ -245,5 +245,12 @@ export interface Hook {
 
 // ── ActivityView extension ─────────────────────────────────────────────────
 
-export interface TokenUsage {\n  input: number\n  output: number\n  total: number\n  cost: number\n  duration: number\n  tokensPerSecond: number\n}\n\nexport type ExtendedActivityView = ActivityView | 'checkpoints'
+export interface TokenUsage {
+  input: number
+  output: number
+  total: number
+  cost: number
+  duration: number
+  tokensPerSecond: number
+}
 

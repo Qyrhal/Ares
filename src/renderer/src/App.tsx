@@ -11,10 +11,7 @@ import { QuickFileOpen } from '@/components/QuickFileOpen'
 import { InputBar } from '@/components/InputBar'
 import { FileEditor } from '@/components/FileEditor'
 import { SettingsPanel } from '@/components/SettingsPanel'
-import { SkillsPanel } from '@/components/SkillsPanel'
-import { PluginsPanel } from '@/components/PluginsPanel'
-import { HooksPanel } from '@/components/HooksPanel'
-import { CheckpointPanel } from '@/components/CheckpointPanel'
+import { ExtensionsPanel } from '@/components/ExtensionsPanel'
 import { StatusBar } from '@/components/StatusBar'
 import { TerminalView } from '@/components/TerminalView'
 import { CommitDetail } from '@/components/CommitDetail'
@@ -655,7 +652,7 @@ export default function App(): React.ReactElement {
             agentBadge={store.sessions.filter((s) => s.agentStatus === 'running').length}
           />
 
-          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && store.activeView !== 'hooks' && store.activeView !== 'checkpoints' && (
+          {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
             store.activeView === 'agents' ? (
               <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
                 <AgentTree
@@ -688,7 +685,7 @@ export default function App(): React.ReactElement {
         </>)}
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          {store.activeView !== 'settings' && store.activeView !== 'skills' && store.activeView !== 'plugins' && store.activeView !== 'hooks' && store.activeView !== 'checkpoints' && store.activeView !== 'agents' && (
+          {store.activeView !== 'settings' && store.activeView !== 'extensions' && store.activeView !== 'agents' && (
             <TabBar
               tabs={store.tabs}
               activeTabId={store.activeTabId}
@@ -701,14 +698,8 @@ export default function App(): React.ReactElement {
           <div className="flex flex-1 flex-col overflow-hidden min-h-0">
             {store.activeView === 'settings' ? (
               <SettingsPanel settings={store.settings} onSave={handleSaveSettings} />
-            ) : store.activeView === 'skills' ? (
-              <SkillsPanel />
-            ) : store.activeView === 'plugins' ? (
-              <PluginsPanel />
-            ) : store.activeView === 'hooks' ? (
-              <HooksPanel />
-            ) : store.activeView === 'checkpoints' ? (
-              <CheckpointPanel workspacePath={store.workspacePath} />
+            ) : store.activeView === 'extensions' ? (
+              <ExtensionsPanel />
             ) : store.activeView === 'agents' ? (
               activeTab?.type === 'session' && activeSession ? (
                 <>
@@ -912,12 +903,9 @@ function usePaletteCommands(store: ReturnType<typeof useAppStore.getState>): Com
     { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => store.toggleZenMode() },
     { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => store.setActiveView('settings') },
     { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => store.setActiveView('explorer') },
-    { id: 'git', label: 'Open git panel', description: 'View git status and history', category: 'View', action: () => store.setActiveView('git') },
-    { id: 'skills', label: 'Open skills panel', description: 'View and manage agent skills', category: 'View', action: () => store.setActiveView('skills') },
-    { id: 'plugins', label: 'Open plugins panel', description: 'View and manage plugins', category: 'View', action: () => store.setActiveView('plugins') },
+    { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => store.setActiveView('git') },
+    { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => store.setActiveView('extensions') },
     { id: 'agents', label: 'Open agent dashboard', description: 'View and manage agents', category: 'View', action: () => store.setActiveView('agents') },
-    { id: 'checkpoints', label: 'Open checkpoints', description: 'View and restore checkpoints', category: 'View', action: () => store.setActiveView('checkpoints') },
-    { id: 'hooks', label: 'Open hooks panel', description: 'Configure lifecycle hooks', category: 'View', action: () => store.setActiveView('hooks') },
   ]
 }
 
