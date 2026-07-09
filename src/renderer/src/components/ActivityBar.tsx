@@ -28,10 +28,10 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
           title={label}
           onClick={() => onChangeView(view)}
           className={cn(
-            'relative flex size-9 items-center justify-center rounded-lg transition-colors',
+            'relative flex size-9 items-center justify-center rounded-lg transition-all',
             activeView === view
-              ? 'bg-primary/15 text-primary'
-              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              ? 'bg-primary/15 text-primary shadow-[var(--shadow-inset-sm)]'
+              : 'text-muted-foreground hover:bg-accent hover:text-foreground hover:shadow-xs'
           )}
         >
           <Icon className="size-5" />
@@ -51,10 +51,10 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
         title="Terminal (⌘` / ⌘J)"
         onClick={onToggleTerminal}
         className={cn(
-          'flex size-9 items-center justify-center rounded-lg transition-colors',
+          'flex size-9 items-center justify-center rounded-lg transition-all',
           terminalOpen
-            ? 'bg-primary/15 text-primary'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            ? 'bg-primary/15 text-primary shadow-[var(--shadow-inset-sm)]'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground hover:shadow-xs'
         )}
       >
         <SquareTerminal className="size-5" />
@@ -65,10 +65,10 @@ export function ActivityBar({ activeView, onChangeView, terminalOpen, onToggleTe
         title="Settings"
         onClick={() => onChangeView('settings')}
         className={cn(
-          'flex size-9 items-center justify-center rounded-lg transition-colors',
+          'flex size-9 items-center justify-center rounded-lg transition-all',
           activeView === 'settings'
-            ? 'bg-primary/15 text-primary'
-            : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            ? 'bg-primary/15 text-primary shadow-[var(--shadow-inset-sm)]'
+            : 'text-muted-foreground hover:bg-accent hover:text-foreground hover:shadow-xs'
         )}
       >
         <SettingsIcon className="size-5" />

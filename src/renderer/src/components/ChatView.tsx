@@ -139,7 +139,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
               <button
                 key={cap.label}
                 onClick={() => onSuggestion?.(cap.prompt)}
-                className="group rounded-lg border border-border bg-card p-3 text-left hover:border-primary/30 hover:bg-accent transition-colors"
+                className="surface-card group rounded-lg border border-border bg-card p-3 text-left transition-all hover:border-primary/30 hover:bg-accent hover:shadow-md"
               >
                 <div className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                   {cap.label}
@@ -194,7 +194,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
       {showScrollButton && (
         <button
           onClick={scrollToBottom}
-          className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground shadow-lg hover:bg-accent hover:text-foreground transition-colors z-20 animate-bounce"
+          className="surface-overlay absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-1.5 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors z-20 animate-bounce"
           aria-label="Scroll to bottom"
         >
           <ArrowDown className="size-3.5" />
