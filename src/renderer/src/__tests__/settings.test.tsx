@@ -1,6 +1,6 @@
 import React from 'react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { SettingsPanel } from '../components/SettingsPanel'
 import { AppSettings } from '@/types'
 
@@ -25,6 +25,8 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         settings={{ ...BASE_SETTINGS, apiBaseUrl: 'http://localhost:11434/v1' }}
         onSave={vi.fn()}
+        sessionCount={0}
+        onDeleteAllSessions={vi.fn()}
       />
     )
 
@@ -47,6 +49,8 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         settings={{ ...BASE_SETTINGS, apiBaseUrl: 'http://localhost:9999/v1' }}
         onSave={vi.fn()}
+        sessionCount={0}
+        onDeleteAllSessions={vi.fn()}
       />
     )
 
@@ -62,6 +66,8 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         settings={{ ...BASE_SETTINGS, apiBaseUrl: 'http://localhost:9999/v1' }}
         onSave={vi.fn()}
+        sessionCount={0}
+        onDeleteAllSessions={vi.fn()}
       />
     )
 
@@ -75,6 +81,8 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         settings={BASE_SETTINGS}
         onSave={vi.fn()}
+        sessionCount={0}
+        onDeleteAllSessions={vi.fn()}
       />
     )
 
@@ -90,9 +98,52 @@ describe('SettingsPanel', () => {
       <SettingsPanel
         settings={BASE_SETTINGS}
         onSave={vi.fn()}
+        sessionCount={0}
+        onDeleteAllSessions={vi.fn()}
       />
     )
 
     expect(screen.getByPlaceholderText('You are a helpful coding assistant...')).toBeInTheDocument()
+  })
+})
+
+describe('SettingsPanel — delete all sessions', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('shows the session count in the delete-all description', () => {
+    render(
+      <SettingsPanel settings={BASE_SETTINGS} onSave={vi.fn()} sessionCount={3} onDeleteAllSessions={vi.fn()} />
+    )
+    expect(screen.getByText(/Permanently deletes all 3 sessions/)).toBeInTheDocument()
+  })
+
+  it('disables the delete-all button when there are no sessions', () => {
+    render(
+      <SettingsPanel settings={BASE_SETTINGS} onSave={vi.fn()} sessionCount={0} onDeleteAllSessions={vi.fn()} />
+    )
+    expect(screen.getByRole('button', { name: /Delete all/ })).toBeDisabled()
+  })
+
+  it('does not call onDeleteAllSessions when the confirmation is declined', () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const onDeleteAllSessions = vi.fn()
+    render(
+      <SettingsPanel settings={BASE_SETTINGS} onSave={vi.fn()} sessionCount={2} onDeleteAllSessions={onDeleteAllSessions} />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Delete all/ }))
+    expect(window.confirm).toHaveBeenCalledWith('Delete all 2 sessions? This cannot be undone.')
+    expect(onDeleteAllSessions).not.toHaveBeenCalled()
+  })
+
+  it('calls onDeleteAllSessions when the confirmation is accepted', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const onDeleteAllSessions = vi.fn().mockResolvedValue(undefined)
+    render(
+      <SettingsPanel settings={BASE_SETTINGS} onSave={vi.fn()} sessionCount={5} onDeleteAllSessions={onDeleteAllSessions} />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /Delete all/ }))
+    await waitFor(() => expect(onDeleteAllSessions).toHaveBeenCalledTimes(1))
   })
 })
