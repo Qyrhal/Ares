@@ -86,7 +86,7 @@ export type Tab =
   | { type: 'session'; id: string; title: string }
   | { type: 'file'; path: string; name: string; isDirty: boolean }
 
-export type ActivityView = 'chat' | 'explorer' | 'git' | 'extensions' | 'settings' | 'agents'
+export type ActivityView = 'chat' | 'explorer' | 'git' | 'extensions' | 'settings'
 
 export interface PiSkill {
   id: string

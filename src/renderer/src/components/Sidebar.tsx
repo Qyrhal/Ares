@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react'
-import { MessageSquare, Pin, Download, Upload, Search, X, Bot, GitBranch, Loader2 } from 'lucide-react'
+import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2 } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
@@ -114,12 +114,30 @@ function SessionsPane({
     window.location.reload()
   }, [])
 
-  const pinned = sessions.filter((s) => s.pinned)
-  const unpinned = sessions.filter((s) => !s.pinned)
+  // Orders sessions so each parent is immediately followed by its own
+  // children in spawn order, instead of the flat store order (which
+  // prepends new sessions and scatters children above/below parents).
+  const orderWithChildren = (list: Session[]): Session[] => {
+    const childrenOf = new Map<string, Session[]>()
+    const roots: Session[] = []
+    for (const s of list) {
+      if (s.parentId && list.some((p) => p.id === s.parentId)) {
+        const arr = childrenOf.get(s.parentId) ?? []
+        arr.push(s)
+        childrenOf.set(s.parentId, arr)
+      } else {
+        roots.push(s)
+      }
+    }
+    for (const arr of childrenOf.values()) arr.sort((a, b) => a.createdAt - b.createdAt)
+    return roots.flatMap((root) => [root, ...(childrenOf.get(root.id) ?? [])])
+  }
+
+  const pinned = orderWithChildren(sessions.filter((s) => s.pinned))
+  const unpinned = orderWithChildren(sessions.filter((s) => !s.pinned))
 
   const renderSession = (s: Session) => {
     const isSubAgent = !!s.parentId
-    const parent = isSubAgent ? sessions.find((p) => p.id === s.parentId) : null
     return (
     <button
       key={s.id}
@@ -127,45 +145,31 @@ function SessionsPane({
       onMouseEnter={() => setHoveredId(s.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
-        'group flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-all',
+        'group flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-all',
+        isSubAgent ? 'pl-5' : 'pl-2',
         activeSessionId === s.id
           ? 'bg-accent text-foreground shadow-xs'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
       )}
     >
       {isSubAgent ? (
-        <Bot className={cn('mt-0.5 size-3.5 shrink-0', s.agentStatus === 'running' ? 'text-primary' : s.agentStatus === 'done' ? 'text-green-500' : 'opacity-60')} />
+        <Bot className={cn('size-3 shrink-0', s.agentStatus === 'running' ? 'text-primary' : s.agentStatus === 'done' ? 'text-green-500' : 'opacity-60')} />
       ) : (
-        <MessageSquare className="mt-0.5 size-3.5 shrink-0 opacity-60" />
+        <MessageSquare className="size-3 shrink-0 opacity-60" />
       )}
       <div className="min-w-0 flex-1">
         <p className="truncate text-xs font-medium leading-snug">
-          {isSubAgent && <span className="inline-block w-3 mr-0.5 opacity-40">{'└─'}</span>}
-          {truncate(s.title, isSubAgent ? 28 : 32)}
+          {truncate(s.title, isSubAgent ? 26 : 32)}
         </p>
-        {s.workspacePath && (
-          <p className="truncate text-[9px] text-muted-foreground/40 mt-0.5" title={s.workspacePath}>
-            {s.workspacePath.split('/').filter(Boolean).slice(-3).join('/')}
-          </p>
-        )}
-        <p className="mt-0.5 text-[10px] text-muted-foreground/60">
-          {isSubAgent && parent && (
-            <span className="inline-flex items-center gap-0.5 mr-1.5 text-[9px] text-primary/60">
-              <GitBranch className="size-2.5" /> {truncate(parent.title, 16)}
-            </span>
-          )}
+        <p className="mt-0.5 flex items-center gap-1 text-[10px] leading-tight text-muted-foreground/60 whitespace-nowrap">
           {s.agentStatus === 'running' && (
-            <span className="inline-flex items-center gap-0.5 mr-1.5 text-[9px] text-primary">
+            <span className="inline-flex items-center gap-0.5 text-primary">
               <Loader2 className="size-2.5 animate-spin" /> running
             </span>
           )}
-          {s.agentStatus === 'done' && (
-            <span className="mr-1.5 text-[9px] text-green-500">done</span>
-          )}
-          {s.agentStatus === 'error' && (
-            <span className="mr-1.5 text-[9px] text-destructive">error</span>
-          )}
-          {timeAgo(s.updatedAt)} · {s.messageCount ?? 0} msg
+          {s.agentStatus === 'done' && <span className="text-green-500">done</span>}
+          {s.agentStatus === 'error' && <span className="text-destructive">error</span>}
+          <span className="truncate">{timeAgo(s.updatedAt)} · {s.messageCount ?? 0} msg</span>
         </p>
       </div>
       {(hoveredId === s.id || activeSessionId === s.id) && (
