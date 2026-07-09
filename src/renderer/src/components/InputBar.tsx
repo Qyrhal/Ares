@@ -534,7 +534,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
   return (
     <div
-      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-4 pt-3 pb-4 shadow-[var(--shadow-highlight)]"
+      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-3 pt-2.5 pb-2.5 shadow-[var(--shadow-highlight)]"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
@@ -550,7 +550,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       )}
 
       {attachments.length > 0 && (
-        <AttachmentGroup className="mb-2">
+        <AttachmentGroup className="mb-1.5">
           {attachments.map((att) => (
             <Attachment key={att.id} size="sm" className="max-w-48">
               <AttachmentMedia>{fileIcon(att.type)}</AttachmentMedia>
@@ -569,7 +569,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       )}
 
       {skillAttachments.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1.5">
+        <div className="mb-1.5 flex flex-wrap gap-1.5">
           {skillAttachments.map((sk) => (
             <div key={sk.id} className="inline-flex items-center gap-1 rounded-md border border-violet-500/30 bg-violet-500/10 px-2 py-1 text-xs text-violet-300">
               <Sparkles className="size-3 shrink-0" />
@@ -589,7 +589,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
       {/* Reply-to chip */}
       {replyTo && (
-        <div className="mb-2 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-1.5">
+        <div className="mb-1.5 flex items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-2.5 py-1">
           <Reply className="size-3 shrink-0 text-primary" />
           <div className="flex min-w-0 flex-1 flex-col">
             <span className="text-[10px] font-medium text-primary uppercase tracking-wider">Replying to {replyTo.role === 'user' ? 'You' : 'Assistant'}</span>
@@ -606,17 +606,17 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       )}
 
       <div className={cn(
-        'flex items-end gap-2 rounded-xl border border-border bg-input px-3 py-2 transition-all shadow-[var(--shadow-inset-sm)]',
+        'flex items-end gap-1.5 rounded-lg border border-border bg-input px-2.5 py-1.5 transition-all shadow-[var(--shadow-inset-sm)]',
         'focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 focus-within:shadow-sm'
       )}>
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         <button
           type="button"
           onClick={() => fileInputRef.current?.click()}
-          className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="mb-0.5 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           aria-label="Attach file"
         >
-          <PaperclipIcon className="size-4" />
+          <PaperclipIcon className="size-3.5" />
         </button>
 
         <div className="relative flex-1">
@@ -628,7 +628,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             disabled={disabled}
             placeholder={placeholder ?? 'Ask anything… (@ to mention files, / for commands)'}
             rows={1}
-            className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 min-h-[28px] max-h-60 leading-6 py-0.5"
+            className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-50 min-h-[24px] max-h-60 leading-6 py-0.5"
           />
 
           {/* @mention dropdown */}
@@ -711,7 +711,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           <button
             type="button"
             onClick={onCancel}
-            className="mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
+            className="mb-0.5 flex size-6 shrink-0 items-center justify-center rounded-md bg-destructive/10 text-destructive transition-colors hover:bg-destructive/20"
             aria-label="Stop generation (Ctrl+C)"
             title="Stop generation (Ctrl+C)"
           >
@@ -722,7 +722,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             type="button"
             onClick={handleSend}
             disabled={!canSend}
-            className={cn('press-effect mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md transition-all', canSend ? 'bg-primary text-primary-foreground shadow-sm hover:shadow-md hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
+            className={cn('press-effect mb-0.5 flex size-6 shrink-0 items-center justify-center rounded-md transition-all', canSend ? 'bg-primary text-primary-foreground shadow-sm hover:shadow-md hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
             aria-label="Send message"
           >
             <SendIcon className="size-3.5" />
@@ -778,7 +778,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       )}
 
       {/* ── Bottom toolbar ─────────────────────────────────────────── */}
-      <div className="mt-2 flex items-center justify-between">
+      <div className="mt-1.5 flex items-center justify-between">
 
         {/* Left: permission mode */}
         <button
@@ -788,42 +788,42 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             const next = PERM_MODES[(idx + 1) % PERM_MODES.length]
             onPermissionModeChange?.(next)
           }}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           title="Click to cycle permission mode"
         >
-          <Shield className="size-3 shrink-0" />
+          <Shield className="size-2.5 shrink-0" />
           <span>{PERM_LABELS[permissionMode]}</span>
         </button>
 
-        {/* Right: model | effort | context */}
-        <div className="flex items-center gap-1">
+        {/* Right: model · effort · context */}
+        <div className="flex items-center gap-0.5">
           {/* Model chip — opens existing model picker */}
           <button
             type="button"
             onClick={() => { fetchModels(); setShowModelPicker(true); setModelSearch(''); setModelHighlight(0); requestAnimationFrame(() => modelSearchRef.current?.focus()) }}
-            className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors max-w-[140px]"
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-w-[140px]"
             title="Change model"
           >
             <span className="truncate">{currentModel || 'No model'}</span>
           </button>
 
           {/* Separator */}
-          <span className="text-border select-none">|</span>
+          <span className="h-3 w-px shrink-0 bg-border" />
 
           {/* Effort picker */}
           <div ref={effortRef} className="relative">
             <button
               type="button"
               onClick={() => setShowEffortPicker((v) => !v)}
-              className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+              className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               title="Effort level"
             >
-              <Zap className="size-3 shrink-0" />
+              <Zap className="size-2.5 shrink-0" />
               <span>{EFFORT_LABELS[effort] ?? 'Med'}</span>
-              <ChevronDown className={cn('size-3 shrink-0 transition-transform', showEffortPicker && 'rotate-180')} />
+              <ChevronDown className={cn('size-2.5 shrink-0 transition-transform', showEffortPicker && 'rotate-180')} />
             </button>
             {showEffortPicker && (
-              <div className="absolute bottom-full right-0 mb-1 w-28 overflow-hidden rounded-lg border border-border bg-popover shadow-lg z-50 p-1">
+              <div className="surface-overlay absolute bottom-full right-0 mb-1 w-28 overflow-hidden rounded-lg border border-border z-50 p-1">
                 {EFFORT_LEVELS.map((lvl) => (
                   <button
                     key={lvl}
@@ -843,7 +843,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           </div>
 
           {/* Separator */}
-          <span className="text-border select-none">|</span>
+          <span className="h-3 w-px shrink-0 bg-border" />
 
           {/* Context donut */}
           <ContextDonut used={usedTokens} total={ctxWindow} />
