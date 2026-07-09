@@ -25,7 +25,7 @@ export function SpawnAgentDialog({ onSpawn, onClose }: SpawnAgentDialogProps): R
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-xl border border-border bg-card shadow-2xl mx-4">
+      <div className="surface-overlay relative w-full max-w-md rounded-xl border border-border mx-4">
         {/* Header */}
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
           <Bot className="size-4 text-primary shrink-0" />

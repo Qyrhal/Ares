@@ -132,8 +132,8 @@ export function GitHistory({ commits, activeCommit, onSelectCommit }: GitHistory
           title={node.commit.message}
           onClick={() => onSelectCommit(node.commit.hash)}
           className={cn(
-            'flex cursor-pointer items-center gap-1 rounded-sm px-1 py-[1px] text-xs leading-tight hover:bg-accent/40',
-            activeCommit === node.commit.hash && 'bg-accent/60'
+            'flex cursor-pointer items-center gap-1 rounded-sm px-1 py-[1px] text-xs leading-tight transition-shadow hover:bg-accent/40',
+            activeCommit === node.commit.hash && 'bg-accent/60 shadow-xs'
           )}
           style={{ paddingLeft: graphWidth + 4 }}
         >
