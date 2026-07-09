@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { GitFile, GitStatus, GitBranches, GitCommit } from '@/types'
 import { Button } from '@/components/ui/button'
 import { GitHistory } from '@/components/GitHistory'
+import { CheckpointPanel } from '@/components/CheckpointPanel'
 import { useAppStore } from '@/store/useAppStore'
 
 const el = window.electron
@@ -285,6 +286,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   const [untrackedOpen, setUntrackedOpen] = useState(true)
   const [historyOpen, setHistoryOpen] = useState(true)
   const [historyHeight, setHistoryHeight] = useState(200)
+  const [paneTab, setPaneTab] = useState<'changes' | 'checkpoints'>('changes')
   const handleResizeHistory = useCallback((dy: number) => {
     setHistoryHeight((prev) => Math.max(80, Math.min(600, prev - dy)))
   }, [])
@@ -385,6 +387,32 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
         </button>
       </div>
 
+      {/* Sub-tabs */}
+      <div role="tablist" className="flex shrink-0 gap-1 border-b border-border px-2 pt-1.5">
+        {([
+          { id: 'changes' as const, label: 'Changes' },
+          { id: 'checkpoints' as const, label: 'Checkpoints' },
+        ]).map(({ id, label }) => (
+          <button
+            key={id}
+            role="tab"
+            aria-selected={paneTab === id}
+            onClick={() => setPaneTab(id)}
+            className={cn(
+              'rounded-t-lg border border-b-0 px-2.5 py-1 text-[11px] font-medium transition-colors',
+              paneTab === id
+                ? 'border-border bg-background text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground'
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {paneTab === 'checkpoints' ? (
+        <CheckpointPanel workspacePath={workspacePath} />
+      ) : (
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Upper area — scrollable */}
         <div className="flex-1 overflow-y-auto">
@@ -570,6 +598,7 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
           </>
         )}
       </div>
+      )}
     </div>
   )
 }
