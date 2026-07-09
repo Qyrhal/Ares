@@ -534,7 +534,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
   return (
     <div
-      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-4 pt-3 pb-4"
+      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-4 pt-3 pb-4 shadow-[var(--shadow-highlight)]"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
@@ -606,8 +606,8 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       )}
 
       <div className={cn(
-        'flex items-end gap-2 rounded-xl border border-border bg-input px-3 py-2 transition-colors',
-        'focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20'
+        'flex items-end gap-2 rounded-xl border border-border bg-input px-3 py-2 transition-all shadow-[var(--shadow-inset-sm)]',
+        'focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20 focus-within:shadow-sm'
       )}>
         <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileChange} />
         <button
@@ -722,7 +722,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             type="button"
             onClick={handleSend}
             disabled={!canSend}
-            className={cn('mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md transition-colors', canSend ? 'bg-primary text-primary-foreground hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
+            className={cn('press-effect mb-0.5 flex size-7 shrink-0 items-center justify-center rounded-md transition-all', canSend ? 'bg-primary text-primary-foreground shadow-sm hover:shadow-md hover:bg-primary/90' : 'text-muted-foreground opacity-40 cursor-not-allowed')}
             aria-label="Send message"
           >
             <SendIcon className="size-3.5" />

@@ -15,6 +15,7 @@ const Marker = React.forwardRef<HTMLDivElement, MarkerProps>(
       data-variant={variant}
       className={cn(
         'flex items-center gap-2 py-1 text-xs text-muted-foreground',
+        variant === 'default' && 'rounded-md px-1.5 -mx-1.5 transition-shadow hover:shadow-xs',
         variant === 'border' && 'border-b border-border pb-2 mb-1',
         variant === 'separator' && [
           'justify-center',

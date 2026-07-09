@@ -41,9 +41,9 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSessio
             key={id}
             onClick={() => onSelectTab(id)}
             className={cn(
-              'group relative flex h-full min-w-0 max-w-44 shrink-0 items-center gap-1.5 border-r border-border px-3 text-xs transition-colors',
+              'group relative flex h-full min-w-0 max-w-44 shrink-0 items-center gap-1.5 border-r border-border px-3 text-xs transition-all',
               isActive
-                ? 'bg-background text-foreground'
+                ? 'surface-raised text-foreground'
                 : 'bg-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground'
             )}
           >

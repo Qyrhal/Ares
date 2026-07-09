@@ -61,9 +61,9 @@ function TreeNodeView({
       <button
         onClick={() => onSelect(session.id)}
         className={cn(
-          'group flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs transition-colors',
+          'group flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs transition-all',
           isActive
-            ? 'bg-primary/10 text-foreground'
+            ? 'bg-primary/10 text-foreground shadow-xs'
             : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
         )}
         style={{ paddingLeft: `${8 + depth * 16}px` }}

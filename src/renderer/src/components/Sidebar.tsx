@@ -39,7 +39,7 @@ export function Sidebar({
   onFsCreateFile, onFsCreateFolder, onFsRename, onFsDelete,
 }: SidebarProps): React.ReactElement {
   return (
-    <aside className="flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
+    <aside className="surface-card flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
       {mode === 'chat' && (
         <SessionsPane
           sessions={sessions}
@@ -127,9 +127,9 @@ function SessionsPane({
       onMouseEnter={() => setHoveredId(s.id)}
       onMouseLeave={() => setHoveredId(null)}
       className={cn(
-        'group flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
+        'group flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-all',
         activeSessionId === s.id
-          ? 'bg-accent text-foreground'
+          ? 'bg-accent text-foreground shadow-xs'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
       )}
     >
