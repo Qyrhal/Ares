@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react'
 import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
 import { AppSettings } from '@/types'
 import { Button } from '@/components/ui/button'
@@ -24,6 +24,8 @@ ALWAYS prefer editFile over writeFile for making changes to existing files — i
 interface SettingsPanelProps {
   settings: AppSettings
   onSave: (s: AppSettings) => Promise<void>
+  sessionCount: number
+  onDeleteAllSessions: () => Promise<void>
 }
 
 const PRESET_ENDPOINTS = [
@@ -36,11 +38,12 @@ const PRESET_ENDPOINTS = [
 
 type ConnStatus = 'idle' | 'loading' | 'ok' | 'error'
 
-export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.ReactElement {
+export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessions }: SettingsPanelProps): React.ReactElement {
   const [form, setForm] = useState<AppSettings>(settings)
   const [showKey, setShowKey] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [deletingAll, setDeletingAll] = useState(false)
 
   const [connStatus, setConnStatus] = useState<ConnStatus>('idle')
   const [connMessage, setConnMessage] = useState('')
@@ -119,6 +122,14 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
       setConnMessage((err as Error).message)
     }
   }, [form.apiBaseUrl, form.apiKey, form.defaultModel])
+
+  const handleDeleteAllSessions = async (): Promise<void> => {
+    if (sessionCount === 0) return
+    if (!window.confirm(`Delete all ${sessionCount} session${sessionCount !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    setDeletingAll(true)
+    await onDeleteAllSessions()
+    setDeletingAll(false)
+  }
 
   const modelOptions: SelectOption[] = fetchedModels
   const currentModelInList = modelOptions.some((m) => m.value === form.defaultModel)
@@ -345,6 +356,28 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
               : <><Save className="size-4" /> {saving ? 'Saving…' : 'Save settings'}</>}
           </Button>
         </div>
+
+        {/* ── Data ──────────────────────────────────────────────────── */}
+        <Section title="Data" description="Manage locally stored chat data.">
+          <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
+            <div>
+              <p className="text-xs font-medium text-foreground">Delete all sessions</p>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Permanently deletes all {sessionCount} session{sessionCount !== 1 ? 's' : ''} and their messages. This cannot be undone.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteAllSessions}
+              disabled={deletingAll || sessionCount === 0}
+              className="shrink-0 gap-1.5"
+            >
+              {deletingAll ? <Loader2 className="size-3.5 animate-spin" /> : <Trash2 className="size-3.5" />}
+              Delete all
+            </Button>
+          </div>
+        </Section>
 
         {/* About */}
         <Section title="About" className="mt-10">

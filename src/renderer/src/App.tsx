@@ -595,6 +595,11 @@ export default function App(): React.ReactElement {
     applyTheme(s.themeId)
   }, [])
 
+  const handleDeleteAllSessions = useCallback(async () => {
+    const sessions = useAppStore.getState().sessions
+    await Promise.all(sessions.map((s) => handleDeleteSession(s.id)))
+  }, [handleDeleteSession])
+
   const handleOpenFolder = useCallback(async () => {
     const p = await el.dialog.openFolder()
     if (!p) return
@@ -699,7 +704,12 @@ export default function App(): React.ReactElement {
 
           <div className="flex flex-1 flex-col overflow-hidden min-h-0">
             {store.activeView === 'settings' ? (
-              <SettingsPanel settings={store.settings} onSave={handleSaveSettings} />
+              <SettingsPanel
+                settings={store.settings}
+                onSave={handleSaveSettings}
+                sessionCount={store.sessions.length}
+                onDeleteAllSessions={handleDeleteAllSessions}
+              />
             ) : store.activeView === 'extensions' ? (
               <ExtensionsPanel />
             ) : store.activeView === 'agents' ? (
