@@ -42,7 +42,7 @@ export function AgentQuestionCard({ questions, onSubmit }: AgentQuestionCardProp
   }
 
   return (
-    <div className="border-t border-border bg-card/80 px-4 py-4 space-y-5">
+    <div className="border-t border-border bg-card/80 px-4 py-4 space-y-5 shadow-[var(--shadow-highlight)]">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
         Agent has questions
       </p>

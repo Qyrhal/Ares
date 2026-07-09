@@ -161,7 +161,10 @@ export function CheckpointPanel({ workspacePath }: CheckpointPanelProps): React.
             {checkpoints.map((cp) => (
               <div key={cp.id}>
                 <div
-                  className="group flex items-center gap-2 rounded-sm px-3 py-2 hover:bg-accent/40 cursor-pointer"
+                  className={cn(
+                    'group flex items-center gap-2 rounded-sm px-3 py-2 cursor-pointer transition-shadow hover:bg-accent/40',
+                    expandedIdx === cp.index && 'bg-accent/40 shadow-xs'
+                  )}
                   onClick={() => handleShowDiff(cp.index)}
                 >
                   <History className="size-3.5 shrink-0 text-muted-foreground/60" />

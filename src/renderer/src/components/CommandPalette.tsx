@@ -81,7 +81,7 @@ export function CommandPalette({ open, onClose, commands, placeholder = 'Search 
 
       {/* Dialog */}
       <div
-        className="relative z-10 w-full max-w-lg rounded-xl border border-border bg-card shadow-2xl overflow-hidden"
+        className="surface-overlay relative z-10 w-full max-w-lg rounded-xl border border-border overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search input */}

@@ -323,9 +323,9 @@ export function SettingsPanel({ settings, onSave }: SettingsPanelProps): React.R
                   type="button"
                   onClick={() => set('permissionMode', opt.value)}
                   className={cn(
-                    'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-colors',
+                    'flex flex-col items-start gap-0.5 rounded-lg border px-3 py-2 text-left transition-all',
                     form.permissionMode === opt.value
-                      ? 'border-primary bg-primary/10 text-primary'
+                      ? 'border-primary bg-primary/10 text-primary shadow-sm'
                       : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
                   )}
                 >
