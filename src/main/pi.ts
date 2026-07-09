@@ -6,8 +6,9 @@ import { app, BrowserWindow } from 'electron'
 import * as nodeModule from 'module'
 import fs from 'fs'
 import path from 'path'
-import { getAgentConfig, getSettings, replaceTodos, createSession, updateSession, addMessage } from './db'
+import { getAgentConfig, getSettings, replaceTodos, createSession, updateSession, addMessage, getSessions, getMessages, addTeamNote, getTeamNotes } from './db'
 import { createCheckpoint } from './checkpoints'
+import { buildAutoAnswerMessages, parseAutoAnswerResponse, findRootSessionId, briefWithTeamNotes } from './orchestration'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
 // markAsUncloneable was added in Node.js 22; Electron 33 ships Node.js 20.
@@ -39,6 +40,33 @@ import { createCheckpoint } from './checkpoints'
 }())
 
 const esmImport = new Function('spec', 'return import(spec)') as (spec: string) => Promise<any>
+
+// One-shot completion (no tools, no full agent session) used to answer a sub-agent's
+// askUser question on the orchestrator's behalf, so it never needs a human mid-task.
+async function autoAnswerQuestion(
+  apiBaseUrl: string,
+  apiKey: string,
+  modelId: string,
+  parentTask: string,
+  childTitle: string,
+  questions: Array<{ question: string; header: string; options?: string[]; multiSelect?: boolean }>,
+): Promise<Record<string, string>> {
+  const { system, user } = buildAutoAnswerMessages(parentTask, childTitle, questions)
+  const res = await fetch(apiBaseUrl.replace(/\/$/, '') + '/chat/completions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}) },
+    body: JSON.stringify({
+      model: modelId,
+      messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
+      temperature: 0.3,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  })
+  if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+  const json = await res.json()
+  const raw = json.choices?.[0]?.message?.content ?? ''
+  return parseAutoAnswerResponse(raw, questions)
+}
 
 let _sdk: typeof import('@earendil-works/pi-coding-agent') | undefined
 
@@ -150,16 +178,22 @@ async function buildResourceLoader(cwd: string) {
     'You have access to several custom tools. Use them appropriately:',
     '',
     '### setTodos — Plan Mode',
-    'ALWAYS call setTodos at the start of any multi-step task. Show your plan as a checklist. Update it as you progress (mark items completed: true). The user sees this as a live progress tracker.',
+    'ALWAYS call setTodos at the start of any multi-step task. Show your plan as a checklist. Mark items complete ONE AT A TIME, immediately after finishing each — call setTodos again right then, not in a batch at the end. If you start a genuinely new, unrelated plan, call setTodos with ONLY the new items — this replaces the whole list, so don\'t carry stale items forward. The user sees this as a live progress tracker.',
     '',
     '### webSearch — Web Search',
     'Use webSearch to look up current information, docs, APIs, news, or anything outside your training data. Results come from DuckDuckGo. Always cite sources.',
     '',
     '### spawnAgent / spawnAgents — Sub-agents',
-    'Decompose complex work into independent subtasks and use spawnAgent (sequential) or spawnAgents (parallel) to delegate. Each sub-agent gets its own session and appears in the Agent Tree. Use spawnAgents only for truly independent subtasks.',
+    'Decompose complex work into independent subtasks and use spawnAgent (sequential) or spawnAgents (parallel) to delegate. Each sub-agent gets its own session, appears in the Agent Tree, and automatically receives any shareWithTeam notes in its briefing. Use spawnAgents only for truly independent subtasks. A sub-agent\'s own askUser calls are answered automatically on your behalf — you will not be interrupted for them.',
+    '',
+    '### messageAgent — Resume a sub-agent',
+    'If a spawned sub-agent errors, you get its recent activity and agentId back. Use messageAgent({ agentId, message }) to send corrective instructions and resume that SAME sub-agent instead of starting over. Also use it to keep directing a specific sub-agent mid-task.',
+    '',
+    '### shareWithTeam / getTeamNotes — Team coordination',
+    'Use shareWithTeam({ note }) to broadcast a finding, convention, or blocker to every agent in the current task tree (yourself and all sub-agents). Use getTeamNotes({}) to read what teammates have shared. New sub-agents automatically get existing team notes in their briefing.',
     '',
     '### askUser — Questions',
-    'Ask the user when you need clarification, preferences, or decisions. Provide concrete options when possible. Do NOT ask yes/no questions that the user could infer from context.',
+    'Ask the user when you need clarification, preferences, or decisions. Provide concrete options when possible. Do NOT ask yes/no questions that the user could infer from context. (Only reaches a human at the top level — a sub-agent\'s askUser is auto-answered.)',
     '',
     '### notifyComplete — Done Signal',
     'Call this ONLY when the ENTIRE goal is satisfied. Not for milestones.',
@@ -167,7 +201,7 @@ async function buildResourceLoader(cwd: string) {
     '### Workflow',
     '1. Understand the request',
     '2. Call setTodos to show your plan',
-    '3. Work through items — use spawnAgent/spawnAgents for subtasks, askUser for clarification',
+    '3. Work through items one at a time, marking each complete as you finish it — use spawnAgent/spawnAgents for subtasks, askUser for clarification, messageAgent to recover from a sub-agent error, shareWithTeam/getTeamNotes to coordinate',
     '4. When ALL items are done, call notifyComplete',
   ].join('\n')
   const fullSystemPrompt = systemPrompt.trim()
@@ -307,7 +341,7 @@ async function getOrCreate(
 
   const askUserTool = {
     name: 'askUser',
-    description: 'Ask the user one or more questions with optional multiple-choice chips. Use this when you need clarification before proceeding. The user sees an interactive form; the call blocks until they submit.',
+    description: 'Ask the user one or more questions with optional multiple-choice chips. Use this when you need clarification before proceeding. For a top-level session, the user sees an interactive form and the call blocks until they submit. For a sub-agent session, this is answered automatically by the orchestrator\'s context instead — no human is involved.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -330,8 +364,22 @@ async function getOrCreate(
     },
     async execute(_id: string, params: unknown) {
       const { questions } = params as { questions: Array<{ question: string; header: string; options?: string[]; multiSelect?: boolean }> }
-      const questionId = crypto.randomUUID()
 
+      const mine = getSessions().find((s) => s.id === sessionId)
+      if (mine?.parent_id) {
+        try {
+          const parentTask = getMessages(mine.parent_id).find((m) => m.role === 'user')?.content ?? ''
+          const answers = await autoAnswerQuestion(apiBaseUrl, apiKey, modelId, parentTask, mine.title, questions)
+          const formatted = Object.entries(answers).map(([k, v]) => `${k}: ${v}`).join('\n')
+          addMessage(sessionId, 'assistant', `🤖 **Orchestrator auto-answered:**\n\n${formatted}`)
+          return { content: [{ type: 'text' as const, text: formatted }] }
+        } catch (err) {
+          console.error('[ares] auto-answer failed, falling back to human ask:', (err as Error).message)
+          // fall through to the human-ask path below
+        }
+      }
+
+      const questionId = crypto.randomUUID()
       return new Promise<{ content: [{ type: 'text'; text: string }] }>((resolve) => {
         pendingQuestions.set(questionId, (answers) => {
           const formatted = Object.entries(answers).map(([k, v]) => `${k}: ${v}`).join('\n')
@@ -346,7 +394,7 @@ async function getOrCreate(
 
   const spawnAgentTool = {
     name: 'spawnAgent',
-    description: 'Spawn a sub-agent to handle a focused subtask. Use this when a task can be cleanly decomposed into independent subtasks that each need focused attention. The sub-agent runs with the same model, tools, and workspace; it appears in the Agent Tree as a child session. This call BLOCKS until the sub-agent finishes. Good candidates: research a specific API, write a self-contained function, analyze one file, draft a section. AVOID: tasks needing ongoing coordination with the parent or access to parent-only context.',
+    description: 'Spawn a sub-agent to handle a focused subtask. Use this when a task can be cleanly decomposed into independent subtasks that each need focused attention. The sub-agent runs with the same model, tools, and workspace; it appears in the Agent Tree as a child session, and receives any existing shareWithTeam notes in its briefing. This call BLOCKS until the sub-agent finishes. If it fails, use messageAgent with its id to send corrective instructions and retry, rather than spawning a fresh one. Good candidates: research a specific API, write a self-contained function, analyze one file, draft a section. AVOID: tasks needing ongoing coordination with the parent or access to parent-only context.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -360,7 +408,9 @@ async function getOrCreate(
 
       const childDb = createSession(title, modelId, sessionId)
       childSessionIds.push(childDb.id)
-      addMessage(childDb.id, 'user', task)
+      const rootId = findRootSessionId(getSessions(), sessionId)
+      const briefing = briefWithTeamNotes(task, getTeamNotes(rootId))
+      addMessage(childDb.id, 'user', briefing)
       updateSession(childDb.id, { agent_status: 'running' })
 
       if (!win.isDestroyed()) {
@@ -377,7 +427,7 @@ async function getOrCreate(
           }
         })
         try {
-          await childPiSession.prompt(task)
+          await childPiSession.prompt(briefing)
         } finally {
           unsub()
         }
@@ -388,14 +438,15 @@ async function getOrCreate(
       } catch (err) {
         updateSession(childDb.id, { agent_status: 'error' })
         if (!win.isDestroyed()) win.webContents.send('pi:agent-status', childDb.id, 'error')
-        return { content: [{ type: 'text' as const, text: `Sub-agent failed: ${(err as Error).message}` }] }
+        const recent = getMessages(childDb.id).slice(-3).map((m) => `[${m.role}] ${(m.content ?? '').slice(0, 300)}`).join('\n')
+        return { content: [{ type: 'text' as const, text: `Sub-agent "${title}" (id: ${childDb.id}) failed: ${(err as Error).message}\n\nRecent activity:\n${recent}\n\nUse messageAgent with agentId "${childDb.id}" to send corrective instructions and retry, or spawnAgent again for a fresh attempt.` }] }
       }
     },
   }
 
   const spawnAgentsTool = {
     name: 'spawnAgents',
-    description: 'Spawn MULTIPLE sub-agents concurrently — ALL run in parallel. Blocks until ALL finish. Use for truly independent subtasks with zero coupling: e.g., research API A while writing function B while drafting doc C. Each gets its own agent session. Returns results from all. WARNING: do NOT use when subtasks share state or depend on each other — use spawnAgent sequentially instead.',
+    description: 'Spawn MULTIPLE sub-agents concurrently — ALL run in parallel. Blocks until ALL finish. Use for truly independent subtasks with zero coupling: e.g., research API A while writing function B while drafting doc C. Each gets its own agent session and receives any existing shareWithTeam notes in its briefing. Returns results from all, including an agentId for any that failed so you can use messageAgent to correct and resume it. WARNING: do NOT use when subtasks share state or depend on each other — use spawnAgent sequentially instead.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -417,22 +468,26 @@ async function getOrCreate(
     async execute(_id: string, params: unknown) {
       const { agents } = params as { agents: Array<{ task: string; title: string }> }
 
+      const rootId = findRootSessionId(getSessions(), sessionId)
+      const teamNotes = getTeamNotes(rootId)
+
       // Create all child sessions upfront so they appear immediately in the Agent Tree
       const children = agents.map(({ task, title }) => {
         const childDb = createSession(title, modelId, sessionId)
         childSessionIds.push(childDb.id)
-        addMessage(childDb.id, 'user', task)
+        const briefing = briefWithTeamNotes(task, teamNotes)
+        addMessage(childDb.id, 'user', briefing)
         updateSession(childDb.id, { agent_status: 'running' })
         if (!win.isDestroyed()) {
           win.webContents.send('pi:agent-spawned', childDb)
           win.webContents.send('pi:agent-status', childDb.id, 'running')
         }
-        return { childDb, task }
+        return { childDb, briefing }
       })
 
       // Run all in parallel
       const results = await Promise.all(
-        children.map(async ({ childDb, task }) => {
+        children.map(async ({ childDb, briefing }) => {
           let accumulated = ''
           try {
             const childPiSession = await getOrCreate(win, childDb.id, apiBaseUrl, apiKey, modelId, cwd)
@@ -442,7 +497,7 @@ async function getOrCreate(
               }
             })
             try {
-              await childPiSession.prompt(task)
+              await childPiSession.prompt(briefing)
             } finally {
               unsub()
             }
@@ -453,12 +508,91 @@ async function getOrCreate(
           } catch (err) {
             updateSession(childDb.id, { agent_status: 'error' })
             if (!win.isDestroyed()) win.webContents.send('pi:agent-status', childDb.id, 'error')
-            return { title: childDb.title, result: (err as Error).message, ok: false }
+            const recent = getMessages(childDb.id).slice(-3).map((m) => `[${m.role}] ${(m.content ?? '').slice(0, 300)}`).join('\n')
+            return { title: childDb.title, result: `${(err as Error).message}\n\nRecent activity:\n${recent}\n\nUse messageAgent with agentId "${childDb.id}" to correct and resume.`, ok: false }
           }
         })
       )
 
       const text = results.map((r) => `[${r.ok ? '✓' : '✗'} ${r.title}]\n${r.result}`).join('\n\n')
+      return { content: [{ type: 'text' as const, text }] }
+    },
+  }
+
+  const messageAgentTool = {
+    name: 'messageAgent',
+    description: 'Send a follow-up message to a sub-agent you previously spawned, and get its response. Use this after a sub-agent errors (to give corrective instructions and retry) or to continue directing a specific sub-agent instead of spawning a new one. Blocks until the sub-agent responds.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        agentId: { type: 'string' as const, description: 'The sub-agent session id (from a prior spawnAgent/spawnAgents call, or from an error report)' },
+        message: { type: 'string' as const, description: 'The message/instructions to send' },
+      },
+      required: ['agentId', 'message'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { agentId, message } = params as { agentId: string; message: string }
+      if (!childSessionIds.includes(agentId)) {
+        return { content: [{ type: 'text' as const, text: `Error: "${agentId}" is not a sub-agent you spawned in this session.` }] }
+      }
+
+      addMessage(agentId, 'user', message)
+      updateSession(agentId, { agent_status: 'running' })
+      if (!win.isDestroyed()) win.webContents.send('pi:agent-status', agentId, 'running')
+
+      let accumulated = ''
+      try {
+        const childPiSession = await getOrCreate(win, agentId, apiBaseUrl, apiKey, modelId, cwd)
+        const unsub = childPiSession.subscribe((event: any) => {
+          if (event.type === 'message_update' && event.assistantMessageEvent?.type === 'text_delta') {
+            accumulated += event.assistantMessageEvent.delta
+          }
+        })
+        try {
+          await childPiSession.prompt(message)
+        } finally {
+          unsub()
+        }
+        if (accumulated) addMessage(agentId, 'assistant', accumulated)
+        updateSession(agentId, { agent_status: 'done' })
+        if (!win.isDestroyed()) win.webContents.send('pi:agent-status', agentId, 'done')
+        return { content: [{ type: 'text' as const, text: accumulated || 'Sub-agent responded with no output.' }] }
+      } catch (err) {
+        updateSession(agentId, { agent_status: 'error' })
+        if (!win.isDestroyed()) win.webContents.send('pi:agent-status', agentId, 'error')
+        return { content: [{ type: 'text' as const, text: `Sub-agent failed again: ${(err as Error).message}` }] }
+      }
+    },
+  }
+
+  const shareWithTeamTool = {
+    name: 'shareWithTeam',
+    description: 'Share a finding, decision, or piece of information with your entire agent team (the orchestrator and all its sub-agents, including siblings). Use this when you discover something other agents in the same task tree should know — a shared convention, a blocker, an API you found. Visible to teammates via getTeamNotes, and automatically included in the task briefing of any sub-agent spawned after you share it.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        note: { type: 'string' as const, description: 'The information to share with the team' },
+      },
+      required: ['note'],
+    },
+    async execute(_id: string, params: unknown) {
+      const { note } = params as { note: string }
+      const rootId = findRootSessionId(getSessions(), sessionId)
+      const me = getSessions().find((s) => s.id === sessionId)
+      addTeamNote(rootId, sessionId, me?.title ?? 'Agent', note)
+      return { content: [{ type: 'text' as const, text: 'Shared with team.' }] }
+    },
+  }
+
+  const getTeamNotesTool = {
+    name: 'getTeamNotes',
+    description: 'Read everything your agent team (the orchestrator and sibling sub-agents in the same task tree) has shared so far via shareWithTeam. Use this to check for relevant context before starting work, or if you suspect another agent found something useful.',
+    parameters: { type: 'object' as const, properties: {} },
+    async execute() {
+      const rootId = findRootSessionId(getSessions(), sessionId)
+      const notes = getTeamNotes(rootId)
+      if (notes.length === 0) return { content: [{ type: 'text' as const, text: 'No team notes yet.' }] }
+      const text = notes.map((n) => `[${n.from_title}] ${n.note}`).join('\n')
       return { content: [{ type: 'text' as const, text }] }
     },
   }
@@ -486,7 +620,7 @@ async function getOrCreate(
 
   const setTodosTool = {
     name: 'setTodos',
-    description: 'Set the task plan (TODO list) for the current session. Call this at the START of any multi-step task to outline your plan. The user sees these as a live checklist. Call AGAIN to mark items complete as you progress. This replaces the ENTIRE list each call — always pass ALL current items. This is your plan mode: before starting complex work, call setTodos first to show the user your intended approach, then work through the list item by item.',
+    description: 'Set the task plan (TODO list) for the current session. Call this at the START of any multi-step task to outline your plan. The user sees these as a live checklist. Mark items complete ONE AT A TIME, immediately after finishing each — call setTodos again right then with just that item flipped to completed:true, before starting the next item. Never batch multiple completions into one call at the end. This replaces the ENTIRE list each call — always pass ALL current items (not just the changed one). If you start a genuinely new, unrelated plan, call setTodos with ONLY the new plan\'s items — this clears the old list, don\'t carry stale items forward. This is your plan mode: before starting complex work, call setTodos first to show the user your intended approach, then work through the list item by item.',
     parameters: {
       type: 'object' as const,
       properties: {
@@ -547,9 +681,10 @@ async function getOrCreate(
     model,
     cwd: effectiveCwd,
     tools: ['read', 'bash', 'edit', 'write', 'grep', 'find', 'ls',
-            'spawnAgent', 'spawnAgents', 'askUser', 'setTodos', 'notifyComplete', 'webSearch'],
+            'spawnAgent', 'spawnAgents', 'askUser', 'setTodos', 'notifyComplete', 'webSearch',
+            'messageAgent', 'shareWithTeam', 'getTeamNotes'],
     resourceLoader,
-    customTools: [...mcpTools, askUserTool, spawnAgentTool, spawnAgentsTool, notifyCompleteTool, setTodosTool, webSearchTool],
+    customTools: [...mcpTools, askUserTool, spawnAgentTool, spawnAgentsTool, notifyCompleteTool, setTodosTool, webSearchTool, messageAgentTool, shareWithTeamTool, getTeamNotesTool],
   })
 
   sessions.set(sessionId, { session, settingsKey: key, mcpClients })
