@@ -77,7 +77,7 @@ export function Select({
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-full min-w-[220px] rounded-lg border border-border bg-popover shadow-2xl">
+        <div className="surface-overlay absolute left-0 top-full z-50 mt-1 w-full min-w-[220px] rounded-lg border border-border">
           {searchable && (
             <div className="flex items-center gap-2 border-b border-border px-3 py-2">
               <SearchIcon className="size-3.5 shrink-0 text-muted-foreground" />
