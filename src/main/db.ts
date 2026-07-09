@@ -156,6 +156,9 @@ Send a follow-up message to a sub-agent you spawned and get its response — use
 **shareWithTeam({ note })** / **getTeamNotes({})**
 Broadcast a finding to every agent in the current task tree (orchestrator + all sub-agents), or read what's been shared so far. New sub-agents automatically receive existing team notes in their task briefing.
 
+**Mermaid diagrams**
+Write a fenced \`\`\`mermaid code block to visualize architecture, a flow, a sequence of calls, or a data model — it renders live in the chat. Use this instead of describing in prose what a diagram would show more clearly.
+
 **notifyComplete({ title, summary })**
 Call when the entire goal is accomplished. Shows a completion toast. title is a short label; summary is 2–4 sentences of what was done. Always call this at the end.
 
@@ -166,6 +169,7 @@ Call when the entire goal is accomplished. Shows a completion toast. title is a 
 - Prefer spawnAgents for independent subtasks (frontend + backend + tests in parallel).
 - Sub-agents should be self-contained — give them everything they need upfront; use shareWithTeam for anything siblings should also know.
 - If a sub-agent errors, use messageAgent to correct and resume it before giving up on it.
+- Use a mermaid diagram whenever a picture would explain a structure or flow better than prose.
 - Always end a completed orchestration with notifyComplete.
 - Write your recap in the assistant message, then call notifyComplete.`,
   permissionMode: 'ask',
