@@ -27,6 +27,51 @@
 
   --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
   --font-display: "Orbitron", sans-serif;
+
+  /* Elevation — shadow scale (dark-mode tuned: black-based shadows + faint highlight for a lifted edge) */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 20px -4px rgb(0 0 0 / 0.55), 0 4px 8px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 20px 32px -8px rgb(0 0 0 / 0.6), 0 8px 12px -6px rgb(0 0 0 / 0.4);
+  --shadow-inset-sm: inset 0 1px 2px 0 rgb(0 0 0 / 0.45);
+  --shadow-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.04);
+
+  /* Surface gradients — faint depth on card/panel backgrounds instead of flat fills */
+  --gradient-surface: linear-gradient(180deg, rgb(255 255 255 / 0.03) 0%, rgb(255 255 255 / 0) 100%);
+  --gradient-surface-raised: linear-gradient(180deg, rgb(255 255 255 / 0.05) 0%, rgb(255 255 255 / 0) 40%);
+  --gradient-primary: linear-gradient(180deg, color-mix(in oklab, var(--color-primary) 100%, white 8%) 0%, var(--color-primary) 100%);
+
+  /* Two-tier border strength for elevation hierarchy */
+  --color-border-subtle: #1f1f1f;
+  --color-border-strong: #3a3a3a;
+
+  /* Elevated surfaces, distinct from flat --color-card, for popovers/modals/floating panels */
+  --color-surface-raised: #151515;
+  --color-surface-overlay: #1c1c1c;
+}
+
+/* Skeuomorphic surface + press-state helpers, used by ui/ primitives and panels */
+.surface-card {
+  background-image: var(--gradient-surface);
+  box-shadow: var(--shadow-sm), var(--shadow-highlight);
+}
+.surface-raised {
+  background-color: var(--color-surface-raised);
+  background-image: var(--gradient-surface-raised);
+  box-shadow: var(--shadow-md), var(--shadow-highlight);
+}
+.surface-overlay {
+  background-color: var(--color-surface-overlay);
+  background-image: var(--gradient-surface-raised);
+  box-shadow: var(--shadow-xl), var(--shadow-highlight);
+}
+.press-effect {
+  transition: box-shadow 120ms ease, transform 120ms ease;
+}
+.press-effect:active {
+  box-shadow: var(--shadow-inset-sm);
+  transform: translateY(0.5px);
 }
 
 html, body, #root {

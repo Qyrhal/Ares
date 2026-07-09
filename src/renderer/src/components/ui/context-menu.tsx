@@ -51,7 +51,7 @@ export function ContextMenu({ entries, x, y, onClose }: ContextMenuProps): React
     <div
       ref={ref}
       style={{ position: 'fixed', left: adjustedX, top: adjustedY, zIndex: 9999 }}
-      className="min-w-[180px] rounded-lg border border-border bg-popover p-1 shadow-2xl"
+      className="surface-overlay min-w-[180px] rounded-lg border border-border p-1"
     >
       {entries.map((entry, i) => {
         if ('separator' in entry) {
