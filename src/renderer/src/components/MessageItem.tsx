@@ -402,7 +402,7 @@ export function MessageItem({ message, onReply, onEdit, onDelete, onReact }: Mes
           </div>
         ) : message.content && (
           isUser ? (
-            <div className="markdown-content rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed">
+            <div className="markdown-content rounded-2xl rounded-tr-sm bg-primary text-primary-foreground px-4 py-2.5 text-sm leading-relaxed shadow-sm">
               <MessageContent content={message.content} />
             </div>
           ) : (

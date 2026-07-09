@@ -51,9 +51,9 @@ function AgentCard({
     <button
       onClick={onSelect}
       className={cn(
-        'group flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:shadow-md',
+        'surface-card group flex flex-col gap-2 rounded-xl border p-4 text-left transition-all hover:shadow-md',
         isActive
-          ? 'border-primary/40 bg-primary/5 shadow-sm shadow-primary/10'
+          ? 'border-primary/40 bg-primary/5 shadow-md'
           : 'border-border bg-card hover:border-border/80 hover:bg-accent/30'
       )}
     >
@@ -116,7 +116,7 @@ export function AgentDashboard({ sessions, activeSessionId, onSelectSession, onS
         <div className="flex-1" />
         <button
           onClick={() => setShowSpawn(true)}
-          className="flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          className="press-effect flex items-center gap-1.5 rounded-lg border border-border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
         >
           <Plus className="size-3.5" />
           Spawn Agent
