@@ -221,9 +221,12 @@ describe('Session groups — context menu', () => {
     const moveBtn = screen.getByText('Move to group')
     fireEvent.click(moveBtn)
 
-    expect(findInDocument('Research')).toBeInTheDocument()
-    expect(findInDocument('Bugfixes')).toBeInTheDocument()
-    expect(findInDocument('Ungrouped')).toBeInTheDocument()
+    // Group names appear both in group headers and submenu — use getAllByText
+    const researchBtns = screen.getAllByText('Research')
+    expect(researchBtns.length).toBeGreaterThanOrEqual(1)
+    expect(researchBtns[researchBtns.length - 1].closest('button')).toHaveTextContent('Research')
+    expect(screen.getAllByText('Bugfixes').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Ungrouped')).toBeInTheDocument()
   })
 })
 
