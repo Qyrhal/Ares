@@ -799,7 +799,7 @@ export default function App(): React.ReactElement {
                 onClose={(p) => { store.closeTab(p); store.removeTabsByPath(p, false) }}
               />
             ) : activeTab?.type === 'session' && activeSession ? (
-              <>
+              <div className="flex flex-1 flex-col min-h-0">
                 <ChatTabBar
                   tabs={[
                     { id: activeSession.id, title: activeSession.title, isSideChat: false },
@@ -922,7 +922,7 @@ export default function App(): React.ReactElement {
                     )
                   })()}
                 </div>
-              </>
+              </div>
             ) : (
               <EmptyMain onNewSession={handleNewSession} onOpenFolder={handleOpenFolder} />
             )}
