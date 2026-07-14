@@ -4,6 +4,7 @@ import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, Ag
 import { ActivityBar } from '@/components/ActivityBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TabBar } from '@/components/TabBar'
+import { ChatTabBar, type ChatTab } from '@/components/ChatTabBar'
 import { ChatView } from '@/components/ChatView'
 import { CommandPalette, type CommandEntry } from '@/components/CommandPalette'
 import { TabSwitcher } from '@/components/TabSwitcher'
@@ -205,6 +206,20 @@ export default function App(): React.ReactElement {
       store.setTodos(raw.map(parseTodo))
     })
   }, [activeSessionTab?.id])
+
+  // Load side chat messages when side chat session changes
+  useEffect(() => {
+    const scId = store.sideChatSessionId
+    if (!scId) { store.setSideChatMessages([]); return }
+    el.db.getMessages(scId).then((raw) => {
+      const msgs = raw.map(parseMessage)
+      const stale = msgs.filter((m) => m.role === 'tool' && m.toolStatus === 'running')
+      for (const m of stale) el.db.updateMessage(m.id, { tool_status: 'done' })
+      store.setSideChatMessages(msgs.map((m) =>
+        m.role === 'tool' && m.toolStatus === 'running' ? { ...m, toolStatus: 'done' } : m
+      ))
+    })
+  }, [store.sideChatSessionId])
 
   // Git badge — poll status every 30s to show pending changes/ahead count
   useEffect(() => {
@@ -657,6 +672,59 @@ export default function App(): React.ReactElement {
     if (tab?.type === 'session') handleSelectSession(tab.id)
   }, [handleSelectSession])
 
+  // ── Side Chat operations ──────────────────────────────────────────────────────
+  const handleOpenSideChat = useCallback(async () => {
+    const currentSess = useAppStore.getState().sessions.find(
+      (s) => s.id === useAppStore.getState().activeTabId
+    )
+    if (!currentSess) return
+
+    const currentWp = useAppStore.getState().workspacePath
+    const raw = await el.db.createSession(
+      'Side chat',
+      currentSess.model || store.settings.defaultModel,
+      null,
+      true
+    )
+    const session = parseSession(raw)
+    if (currentWp) {
+      await el.db.updateSession(session.id, { workspace_path: currentWp })
+      session.workspacePath = currentWp
+    }
+    store.addSession(session)
+    store.setSideChat(session.id)
+    store.setSideChatMessages([])
+    store.setSideChatLoading(false)
+    // Load side chat messages (empty for new session)
+    el.db.getMessages(session.id).then((raw) => {
+      store.setSideChatMessages(raw.map(parseMessage))
+    })
+  }, [store])
+
+  const handleCloseSideChat = useCallback(() => {
+    store.setSideChat(null)
+    store.setSideChatMessages([])
+    store.setSideChatLoading(false)
+  }, [store])
+
+  const handlePromoteSideChat = useCallback(async () => {
+    const sideChatId = useAppStore.getState().sideChatSessionId
+    if (!sideChatId) return
+
+    const session = useAppStore.getState().sessions.find((s) => s.id === sideChatId)
+    if (!session) return
+
+    await el.db.updateSession(sideChatId, { is_side_chat: false })
+    store.updateSession(sideChatId, { isSideChat: false })
+    store.openSessionTab(session)
+    await el.db.getMessages(sideChatId).then((raw) => {
+      store.setMessages(raw.map(parseMessage))
+    })
+    store.setSideChat(null)
+    store.setSideChatMessages([])
+    store.setSideChatLoading(false)
+  }, [store])
+
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className={cn('flex flex-col h-screen w-screen overflow-hidden bg-background', store.zenMode && 'zen-mode')}>
@@ -732,67 +800,128 @@ export default function App(): React.ReactElement {
               />
             ) : activeTab?.type === 'session' && activeSession ? (
               <>
-                <ChatView
-                  messages={store.messages}
-                  sessionTitle={activeSession.title}
-                  isLoading={store.isLoading}
-                  onSuggestion={(text) => handleSend(text, [])}
-                  todos={store.todos}
-                  onReply={handleReply}
-                  onEdit={handleEditMessage}
-                  onDelete={handleDeleteMessage}
-                  onReact={handleReact}
-                />
-                {pendingPerm && (
-                  <PermissionPrompt
-                    toolName={pendingPerm.toolName}
-                    toolArgs={pendingPerm.toolArgs}
-                    onApprove={handlePermApprove}
-                    onDeny={handlePermDeny}
-                  />
-                )}
-                {pendingQuestion?.sessionId === activeSession.id && (
-                  <AgentQuestionCard
-                    questions={pendingQuestion.questions}
-                    onSubmit={handleQuestionSubmit}
-                  />
-                )}
-                <InputBar
-                  onSend={handleSend}
-                  onCommand={handleCommand}
-                  onRevealInExplorer={() => {
-                    if (store.workspacePath) {
-                      store.setActiveView('explorer')
+                <ChatTabBar
+                  tabs={[
+                    { id: activeSession.id, title: activeSession.title, isSideChat: false },
+                    ...(store.sideChatSessionId
+                      ? [{
+                          id: store.sideChatSessionId,
+                          title: store.sessions.find((s) => s.id === store.sideChatSessionId)?.title ?? 'Side chat',
+                          isSideChat: true,
+                        }]
+                      : []),
+                  ]}
+                  activeTabId={store.activeTabId}
+                  sideChatSessionId={store.sideChatSessionId}
+                  onSelectTab={(id) => {
+                    if (id === store.sideChatSessionId) {
+                      // Activating side chat tab - promote to main
+                      handlePromoteSideChat()
                     } else {
-                      handleOpenFolder()
+                      handleSelectTab(id)
                     }
                   }}
-                  disabled={store.isLoading}
-                  placeholder={`Ask ${activeSession.model || store.settings.defaultModel}…`}
-                  workspacePath={store.workspacePath}
-                  fileNodes={store.fileNodes}
-                  apiBaseUrl={store.settings.apiBaseUrl}
-                  apiKey={store.settings.apiKey}
-                  recentProjects={store.recentProjects}
-                  onSelectProject={handleSelectProject}
-                  onOpenFinder={handleOpenFolder}
-                  currentModel={activeSession.model || store.settings.defaultModel}
-                  messages={store.messages}
-                  effort={activeSession.effort ?? 'medium'}
-                  onEffortChange={(e) => {
-                    store.updateSession(activeSession.id, { effort: e as EffortLevel })
-                    el.db.updateSession(activeSession.id, { effort: e })
+                  onCloseTab={(id) => {
+                    if (id === store.sideChatSessionId) {
+                      handleCloseSideChat()
+                    }
                   }}
-                  permissionMode={activeSession.permissionMode ?? store.settings.permissionMode}
-                  onPermissionModeChange={(m) => {
-                    store.updateSession(activeSession.id, { permissionMode: m })
-                    el.db.updateSession(activeSession.id, { permissionMode: m })
-                  }}
-                  pluginSkills={agentSkills}
-                  pluginCommands={agentCommands}
-                  replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
-                  onCancelReply={handleCancelReply}
+                  onNewSideChat={handleOpenSideChat}
                 />
+                <div className={cn('flex flex-1 overflow-hidden min-h-0', store.sideChatSessionId && 'divide-x divide-border')}>
+                  <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
+                    <ChatView
+                      messages={store.messages}
+                      sessionTitle={activeSession.title}
+                      isLoading={store.isLoading}
+                      onSuggestion={(text) => handleSend(text, [])}
+                      todos={store.todos}
+                      onReply={handleReply}
+                      onEdit={handleEditMessage}
+                      onDelete={handleDeleteMessage}
+                      onReact={handleReact}
+                    />
+                    {pendingPerm && (
+                      <PermissionPrompt
+                        toolName={pendingPerm.toolName}
+                        toolArgs={pendingPerm.toolArgs}
+                        onApprove={handlePermApprove}
+                        onDeny={handlePermDeny}
+                      />
+                    )}
+                    {pendingQuestion?.sessionId === activeSession.id && (
+                      <AgentQuestionCard
+                        questions={pendingQuestion.questions}
+                        onSubmit={handleQuestionSubmit}
+                      />
+                    )}
+                    <InputBar
+                      onSend={handleSend}
+                      onCommand={handleCommand}
+                      onRevealInExplorer={() => {
+                        if (store.workspacePath) {
+                          store.setActiveView('explorer')
+                        } else {
+                          handleOpenFolder()
+                        }
+                      }}
+                      disabled={store.isLoading}
+                      placeholder={`Ask ${activeSession.model || store.settings.defaultModel}…`}
+                      workspacePath={store.workspacePath}
+                      fileNodes={store.fileNodes}
+                      apiBaseUrl={store.settings.apiBaseUrl}
+                      apiKey={store.settings.apiKey}
+                      recentProjects={store.recentProjects}
+                      onSelectProject={handleSelectProject}
+                      onOpenFinder={handleOpenFolder}
+                      currentModel={activeSession.model || store.settings.defaultModel}
+                      messages={store.messages}
+                      effort={activeSession.effort ?? 'medium'}
+                      onEffortChange={(e) => {
+                        store.updateSession(activeSession.id, { effort: e as EffortLevel })
+                        el.db.updateSession(activeSession.id, { effort: e })
+                      }}
+                      permissionMode={activeSession.permissionMode ?? store.settings.permissionMode}
+                      onPermissionModeChange={(m) => {
+                        store.updateSession(activeSession.id, { permissionMode: m })
+                        el.db.updateSession(activeSession.id, { permissionMode: m })
+                      }}
+                      pluginSkills={agentSkills}
+                      pluginCommands={agentCommands}
+                      replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
+                      onCancelReply={handleCancelReply}
+                    />
+                  </div>
+
+                  {/* ── Side Chat Pane ──────────────────────────────────────────── */}
+                  {store.sideChatSessionId && (() => {
+                    const sideSession = store.sessions.find((s) => s.id === store.sideChatSessionId)
+                    if (!sideSession) return null
+                    return (
+                      <div className="flex flex-1 flex-col min-w-0 overflow-hidden border-l border-border bg-background/50">
+                        <div className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-muted-foreground border-b border-border bg-card/30">
+                          <span className="font-medium text-primary/80">Side Chat</span>
+                          <button
+                            onClick={handleCloseSideChat}
+                            className="ml-auto flex size-4 items-center justify-center rounded hover:bg-accent"
+                            aria-label="Close side chat"
+                            title="Close side chat"
+                          >
+                            <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5">
+                              <path d="M4 4l8 8M12 4l-8 8" />
+                            </svg>
+                          </button>
+                        </div>
+                        <ChatView
+                          messages={store.sideChatMessages}
+                          sessionTitle={sideSession.title}
+                          isLoading={store.sideChatIsLoading}
+                          onSuggestion={(text) => handleOpenSideChat()}
+                        />
+                      </div>
+                    )
+                  })()}
+                </div>
               </>
             ) : (
               <EmptyMain onNewSession={handleNewSession} onOpenFolder={handleOpenFolder} />

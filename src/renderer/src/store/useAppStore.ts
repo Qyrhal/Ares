@@ -30,6 +30,11 @@ interface AppStore {
   messages: Message[]
   isLoading: boolean
 
+  // ── Side Chat ──────────────────────────────────────────────────────────────
+  sideChatSessionId: string | null
+  sideChatMessages: Message[]
+  sideChatIsLoading: boolean
+
   // ── Git ─────────────────────────────────────────────────────────────────────
   commits: GitCommit[]
   activeCommit: string | null
@@ -96,6 +101,11 @@ interface AppStore {
   updateTodo: (id: string, patch: Partial<Todo>) => void
   removeTodo: (id: string) => void
 
+  // ── Side Chat actions ──────────────────────────────────────────────────────
+  setSideChat: (id: string | null) => void
+  setSideChatMessages: (msgs: Message[]) => void
+  setSideChatLoading: (v: boolean) => void
+
   // ── Deleted message (for undo) ──────────────────────────────────────────────
   setLastDeletedMessage: (msg: Message | null) => void
   clearLastDeletedMessage: () => void
@@ -126,6 +136,11 @@ export const useAppStore = create<AppStore>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   todos: [],
   lastDeletedMessage: null,
+
+  // ── Side Chat initial state ─────────────────────────────────────────────────
+  sideChatSessionId: null,
+  sideChatMessages: [],
+  sideChatIsLoading: false,
 
   // ── UI actions ───────────────────────────────────────────────────────────────
   setActiveView: (v) => set({ activeView: v }),
@@ -281,4 +296,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   // ── Deleted message actions ─────────────────────────────────────────────────
   setLastDeletedMessage: (msg) => set({ lastDeletedMessage: msg }),
   clearLastDeletedMessage: () => set({ lastDeletedMessage: null }),
+
+  // ── Side Chat actions ──────────────────────────────────────────────────────
+  setSideChat: (id) => set({ sideChatSessionId: id }),
+  setSideChatMessages: (msgs) => set({ sideChatMessages: msgs }),
+  setSideChatLoading: (v) => set({ sideChatIsLoading: v }),
 }))
