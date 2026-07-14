@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import { History, FolderOpen, Cpu, Plug, PlugZap } from 'lucide-react'
 import { Checkpoint } from '@/types'
+import { ModelHoverCard } from './ModelHoverCard'
 import { cn } from '@/lib/utils'
 
 const el = window.electron
@@ -62,10 +63,12 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, className
       )}
 
       {currentModel && (
-        <span className="flex items-center gap-1 shrink-0">
-          <Cpu className="size-3" />
-          {currentModel.length > 20 ? currentModel.slice(0, 20) + '…' : currentModel}
-        </span>
+        <ModelHoverCard modelId={currentModel}>
+          <span className="flex items-center gap-1 shrink-0 cursor-default">
+            <Cpu className="size-3" />
+            {currentModel.length > 20 ? currentModel.slice(0, 20) + '…' : currentModel}
+          </span>
+        </ModelHoverCard>
       )}
 
       {/* MCP status */}
