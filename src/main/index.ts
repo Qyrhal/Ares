@@ -279,7 +279,39 @@ function registerIpcHandlers(): void {
     return res.json()
   })
 
-  // Tools — file operations for AI to read/edit/create files
+  // Inline AI edit — calls chat completions to transform code
+  ipcMain.handle('inlineEdit:apply', async (_, code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string) => {
+    const url = (apiBaseUrl.replace(/\/$/, '')) + '/chat/completions'
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+    const body = {
+      model: model || 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: 'You are a code editing assistant. Given a code snippet and an instruction, return ONLY the modified code with no explanation, no markdown formatting, no backticks. Preserve the original language, style, and conventions.',
+        },
+        {
+          role: 'user',
+          content: `Code:\n\`\`\`\n${code}\n\`\`\`\n\nInstruction: ${instruction}`,
+        },
+      ],
+      temperature: 0.1,
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+    const json = await res.json()
+    const content: string = json.choices?.[0]?.message?.content ?? ''
+    // Strip any markdown code fence wrapping the LLM might include
+    return content.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim()
+  })
   ipcMain.handle('tools:readFile', async (_, p: string) => {
     return fs.readFileSync(p, 'utf-8')
   })
