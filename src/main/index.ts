@@ -126,7 +126,7 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.setIcon(join(__dirname, '../../resources/icon.png'))
   }
-  app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w))
+  app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w, { zoom: true }))
   registerIpcHandlers()
   createWindow()
   app.on('activate', () => {
@@ -270,13 +270,38 @@ function registerIpcHandlers(): void {
   ipcMain.handle('mcp:status', () => getMcpStatus())
 
   // API — proxy fetch through main process to avoid CORS
-  ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string) => {
+  ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: *** => {
     const url = baseUrl.replace(/\/$/, '') + '/models'
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) })
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
     return res.json()
+  })
+
+  // Inline edit — AI-powered code editing via LLM
+  ipcMain.handle('inlineEdit:apply', async (_, code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: *** => {
+    const systemPrompt = 'You are a code editing assistant. Given a code snippet and an edit instruction, output ONLY the complete modified code with no explanation, no markdown formatting, no backticks.'
+    const url = apiBaseUrl.replace(/\/$/, '') + '/chat/completions'
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
+    const body = {
+      model,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: `Code:\n\`\`\`\n${code}\n\`\`\`\n\nInstruction: ${instruction}` },
+      ],
+      temperature: 0.1,
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(30_000),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`)
+    const data = await res.json()
+    return data.choices[0].message.content
   })
 
   // Tools — file operations for AI to read/edit/create files
