@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock } from 'lucide-react'
+import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock, ChevronDown, ChevronRight, Folder, Plus, Pencil, Trash2 } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
-import { Session, FileNode, ActivityView } from '@/types'
+import { Session, SessionGroup, FileNode, ActivityView } from '@/types'
+import { useAppStore } from '@/store/useAppStore'
 import { FileTree, FileTreeProps } from './FileTree'
 import { GitPane } from './GitPane'
 import { ErrorBoundary } from './ErrorBoundary'
@@ -100,6 +101,20 @@ function SessionsPane({
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Session group state ────────────────────────────────────────────────────
+  const sessionGroups = useAppStore((s) => s.sessionGroups)
+  const addSessionGroup = useAppStore((s) => s.addSessionGroup)
+  const renameSessionGroup = useAppStore((s) => s.renameSessionGroup)
+  const removeSessionGroup = useAppStore((s) => s.removeSessionGroup)
+  const setSessionGroup = useAppStore((s) => s.setSessionGroup)
+
+  const [groupContextMenu, setGroupContextMenu] = useState<{ group: SessionGroup; x: number; y: number } | null>(null)
+  const [moveToGroupSession, setMoveToGroupSession] = useState<Session | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
+  const [groupRenamingId, setGroupRenamingId] = useState<string | null>(null)
+  const [groupRenameValue, setGroupRenameValue] = useState('')
+  const groupRenameInputRef = useRef<HTMLInputElement>(null)
+
   const handleExport = useCallback(async () => {
     const active = sessions.find((s) => s.id === activeSessionId)
     if (!active) { toast.error('No active session to export'); return }
@@ -169,6 +184,52 @@ function SessionsPane({
     }
   }, [onDuplicate, onExport, onTogglePin, onDelete, handleStartRename])
 
+  // ── Group action handlers ─────────────────────────────────────────────────
+  const handleAddGroup = useCallback(() => {
+    const name = prompt('Enter group name:')
+    if (name && name.trim()) {
+      addSessionGroup(name.trim())
+    }
+  }, [addSessionGroup])
+
+  const handleGroupContextMenuAction = useCallback((action: string, group: SessionGroup) => {
+    setGroupContextMenu(null)
+    switch (action) {
+      case 'rename':
+        setGroupRenamingId(group.id)
+        setGroupRenameValue(group.name)
+        setTimeout(() => groupRenameInputRef.current?.focus(), 50)
+        break
+      case 'delete':
+        removeSessionGroup(group.id)
+        break
+    }
+  }, [removeSessionGroup])
+
+  const handleFinishGroupRename = useCallback(() => {
+    if (groupRenamingId && groupRenameValue.trim()) {
+      renameSessionGroup(groupRenamingId, groupRenameValue.trim())
+    }
+    setGroupRenamingId(null)
+    setGroupRenameValue('')
+  }, [groupRenamingId, groupRenameValue, renameSessionGroup])
+
+  const toggleCollapse = useCallback((groupId: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
+  }, [])
+
+  const handleMoveToGroup = useCallback((groupId: string | null) => {
+    if (moveToGroupSession) {
+      setSessionGroup(moveToGroupSession.id, groupId)
+      setMoveToGroupSession(null)
+    }
+  }, [moveToGroupSession, setSessionGroup])
+
   // Close context menu on click outside or Escape
   useEffect(() => {
     if (!contextMenu) return
@@ -206,9 +267,6 @@ function SessionsPane({
     for (const arr of childrenOf.values()) arr.sort((a, b) => a.createdAt - b.createdAt)
     return roots.flatMap((root) => [root, ...(childrenOf.get(root.id) ?? [])])
   }
-
-  const pinned = orderWithChildren(sessions.filter((s) => s.pinned))
-  const unpinned = orderWithChildren(sessions.filter((s) => !s.pinned))
 
   const renderSession = (s: Session) => {
     const isSubAgent = !!s.parentId
@@ -294,6 +352,30 @@ function SessionsPane({
     </button>
   )}
 
+  const pinned = orderWithChildren(sessions.filter((s) => s.pinned))
+  const unpinned = sessions.filter((s) => !s.pinned)
+
+  // Group unpinned sessions by their group field
+  const groupedSessions = new Map<string, Session[]>()
+  const ungrouped: Session[] = []
+  for (const s of unpinned) {
+    if (s.group && sessionGroups.some((g) => g.id === s.group)) {
+      const arr = groupedSessions.get(s.group) ?? []
+      arr.push(s)
+      groupedSessions.set(s.group, arr)
+    } else {
+      ungrouped.push(s)
+    }
+  }
+  // Apply parent-child ordering within each group and ungrouped
+  for (const [id, arr] of groupedSessions) {
+    groupedSessions.set(id, orderWithChildren(arr))
+  }
+  const orderedUngrouped = orderWithChildren(ungrouped)
+
+  // Sort groups by createdAt
+  const orderedGroups = [...sessionGroups].sort((a, b) => a.createdAt - b.createdAt)
+
   return (
     <>
       <div className="flex h-9 shrink-0 items-center px-3 border-b border-border">
@@ -301,6 +383,13 @@ function SessionsPane({
           Sessions
         </span>
         <div className="ml-auto flex items-center gap-0.5">
+          <button
+            onClick={handleAddGroup}
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title="Add session group"
+          >
+            <Plus className="size-3.5" />
+          </button>
           <button
             onClick={() => setViewMode(viewMode === 'list' ? 'timeline' : 'list')}
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -329,6 +418,7 @@ function SessionsPane({
       {viewMode === 'timeline' ? (
         <AgentTimeline
           sessions={sessions}
+          sessionGroups={sessionGroups}
           activeSessionId={activeSessionId}
           onSelectSession={onSelect}
         />
@@ -347,22 +437,83 @@ function SessionsPane({
           </div>
         )}
 
+        {/* ── Pinned section ─────────────────────────────────────────────── */}
         {pinned.length > 0 && (
           <>
             <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
               Pinned
             </p>
             {pinned.map(renderSession)}
-            {unpinned.length > 0 && (
+            {(orderedGroups.length > 0 || orderedUngrouped.length > 0) && (
               <div className="my-1 border-t border-border" />
             )}
           </>
         )}
 
-        {unpinned.map(renderSession)}
+        {/* ── Group sections ─────────────────────────────────────────────── */}
+        {orderedGroups.map((group) => {
+          const groupSessions = groupedSessions.get(group.id) ?? []
+          const isCollapsed = collapsedGroups.has(group.id)
+          const isRenaming = groupRenamingId === group.id
+          return (
+            <div key={group.id} className="flex flex-col gap-0.5">
+              <div
+                className="group/header flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent/50 cursor-pointer select-none"
+                onClick={() => toggleCollapse(group.id)}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setGroupContextMenu({ group, x: e.clientX, y: e.clientY })
+                }}
+              >
+                {isCollapsed ? (
+                  <ChevronRight className="size-3 shrink-0" />
+                ) : (
+                  <ChevronDown className="size-3 shrink-0" />
+                )}
+                <Folder className="size-3 shrink-0 text-muted-foreground/70" />
+                {isRenaming ? (
+                  <input
+                    ref={groupRenameInputRef}
+                    type="text"
+                    value={groupRenameValue}
+                    onChange={(e) => setGroupRenameValue(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') { e.stopPropagation(); handleFinishGroupRename() }
+                      if (e.key === 'Escape') { e.stopPropagation(); setGroupRenamingId(null) }
+                    }}
+                    onBlur={handleFinishGroupRename}
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex-1 bg-transparent text-xs font-medium outline-none border-b border-primary/40"
+                    autoFocus
+                  />
+                ) : (
+                  <span className="flex-1 truncate">{group.name}</span>
+                )}
+                <span className="ml-auto text-[10px] tabular-nums text-muted-foreground/50">
+                  {groupSessions.length}
+                </span>
+              </div>
+              {!isCollapsed && groupSessions.map(renderSession)}
+            </div>
+          )
+        })}
+
+        {/* ── Ungrouped section ──────────────────────────────────────────── */}
+        {orderedUngrouped.length > 0 && (
+          <>
+            {orderedGroups.length > 0 && (
+              <div className="my-1 border-t border-border" />
+            )}
+            <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/40">
+              Ungrouped ({orderedUngrouped.length})
+            </p>
+            {orderedUngrouped.map(renderSession)}
+          </>
+        )}
       </div>
       )}
-      {/* ── Context menu ──────────────────────────────────────────────────── */}
+
+      {/* ── Session context menu ─────────────────────────────────────────── */}
       {contextMenu && (
         <div
           className="fixed z-50 w-40 rounded-lg border border-border bg-card py-1 shadow-xl"
@@ -385,6 +536,43 @@ function SessionsPane({
             onClick={() => handleContextMenuAction('export', contextMenu.session)}
           />
           <div className="mx-2 my-1 border-t border-border" />
+          {sessionGroups.length > 0 && (
+            <>
+              <div className="relative">
+                <button
+                  onClick={() => setMoveToGroupSession(contextMenu.session)}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-foreground hover:bg-accent transition-colors"
+                >
+                  Move to group
+                </button>
+                {moveToGroupSession?.id === contextMenu.session.id && (
+                  <div
+                    className="absolute left-full top-0 z-50 w-36 rounded-lg border border-border bg-card py-1 shadow-xl ml-1"
+                    onMouseLeave={() => setMoveToGroupSession(null)}
+                  >
+                    {sessionGroups.map((g) => (
+                      <button
+                        key={g.id}
+                        onClick={() => handleMoveToGroup(g.id)}
+                        className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-foreground hover:bg-accent transition-colors"
+                      >
+                        <Folder className="size-3" />
+                        {g.name}
+                      </button>
+                    ))}
+                    <div className="mx-2 my-1 border-t border-border" />
+                    <button
+                      onClick={() => handleMoveToGroup(null)}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent transition-colors"
+                    >
+                      Ungrouped
+                    </button>
+                  </div>
+                )}
+              </div>
+              <div className="mx-2 my-1 border-t border-border" />
+            </>
+          )}
           <ContextMenuItem
             label={contextMenu.session.pinned ? 'Unpin' : 'Pin'}
             icon="Pin"
@@ -396,6 +584,28 @@ function SessionsPane({
             icon="Trash2"
             destructive
             onClick={() => handleContextMenuAction('delete', contextMenu.session)}
+          />
+        </div>
+      )}
+
+      {/* ── Group context menu ───────────────────────────────────────────── */}
+      {groupContextMenu && (
+        <div
+          className="fixed z-50 w-36 rounded-lg border border-border bg-card py-1 shadow-xl"
+          style={{ left: groupContextMenu.x, top: groupContextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ContextMenuItem
+            label="Rename"
+            icon="Pencil"
+            onClick={() => handleGroupContextMenuAction('rename', groupContextMenu.group)}
+          />
+          <div className="mx-2 my-1 border-t border-border" />
+          <ContextMenuItem
+            label="Delete"
+            icon="Trash2"
+            destructive
+            onClick={() => handleGroupContextMenuAction('delete', groupContextMenu.group)}
           />
         </div>
       )}

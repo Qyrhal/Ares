@@ -55,6 +55,13 @@ export interface Session {
   parentId?: string | null
   agentStatus?: AgentStatus
   isSideChat?: boolean
+  group?: string
+}
+
+export interface SessionGroup {
+  id: string
+  name: string
+  createdAt: number
 }
 
 export interface Todo {

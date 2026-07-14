@@ -203,7 +203,12 @@ const shellApi = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi }
+const inlineEditApi = {
+  apply: (code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string) =>
+    ipcRenderer.invoke('inlineEdit:apply', code, instruction, model, apiBaseUrl, apiKey),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)
