@@ -37,6 +37,7 @@ const electronMock = {
     createFolder: vi.fn().mockResolvedValue(undefined),
     rename: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
+    findFiles: vi.fn().mockResolvedValue([]),
   },
   git: {
     status: vi.fn().mockResolvedValue({ hasRepo: false, branch: '', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [] }),
@@ -114,5 +115,9 @@ const electronMock = {
 
 Object.defineProperty(window, 'electron', { value: electronMock, writable: true })
 ;(globalThis as Record<string, unknown>).__electronMock = electronMock
+
+// jsdom doesn't implement scrollIntoView
+Element.prototype.scrollIntoView = vi.fn()
+
 vi.spyOn(console, 'error').mockImplementation(() => {})
 vi.spyOn(console, 'warn').mockImplementation(() => {})
