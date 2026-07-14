@@ -237,6 +237,32 @@ export function deleteSession(id: string): void {
 
 // ── Messages ─────────────────────────────────────────────────────────────────
 
+export interface SearchResult {
+  sessionId: string
+  sessionTitle: string
+  messageId: string
+  content: string
+  role: string
+}
+
+export function searchMessages(query: string): SearchResult[] {
+  const q = query.toLowerCase()
+  const results: SearchResult[] = []
+  const store = readStore()
+  for (const s of store.sessions) {
+    if (s.title.toLowerCase().includes(q)) {
+      results.push({ sessionId: s.id, sessionTitle: s.title, messageId: '', content: '(session title match)', role: '' })
+    }
+    const sessionMessages = store.messages.filter((m) => m.session_id === s.id)
+    for (const m of sessionMessages) {
+      if (m.content?.toLowerCase().includes(q)) {
+        results.push({ sessionId: s.id, sessionTitle: s.title, messageId: m.id, content: m.content.slice(0, 200), role: m.role })
+      }
+    }
+  }
+  return results.slice(0, 100)
+}
+
 export function getMessages(sessionId: string): DbMessage[] {
   return readStore().messages
     .filter((m) => m.session_id === sessionId)

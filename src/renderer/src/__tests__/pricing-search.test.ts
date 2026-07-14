@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { estimateCost, estimateTokens, getContextWindow } from '@/lib/pricing'
+import { fuzzyMatch } from '@/lib/search'
 
 describe('estimateTokens', () => {
   it('estimates ~4 chars per token', () => {
@@ -36,7 +37,6 @@ describe('estimateCost', () => {
 })
 
 describe('fuzzyMatch', () => {
-  const { fuzzyMatch } = require('@/lib/search')
   it('matches exact text', () => {
     expect(fuzzyMatch('hello', 'hello')).toBe(true)
   })

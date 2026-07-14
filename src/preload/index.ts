@@ -14,6 +14,7 @@ const db = {
   addTodo: (sessionId: string, text: string) => ipcRenderer.invoke('db:addTodo', sessionId, text),
   updateTodo: (id: string, updates: object) => ipcRenderer.invoke('db:updateTodo', id, updates),
   deleteTodo: (id: string) => ipcRenderer.invoke('db:deleteTodo', id),
+  searchMessages: (query: string) => ipcRenderer.invoke('db:searchMessages', query),
 }
 
 const settings = {
