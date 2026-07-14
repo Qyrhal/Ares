@@ -16,6 +16,7 @@ export interface DbSession {
   workspace_path?: string
   parent_id?: string | null
   agent_status?: string
+  is_side_chat?: boolean
 }
 
 export interface DbMessage {
@@ -201,7 +202,7 @@ export function getSessions(): DbSession[] {
     })
 }
 
-export function createSession(title: string, model = 'gpt-4o-mini', parentId?: string | null): DbSession {
+export function createSession(title: string, model = 'gpt-4o-mini', parentId?: string | null, isSideChat = false): DbSession {
   const store = readStore()
   const id = uuidv4()
   const now = Date.now()
@@ -209,6 +210,7 @@ export function createSession(title: string, model = 'gpt-4o-mini', parentId?: s
     id, title, model, created_at: now, updated_at: now,
     parent_id: parentId ?? null,
     agent_status: 'idle',
+    is_side_chat: isSideChat,
   }
   store.sessions.unshift(session)
   writeStore(store)
@@ -217,7 +219,7 @@ export function createSession(title: string, model = 'gpt-4o-mini', parentId?: s
 
 export function updateSession(
   id: string,
-  updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'workspace_path' | 'effort' | 'permissionMode' | 'agent_status'>>
+  updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'workspace_path' | 'effort' | 'permissionMode' | 'agent_status' | 'is_side_chat'>>
 ): void {
   const store = readStore()
   store.sessions = store.sessions.map((s) =>

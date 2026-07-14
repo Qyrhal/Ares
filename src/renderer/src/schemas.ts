@@ -16,6 +16,7 @@ export const RawSessionSchema = z.object({
   workspace_path: z.string().nullable().optional(),
   parent_id: z.string().nullable().optional(),
   agent_status: z.enum(['idle', 'running', 'done', 'error']).optional(),
+  is_side_chat: z.boolean().optional().default(false),
 })
 
 export const RawTodoSchema = z.object({
@@ -68,6 +69,7 @@ export function parseSession(raw: unknown): Session {
     workspacePath: r.workspace_path ?? undefined,
     parentId: r.parent_id ?? null,
     agentStatus: r.agent_status ?? 'idle',
+    isSideChat: r.is_side_chat ?? false,
   }
 }
 
