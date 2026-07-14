@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import type { Session, Message, AppSettings, FileNode, Tab, ActivityView, GitCommit, Todo } from '@/types'
+import type { Session, SessionGroup, Message, AppSettings, FileNode, Tab, ActivityView, GitCommit, Todo } from '@/types'
 
 const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
@@ -29,6 +29,7 @@ interface AppStore {
   sessions: Session[]
   messages: Message[]
   isLoading: boolean
+  sessionGroups: SessionGroup[]
 
   // ── Side Chat ──────────────────────────────────────────────────────────────
   sideChatSessionId: string | null
@@ -79,6 +80,12 @@ interface AppStore {
   removeSession: (id: string) => void
   togglePinSession: (id: string) => void
 
+  // ── Session group actions ───────────────────────────────────────────────────
+  addSessionGroup: (name: string) => string
+  renameSessionGroup: (id: string, name: string) => void
+  removeSessionGroup: (id: string) => void
+  setSessionGroup: (sessionId: string, groupId: string | null) => void
+
   setMessages: (msgs: Message[]) => void
   appendMessage: (msg: Message) => void
   removeMessage: (id: string) => void
@@ -124,6 +131,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   sessions: [],
   messages: [],
   isLoading: false,
+  sessionGroups: [],
 
   commits: [],
   activeCommit: null,
@@ -246,6 +254,34 @@ export const useAppStore = create<AppStore>((set, get) => ({
   togglePinSession: (id) => set((s) => ({
     sessions: s.sessions.map((s) =>
       s.id === id ? { ...s, pinned: !s.pinned } : s
+    ),
+  })),
+
+  // ── Session group actions ───────────────────────────────────────────────────
+  addSessionGroup: (name) => {
+    const id = crypto.randomUUID()
+    set((s) => ({
+      sessionGroups: [...s.sessionGroups, { id, name, createdAt: Date.now() }],
+    }))
+    return id
+  },
+
+  renameSessionGroup: (id, name) => set((s) => ({
+    sessionGroups: s.sessionGroups.map((g) =>
+      g.id === id ? { ...g, name } : g
+    ),
+  })),
+
+  removeSessionGroup: (id) => set((s) => ({
+    sessionGroups: s.sessionGroups.filter((g) => g.id !== id),
+    sessions: s.sessions.map((s) =>
+      s.group === id ? { ...s, group: undefined } : s
+    ),
+  })),
+
+  setSessionGroup: (sessionId, groupId) => set((s) => ({
+    sessions: s.sessions.map((s) =>
+      s.id === sessionId ? { ...s, group: groupId ?? undefined } : s
     ),
   })),
 

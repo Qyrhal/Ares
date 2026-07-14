@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useAppStore } from '@/store/useAppStore'
-import type { Session, Message, Todo, Tab } from '@/types'
+import type { Session, SessionGroup, Message, Todo, Tab } from '@/types'
 
 function mkSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -31,6 +31,7 @@ beforeEach(() => {
     tabs: [],
     activeTabId: null,
     activeView: 'chat',
+    sessionGroups: [],
   })
 })
 
@@ -447,5 +448,120 @@ describe('store — updateRunningTool', () => {
     })
     useAppStore.getState().updateRunningTool({ toolStatus: 'done' })
     expect(useAppStore.getState().messages[0].toolStatus).toBeUndefined()
+  })
+})
+
+// ── Session group actions ─────────────────────────────────────────────────────
+
+describe('store — addSessionGroup', () => {
+  it('adds a session group with generated id and createdAt', () => {
+    const id = useAppStore.getState().addSessionGroup('Research')
+    const groups = useAppStore.getState().sessionGroups
+    expect(groups).toHaveLength(1)
+    expect(groups[0].id).toBe(id)
+    expect(groups[0].name).toBe('Research')
+    expect(groups[0].createdAt).toBeGreaterThan(0)
+  })
+
+  it('adds multiple groups', () => {
+    useAppStore.getState().addSessionGroup('A')
+    useAppStore.getState().addSessionGroup('B')
+    expect(useAppStore.getState().sessionGroups).toHaveLength(2)
+  })
+
+  it('returns a unique id each call', () => {
+    const id1 = useAppStore.getState().addSessionGroup('G1')
+    const id2 = useAppStore.getState().addSessionGroup('G2')
+    expect(id1).not.toBe(id2)
+  })
+})
+
+describe('store — renameSessionGroup', () => {
+  it('renames a group by id', () => {
+    const id = useAppStore.getState().addSessionGroup('Old')
+    useAppStore.getState().renameSessionGroup(id, 'New')
+    expect(useAppStore.getState().sessionGroups[0].name).toBe('New')
+  })
+
+  it('does not affect other groups', () => {
+    const id1 = useAppStore.getState().addSessionGroup('G1')
+    useAppStore.getState().addSessionGroup('G2')
+    useAppStore.getState().renameSessionGroup(id1, 'Renamed')
+    expect(useAppStore.getState().sessionGroups[1].name).toBe('G2')
+  })
+
+  it('no-ops when id is unknown', () => {
+    useAppStore.getState().addSessionGroup('Existing')
+    useAppStore.getState().renameSessionGroup('ghost', 'Whatever')
+    expect(useAppStore.getState().sessionGroups).toHaveLength(1)
+    expect(useAppStore.getState().sessionGroups[0].name).toBe('Existing')
+  })
+})
+
+describe('store — removeSessionGroup', () => {
+  it('removes a group by id', () => {
+    const id = useAppStore.getState().addSessionGroup('Research')
+    useAppStore.getState().removeSessionGroup(id)
+    expect(useAppStore.getState().sessionGroups).toHaveLength(0)
+  })
+
+  it('removes only the specified group', () => {
+    useAppStore.getState().addSessionGroup('A')
+    const idB = useAppStore.getState().addSessionGroup('B')
+    useAppStore.getState().addSessionGroup('C')
+    useAppStore.getState().removeSessionGroup(idB)
+    expect(useAppStore.getState().sessionGroups).toHaveLength(2)
+    expect(useAppStore.getState().sessionGroups.map((g) => g.name)).toEqual(['A', 'C'])
+  })
+
+  it('ungroups sessions that belonged to the removed group', () => {
+    const gid = useAppStore.getState().addSessionGroup('Research')
+    useAppStore.getState().setSessions([
+      mkSession({ id: 's1', group: gid }),
+      mkSession({ id: 's2', group: gid }),
+      mkSession({ id: 's3' }),
+    ])
+    useAppStore.getState().removeSessionGroup(gid)
+    const sessions = useAppStore.getState().sessions
+    expect(sessions[0].group).toBeUndefined()
+    expect(sessions[1].group).toBeUndefined()
+    expect(sessions[2].group).toBeUndefined()
+  })
+
+  it('no-ops when id is unknown', () => {
+    useAppStore.getState().addSessionGroup('Existing')
+    useAppStore.getState().removeSessionGroup('ghost')
+    expect(useAppStore.getState().sessionGroups).toHaveLength(1)
+  })
+})
+
+describe('store — setSessionGroup', () => {
+  it('assigns a session to a group', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' })])
+    const gid = useAppStore.getState().addSessionGroup('Features')
+    useAppStore.getState().setSessionGroup('s1', gid)
+    expect(useAppStore.getState().sessions[0].group).toBe(gid)
+  })
+
+  it('moves a session to another group', () => {
+    const gid1 = useAppStore.getState().addSessionGroup('A')
+    const gid2 = useAppStore.getState().addSessionGroup('B')
+    useAppStore.getState().setSessions([mkSession({ id: 's1', group: gid1 })])
+    useAppStore.getState().setSessionGroup('s1', gid2)
+    expect(useAppStore.getState().sessions[0].group).toBe(gid2)
+  })
+
+  it('ungroups a session when groupId is null', () => {
+    const gid = useAppStore.getState().addSessionGroup('Features')
+    useAppStore.getState().setSessions([mkSession({ id: 's1', group: gid })])
+    useAppStore.getState().setSessionGroup('s1', null)
+    expect(useAppStore.getState().sessions[0].group).toBeUndefined()
+  })
+
+  it('no-ops when session id is unknown', () => {
+    const gid = useAppStore.getState().addSessionGroup('Features')
+    useAppStore.getState().setSessions([mkSession({ id: 's1' })])
+    useAppStore.getState().setSessionGroup('ghost', gid)
+    expect(useAppStore.getState().sessions[0].group).toBeUndefined()
   })
 })
