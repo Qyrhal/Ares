@@ -1,7 +1,7 @@
 import React from 'react'
 import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
-import { cn, formatBytes } from '@/lib/utils'
+import { cn, formatBytes, isMermaidCodeBlock, looksLikeJson } from '@/lib/utils'
 import { Message } from '@/types'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
@@ -12,7 +12,28 @@ import { Tooltip } from '@/components/ui/tooltip'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
+import hljs from 'highlight.js'
 import { toast } from 'sonner'
+
+let mermaidRenderCounter = 0
+
+// mermaid is a large library (diagram-type chunks, katex, cytoscape) — load it
+// lazily so sessions that never render a diagram don't pay for it at startup.
+let mermaidPromise: Promise<typeof import('mermaid')['default']> | null = null
+function loadMermaid(): Promise<typeof import('mermaid')['default']> {
+  if (!mermaidPromise) {
+    mermaidPromise = import('mermaid').then((mod) => {
+      mod.default.initialize({
+        startOnLoad: false,
+        theme: 'dark',
+        themeVariables: { primaryColor: '#dc2626', primaryBorderColor: '#dc2626', lineColor: '#6b6b6b' },
+        securityLevel: 'strict',
+      })
+      return mod.default
+    })
+  }
+  return mermaidPromise
+}
 
 interface MessageItemProps {
   message: Message
@@ -55,6 +76,80 @@ function fileIcon(type: string): React.ReactElement {
   return <File className="size-4" />
 }
 
+// ── Mermaid diagram ────────────────────────────────────────────────────────────
+
+function MermaidDiagram({ code }: { code: string }): React.ReactElement {
+  const containerRef = React.useRef<HTMLDivElement>(null)
+  const [error, setError] = React.useState<string | null>(null)
+  const [copied, setCopied] = React.useState(false)
+  const idRef = React.useRef(`mermaid-${++mermaidRenderCounter}`)
+
+  React.useEffect(() => {
+    let cancelled = false
+    loadMermaid()
+      .then((mermaid) => mermaid.parse(code, { suppressErrors: true })
+        .then((isValid) => {
+          if (!isValid) throw new Error('Invalid diagram syntax')
+          return mermaid.render(idRef.current, code)
+        }))
+      .then(({ svg }) => {
+        if (!cancelled && containerRef.current) {
+          containerRef.current.innerHTML = svg
+          setError(null)
+        }
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message)
+      })
+    return () => { cancelled = true }
+  }, [code])
+
+  const handleCopy = React.useCallback(() => {
+    navigator.clipboard.writeText(code).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    })
+  }, [code])
+
+  if (error) {
+    return (
+      <div className="my-1">
+        <p className="mb-1 text-[10px] text-muted-foreground">Diagram not ready yet — showing source.</p>
+        <pre className="text-[11px]"><code>{code}</code></pre>
+      </div>
+    )
+  }
+
+  return (
+    <div className="group relative my-1 overflow-x-auto rounded-lg border border-border bg-[#0d0d0d] p-3">
+      <button
+        onClick={handleCopy}
+        className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-md bg-muted/80 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground transition-opacity z-10"
+        aria-label={copied ? 'Copied' : 'Copy diagram source'}
+      >
+        {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
+      </button>
+      <div ref={containerRef} className="flex justify-center [&_svg]:max-w-full" />
+    </div>
+  )
+}
+
+// ── Generic highlighted code (for tool call input/output) ──────────────────────
+
+function HighlightedCode({ text, language }: { text: string; language?: string }): React.ReactElement {
+  const html = React.useMemo(() => {
+    try {
+      if (language && hljs.getLanguage(language)) return hljs.highlight(text, { language }).value
+      return hljs.highlightAuto(text).value
+    } catch {
+      return null
+    }
+  }, [text, language])
+
+  if (html === null) return <code>{text}</code>
+  return <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
+}
+
 // ── Code block component with copy button ─────────────────────────────────────
 
 function CodeBlock({ className, children, ...props }: React.ComponentPropsWithoutRef<'code'>): React.ReactElement {
@@ -73,6 +168,10 @@ function CodeBlock({ className, children, ...props }: React.ComponentPropsWithou
 
   if (isInline) {
     return <code className={className} {...props}>{children}</code>
+  }
+
+  if (isMermaidCodeBlock(className)) {
+    return <MermaidDiagram code={text} />
   }
 
   return (
@@ -117,13 +216,13 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
         </span>
       </Marker>
       {expanded && message.toolInput && (
-        <pre className="mt-1 text-[11px]">
-          <code>{message.toolInput}</code>
+        <pre className="mt-1 p-2.5 text-[11px]">
+          <HighlightedCode text={message.toolInput} language={looksLikeJson(message.toolInput) ? 'json' : undefined} />
         </pre>
       )}
       {expanded && message.toolOutput && (
-        <pre className="mt-1 text-[11px] border-primary/20">
-          <code>{message.toolOutput}</code>
+        <pre className="mt-1 p-2.5 text-[11px]">
+          <HighlightedCode text={message.toolOutput} language={looksLikeJson(message.toolOutput) ? 'json' : undefined} />
         </pre>
       )}
     </div>

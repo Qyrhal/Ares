@@ -8,7 +8,14 @@
     "type": "git",
     "url": "https://github.com/Qyrhal/Ares.git"
   },
-  "keywords": ["ai", "coding-assistant", "electron", "pi-agent", "mcp", "openai"],
+  "keywords": [
+    "ai",
+    "coding-assistant",
+    "electron",
+    "pi-agent",
+    "mcp",
+    "openai"
+  ],
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -54,6 +61,7 @@
     "clsx": "^2.1.1",
     "highlight.js": "^11.11.1",
     "lucide-react": "^1.23.0",
+    "mermaid": "^11.16.0",
     "node-pty": "^1.1.0",
     "openai": "^6.45.0",
     "react": "^19.2.7",

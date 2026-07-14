@@ -25,3 +25,21 @@ export function timeAgo(ts: number): string {
 export function truncate(str: string, n: number): string {
   return str.length > n ? str.slice(0, n) + '…' : str
 }
+
+export function isMermaidCodeBlock(className: string | undefined): boolean {
+  return /(?:^|\s)language-mermaid(?:\s|$)/.test(className ?? '')
+}
+
+export function looksLikeJson(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) return false
+  const first = trimmed[0]
+  const last = trimmed[trimmed.length - 1]
+  if (!((first === '{' && last === '}') || (first === '[' && last === ']'))) return false
+  try {
+    JSON.parse(trimmed)
+    return true
+  } catch {
+    return false
+  }
+}
