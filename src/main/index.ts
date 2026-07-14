@@ -126,7 +126,7 @@ app.whenReady().then(() => {
   if (process.platform === 'darwin') {
     app.dock.setIcon(join(__dirname, '../../resources/icon.png'))
   }
-  app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w))
+  app.on('browser-window-created', (_, w) => optimizer.watchWindowShortcuts(w, { zoom: true }))
   registerIpcHandlers()
   createWindow()
   app.on('activate', () => {
