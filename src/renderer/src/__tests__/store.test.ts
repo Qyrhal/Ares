@@ -114,6 +114,85 @@ describe('store — removeTodo', () => {
 
 // ── Session actions ───────────────────────────────────────────────────────────
 
+describe('store — setSessions', () => {
+  it('replaces sessions array', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' }), mkSession({ id: 's2' })])
+    expect(useAppStore.getState().sessions).toHaveLength(2)
+  })
+
+  it('clears sessions when set to empty', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' })])
+    useAppStore.getState().setSessions([])
+    expect(useAppStore.getState().sessions).toHaveLength(0)
+  })
+})
+
+describe('store — removeSession', () => {
+  it('removes a session by id', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' }), mkSession({ id: 's2' })])
+    useAppStore.getState().removeSession('s1')
+    expect(useAppStore.getState().sessions).toHaveLength(1)
+    expect(useAppStore.getState().sessions[0].id).toBe('s2')
+  })
+
+  it('no-ops when id not found', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' })])
+    useAppStore.getState().removeSession('ghost')
+    expect(useAppStore.getState().sessions).toHaveLength(1)
+  })
+})
+
+describe('store — appendMessage', () => {
+  it('appends a message to the list', () => {
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm1' }))
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm2' }))
+    expect(useAppStore.getState().messages).toHaveLength(2)
+  })
+
+  it('preserves existing messages', () => {
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm1', content: 'first' }))
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm2', content: 'second' }))
+    expect(useAppStore.getState().messages[0].content).toBe('first')
+    expect(useAppStore.getState().messages[1].content).toBe('second')
+  })
+})
+
+describe('store — removeMessage', () => {
+  it('removes first message', () => {
+    useAppStore.setState({ messages: [mkMessage({ id: 'm1' }), mkMessage({ id: 'm2' }), mkMessage({ id: 'm3' })] })
+    useAppStore.getState().removeMessage('m1')
+    expect(useAppStore.getState().messages).toHaveLength(2)
+    expect(useAppStore.getState().messages[0].id).toBe('m2')
+  })
+
+  it('removes middle message', () => {
+    useAppStore.setState({ messages: [mkMessage({ id: 'm1' }), mkMessage({ id: 'm2' }), mkMessage({ id: 'm3' })] })
+    useAppStore.getState().removeMessage('m2')
+    expect(useAppStore.getState().messages).toHaveLength(2)
+    expect(useAppStore.getState().messages[0].id).toBe('m1')
+    expect(useAppStore.getState().messages[1].id).toBe('m3')
+  })
+
+  it('removes last message', () => {
+    useAppStore.setState({ messages: [mkMessage({ id: 'm1' }), mkMessage({ id: 'm2' })] })
+    useAppStore.getState().removeMessage('m2')
+    expect(useAppStore.getState().messages).toHaveLength(1)
+  })
+
+  it('no-ops when id not found', () => {
+    useAppStore.setState({ messages: [mkMessage({ id: 'm1' })] })
+    useAppStore.getState().removeMessage('ghost')
+    expect(useAppStore.getState().messages).toHaveLength(1)
+  })
+})
+
+describe('store — setMessages', () => {
+  it('replaces messages array', () => {
+    useAppStore.getState().setMessages([mkMessage({ id: 'm1' }), mkMessage({ id: 'm2' })])
+    expect(useAppStore.getState().messages).toHaveLength(2)
+  })
+})
+
 describe('store — updateSession agentStatus', () => {
   it('sets agentStatus to running', () => {
     useAppStore.getState().setSessions([mkSession({ id: 's1', agentStatus: 'idle' })])

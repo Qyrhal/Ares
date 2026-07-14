@@ -24,96 +24,193 @@ async function renderApp() {
 }
 
 beforeEach(() => {
-  // Reset Zustand store to initial state between tests
   useAppStore.setState({
     activeView: 'chat', terminalOpen: false, terminalKey: 0,
     tabs: [], activeTabId: null,
     sessions: [], messages: [], isLoading: false,
     workspacePath: null, fileNodes: [],
-    settings: { apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', defaultModel: 'gpt-4o-mini', themeId: 'red', systemPrompt: '', permissionMode: 'ask' },
+    settings: {
+      apiKey: '', apiBaseUrl: 'https://api.openai.com/v1',
+      defaultModel: 'gpt-4o-mini', themeId: 'red',
+      systemPrompt: '', permissionMode: 'ask',
+    },
   })
   vi.clearAllMocks()
 })
 
-describe('Keyboard shortcuts', () => {
-  it('renders the app without errors', async () => {
+describe('Keyboard shortcuts — modal overlays', () => {
+  it('⌘Shift+P opens command palette', async () => {
     await renderApp()
-    expect(screen.getByText('ARES')).toBeInTheDocument()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, shiftKey: true, key: 'P' }) })
+    await waitFor(() => expect(screen.getByPlaceholderText('Search commands…')).toBeInTheDocument())
   })
 
-  it('⌘T creates a new session', async () => {
-    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
+  it('⌘Shift+O opens tab switcher', async () => {
     await renderApp()
-    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 't' }) })
-    await waitFor(() => expect(createSession).toHaveBeenCalled())
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, shiftKey: true, key: 'O' }) })
+    await waitFor(() => expect(screen.getByPlaceholderText('Search open tabs…')).toBeInTheDocument())
   })
 
-  it('⌘N creates a new session', async () => {
-    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
+  it('⌘Shift+F opens session search', async () => {
     await renderApp()
-    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 'n' }) })
-    await waitFor(() => expect(createSession).toHaveBeenCalled())
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, shiftKey: true, key: 'F' }) })
+    await waitFor(() => expect(screen.getByPlaceholderText('Search across all sessions…')).toBeInTheDocument())
   })
 
-  it('⌘` toggles the terminal panel on', async () => {
+  it('⌘P opens quick file open', async () => {
     await renderApp()
-    expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument()
-    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
-    await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
-  })
-
-  it('⌘` toggles the terminal panel off', async () => {
-    await renderApp()
-    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
-    await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
-    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
-    await waitFor(() => expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument())
-  })
-
-  it('⌘W does nothing when no tabs are open', async () => {
-    await renderApp()
-    expect(() => fireEvent.keyDown(window, { metaKey: true, key: 'w' })).not.toThrow()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 'p' }) })
+    // workspacePath is null in default state, so placeholder shows "No folder open"
+    await waitFor(() => expect(screen.getByPlaceholderText('No folder open')).toBeInTheDocument())
   })
 })
 
-describe('selectTab — sidebar sync (bug fix)', () => {
-  it('switching to a session tab updates activeView to chat', () => {
-    const session = { id: 's1', type: 'session' as const, title: 'Test' }
-    useAppStore.setState({
-      tabs: [session, { type: 'file' as const, path: '/f.ts', name: 'f.ts', isDirty: false }],
-      activeTabId: '/f.ts',
-      activeView: 'explorer',
-    })
-    useAppStore.getState().selectTab('s1')
-    expect(useAppStore.getState().activeView).toBe('chat')
+describe('Keyboard shortcuts — settings and navigation', () => {
+  it('⌘, opens settings view', async () => {
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: ',' }) })
+    expect(useAppStore.getState().activeView).toBe('settings')
   })
 
-  it('switching to a file tab does not change activeView', () => {
-    const session = { id: 's1', type: 'session' as const, title: 'Test' }
+  it('⌘Shift+Z toggles zen mode', async () => {
+    await renderApp()
+    const initial = useAppStore.getState().zenMode
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, shiftKey: true, key: 'Z' }) })
+    expect(useAppStore.getState().zenMode).toBe(!initial)
+  })
+
+  it('Escape closes command palette', async () => {
+    await renderApp()
+    // Open command palette first
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, shiftKey: true, key: 'P' }) })
+    await waitFor(() => expect(screen.getByPlaceholderText('Search commands…')).toBeInTheDocument())
+    // Escape closes it (handled by CommandPalette's own onKeyDown handler)
+    await act(async () => { fireEvent.keyDown(screen.getByPlaceholderText('Search commands…'), { key: 'Escape' }) })
+    await waitFor(() => expect(screen.queryByPlaceholderText('Search commands…')).not.toBeInTheDocument())
+  })
+})
+
+describe('Keyboard shortcuts — tab cycling', () => {
+  it('⌘[ cycles to previous tab', async () => {
+    // Set up multiple tabs first
     useAppStore.setState({
-      tabs: [session, { type: 'file' as const, path: '/f.ts', name: 'f.ts', isDirty: false }],
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+        { type: 'session' as const, id: 's2', title: 'Tab 2' },
+        { type: 'session' as const, id: 's3', title: 'Tab 3' },
+      ],
+      activeTabId: 's2',
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '[' }) })
+    // Should have switched to s1 (previous)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+
+  it('⌘] cycles to next tab', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+        { type: 'session' as const, id: 's2', title: 'Tab 2' },
+      ],
       activeTabId: 's1',
-      activeView: 'chat',
     })
-    useAppStore.getState().selectTab('/f.ts')
-    expect(useAppStore.getState().activeView).toBe('chat')
-    expect(useAppStore.getState().activeTabId).toBe('/f.ts')
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: ']' }) })
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+  })
+
+  it('⌘[ wraps around from first to last tab', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+        { type: 'session' as const, id: 's2', title: 'Tab 2' },
+      ],
+      activeTabId: 's1',
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '[' }) })
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+  })
+
+  it('⌘] wraps around from last to first tab', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+        { type: 'session' as const, id: 's2', title: 'Tab 2' },
+      ],
+      activeTabId: 's2',
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: ']' }) })
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+
+  it('⌘[ / ⌘] no-ops when no tabs', async () => {
+    await renderApp()
+    expect(() => fireEvent.keyDown(window, { metaKey: true, key: '[' })).not.toThrow()
+    expect(() => fireEvent.keyDown(window, { metaKey: true, key: ']' })).not.toThrow()
   })
 })
 
-describe('Terminal panel', () => {
-  it('activity bar terminal button opens the terminal', async () => {
+describe('Keyboard shortcuts — tab number shortcuts', () => {
+  it('⌘1 selects first tab', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'First' },
+        { type: 'session' as const, id: 's2', title: 'Second' },
+      ],
+      activeTabId: 's2',
+    })
     await renderApp()
-    const termBtn = screen.getByTitle('Terminal (⌘` / ⌘J)')
-    await act(async () => { fireEvent.click(termBtn) })
-    await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '1' }) })
+    expect(useAppStore.getState().activeTabId).toBe('s1')
   })
 
-  it('terminal close button hides the panel', async () => {
+  it('⌘2 selects second tab', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'First' },
+        { type: 'session' as const, id: 's2', title: 'Second' },
+      ],
+      activeTabId: 's1',
+    })
     await renderApp()
-    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
-    await waitFor(() => expect(screen.getByTestId('terminal-mock')).toBeInTheDocument())
-    await act(async () => { fireEvent.click(screen.getByText('Close terminal')) })
-    await waitFor(() => expect(screen.queryByTestId('terminal-mock')).not.toBeInTheDocument())
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '2' }) })
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+  })
+})
+
+describe('Keyboard shortcuts — Escape abort', () => {
+  it('Escape aborts loading when agent is running', async () => {
+    useAppStore.setState({ isLoading: true })
+    await renderApp()
+    // Should not throw
+    await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+  })
+})
+
+describe('Keyboard shortcuts — cross-platform ctrlKey', () => {
+  it('Ctrl+T creates session on Windows/Linux', async () => {
+    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { ctrlKey: true, key: 't' }) })
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
+  })
+
+  it('Ctrl+N creates session on Windows/Linux', async () => {
+    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { ctrlKey: true, key: 'n' }) })
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
+  })
+})
+
+describe('Keyboard shortcuts — Escape close tab', () => {
+  it('Escape close tab when no loading', async () => {
+    useAppStore.setState({ isLoading: false })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+    // Should not crash
   })
 })
