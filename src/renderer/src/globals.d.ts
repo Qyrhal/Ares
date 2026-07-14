@@ -21,6 +21,14 @@ export interface McpStatus {
   toolCount: number
 }
 
+export interface SearchResult {
+  sessionId: string
+  sessionTitle: string
+  messageId: string
+  content: string
+  role: string
+}
+
 declare global {
   interface Window {
     electron: {
@@ -33,6 +41,7 @@ declare global {
         addMessage(sessionId: string, role: string, content: string, opts?: object): Promise<RawMessage>
         deleteMessage(id: string): Promise<void>
         updateMessage(id: string, updates: object): Promise<void>
+        searchMessages(query: string): Promise<SearchResult[]>
       }
       settings: {
         get(): Promise<AppSettings>

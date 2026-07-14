@@ -18,6 +18,7 @@ import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PermissionPrompt } from '@/components/PermissionPrompt'
 import { AgentQuestionCard } from '@/components/AgentQuestionCard'
+import { SessionSearchOverlay } from '@/components/SessionSearchOverlay'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
@@ -46,6 +47,7 @@ export default function App(): React.ReactElement {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [quickFileOpenOpen, setQuickFileOpenOpen] = useState(false)
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false)
+  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
 
   const paletteCommands = React.useMemo(() => usePaletteCommands(store), [store])
 
@@ -261,6 +263,33 @@ export default function App(): React.ReactElement {
     store.togglePinSession(id)
   }, [])
 
+  const handleRenameSession = useCallback(async (id: string, title: string) => {
+    await el.db.updateSession(id, { title })
+    store.updateSession(id, { title })
+  }, [])
+
+  const handleDuplicateSession = useCallback(async (session: Session) => {
+    const msgs = await el.db.getMessages(session.id)
+    const raw = await el.db.createSession(`${session.title} (copy)`, session.model)
+    const newSession = parseSession(raw)
+    for (const m of msgs) {
+      await el.db.addMessage(newSession.id, m.role, m.content, {
+        toolName: m.tool_name ?? undefined,
+        toolInput: m.tool_input ?? undefined,
+        toolOutput: m.tool_output ?? undefined,
+        thinking: m.thinking ?? undefined,
+      })
+    }
+    store.addSession(newSession)
+    store.openSessionTab(newSession)
+  }, [])
+
+  const handleExportSession = useCallback(async (session: Session) => {
+    const msgs = await el.db.getMessages(session.id)
+    const result = await el.session.export(session.title, session.id, msgs)
+    if (result) toast.success(`Session exported to ${result}`)
+  }, [])
+
 
   // Close a tab: session tabs also remove from sidebar + delete from DB.
   const handleCloseTab = useCallback(async (id: string) => {
@@ -285,6 +314,7 @@ export default function App(): React.ReactElement {
 
       if (e.shiftKey && e.key === 'P') { e.preventDefault(); setCommandPaletteOpen(true); return }
       if (e.shiftKey && e.key === 'O') { e.preventDefault(); setTabSwitcherOpen(true); return }
+      if (e.shiftKey && e.key === 'F') { e.preventDefault(); setSearchOverlayOpen(true); return }
       if (!e.shiftKey && e.key === 'p') { e.preventDefault(); setQuickFileOpenOpen(true); return }
 
       if (e.key === ',') { e.preventDefault(); useAppStore.getState().setActiveView('settings'); return }
@@ -811,6 +841,11 @@ export default function App(): React.ReactElement {
           const node = findFileNode(store.fileNodes, path)
           if (node) store.openFileTab(node)
         }}
+      />
+      <SessionSearchOverlay
+        open={searchOverlayOpen}
+        onClose={() => setSearchOverlayOpen(false)}
+        onSelectSession={handleSelectSession}
       />
     </div>
   )

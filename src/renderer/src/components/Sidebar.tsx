@@ -1,17 +1,20 @@
-import React, { useState, useCallback } from 'react'
-import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2 } from 'lucide-react'
+import React, { useState, useCallback, useRef, useEffect } from 'react'
+import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, FileNode, ActivityView } from '@/types'
 import { FileTree, FileTreeProps } from './FileTree'
 import { GitPane } from './GitPane'
 import { ErrorBoundary } from './ErrorBoundary'
+import { AgentTimeline } from './AgentTimeline'
 import { toast } from 'sonner'
 
 const el = window.electron
 
 interface SidebarProps {
   onRenameSession?: (id: string, title: string) => void
+  onDuplicateSession?: (session: Session) => void
+  onExportSession?: (session: Session) => void
   mode: ActivityView
   // sessions
   sessions: Session[]
@@ -37,6 +40,7 @@ export function Sidebar({
   sessions, activeSessionId, onNewSession, onSelectSession, onDeleteSession, onTogglePinSession,
   fileNodes, workspacePath, selectedFilePath, onOpenFile, onOpenFolder,
   onFsCreateFile, onFsCreateFolder, onFsRename, onFsDelete,
+  onRenameSession, onDuplicateSession, onExportSession,
 }: SidebarProps): React.ReactElement {
   return (
     <aside className="surface-card flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
@@ -48,6 +52,9 @@ export function Sidebar({
           onSelect={onSelectSession}
           onDelete={onDeleteSession}
           onTogglePin={onTogglePinSession}
+          onRename={onRenameSession}
+          onDuplicate={onDuplicateSession}
+          onExport={onExportSession}
         />
       )}
       {mode === 'explorer' && (
@@ -73,7 +80,8 @@ export function Sidebar({
 // ── Sessions pane ─────────────────────────────────────────────────────────────
 
 function SessionsPane({
-  sessions, activeSessionId, onNew, onSelect, onDelete, onTogglePin
+  sessions, activeSessionId, onNew, onSelect, onDelete, onTogglePin,
+  onRename, onDuplicate, onExport
 }: {
   sessions: Session[]
   activeSessionId: string | null
@@ -81,8 +89,16 @@ function SessionsPane({
   onSelect: (id: string) => void
   onDelete: (id: string) => void
   onTogglePin: (id: string) => void
+  onRename?: (id: string, title: string) => void
+  onDuplicate?: (session: Session) => void
+  onExport?: (session: Session) => void
 }): React.ReactElement {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
+  const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list')
+  const [contextMenu, setContextMenu] = useState<{ session: Session; x: number; y: number } | null>(null)
+  const [renamingId, setRenamingId] = useState<string | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
 
   const handleExport = useCallback(async () => {
     const active = sessions.find((s) => s.id === activeSessionId)
@@ -114,6 +130,64 @@ function SessionsPane({
     window.location.reload()
   }, [])
 
+  const handleStartRename = useCallback((session: Session) => {
+    setRenamingId(session.id)
+    setRenameValue(session.title)
+    setContextMenu(null)
+    setTimeout(() => {
+      renameInputRef.current?.focus()
+      renameInputRef.current?.select()
+    }, 50)
+  }, [])
+
+  const handleFinishRename = useCallback(() => {
+    if (renamingId && renameValue.trim() && onRename) {
+      onRename(renamingId, renameValue.trim())
+    }
+    setRenamingId(null)
+    setRenameValue('')
+  }, [renamingId, renameValue, onRename])
+
+  const handleContextMenuAction = useCallback((action: string, session: Session) => {
+    setContextMenu(null)
+    switch (action) {
+      case 'rename':
+        handleStartRename(session)
+        break
+      case 'duplicate':
+        onDuplicate?.(session)
+        break
+      case 'export':
+        onExport?.(session)
+        break
+      case 'pin':
+        onTogglePin(session.id)
+        break
+      case 'delete':
+        onDelete(session.id)
+        break
+    }
+  }, [onDuplicate, onExport, onTogglePin, onDelete, handleStartRename])
+
+  // Close context menu on click outside or Escape
+  useEffect(() => {
+    if (!contextMenu) return
+    const handleClick = (): void => setContextMenu(null)
+    const handleKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Escape') setContextMenu(null)
+    }
+    // Delay adding listener to avoid the same right-click event from closing it
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClick)
+      document.addEventListener('keydown', handleKey)
+    }, 0)
+    return () => {
+      clearTimeout(timer)
+      document.removeEventListener('mousedown', handleClick)
+      document.removeEventListener('keydown', handleKey)
+    }
+  }, [contextMenu])
+
   // Orders sessions so each parent is immediately followed by its own
   // children in spawn order, instead of the flat store order (which
   // prepends new sessions and scatters children above/below parents).
@@ -138,12 +212,17 @@ function SessionsPane({
 
   const renderSession = (s: Session) => {
     const isSubAgent = !!s.parentId
+    const isRenaming = renamingId === s.id
     return (
     <button
       key={s.id}
       onClick={() => onSelect(s.id)}
       onMouseEnter={() => setHoveredId(s.id)}
       onMouseLeave={() => setHoveredId(null)}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        setContextMenu({ session: s, x: e.clientX, y: e.clientY })
+      }}
       className={cn(
         'group flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-all',
         isSubAgent ? 'pl-5' : 'pl-2',
@@ -158,9 +237,26 @@ function SessionsPane({
         <MessageSquare className="size-3 shrink-0 opacity-60" />
       )}
       <div className="min-w-0 flex-1">
-        <p className="truncate text-xs font-medium leading-snug">
-          {truncate(s.title, isSubAgent ? 26 : 32)}
-        </p>
+        {isRenaming ? (
+          <input
+            ref={renameInputRef}
+            type="text"
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') { e.stopPropagation(); handleFinishRename() }
+              if (e.key === 'Escape') { e.stopPropagation(); setRenamingId(null) }
+            }}
+            onBlur={handleFinishRename}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full bg-transparent text-xs font-medium outline-none border-b border-primary/40"
+            autoFocus
+          />
+        ) : (
+          <p className="truncate text-xs font-medium leading-snug">
+            {truncate(s.title, isSubAgent ? 26 : 32)}
+          </p>
+        )}
         <p className="mt-0.5 flex items-center gap-1 text-[10px] leading-tight text-muted-foreground/60 whitespace-nowrap">
           {s.agentStatus === 'running' && (
             <span className="inline-flex items-center gap-0.5 text-primary">
@@ -206,6 +302,13 @@ function SessionsPane({
         </span>
         <div className="ml-auto flex items-center gap-0.5">
           <button
+            onClick={() => setViewMode(viewMode === 'list' ? 'timeline' : 'list')}
+            className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            title={viewMode === 'list' ? 'Timeline view' : 'List view'}
+          >
+            {viewMode === 'list' ? <Clock className="size-3.5" /> : <LayoutList className="size-3.5" />}
+          </button>
+          <button
             onClick={handleImport}
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
             title="Import session"
@@ -223,6 +326,13 @@ function SessionsPane({
         </div>
       </div>
 
+      {viewMode === 'timeline' ? (
+        <AgentTimeline
+          sessions={sessions}
+          activeSessionId={activeSessionId}
+          onSelectSession={onSelect}
+        />
+      ) : (
       <div className="flex flex-col gap-0.5 overflow-y-auto px-2 py-1 flex-1">
         {sessions.length === 0 && (
           <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
@@ -251,6 +361,68 @@ function SessionsPane({
 
         {unpinned.map(renderSession)}
       </div>
+      )}
+      {/* ── Context menu ──────────────────────────────────────────────────── */}
+      {contextMenu && (
+        <div
+          className="fixed z-50 w-40 rounded-lg border border-border bg-card py-1 shadow-xl"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ContextMenuItem
+            label="Rename"
+            icon="Edit3"
+            onClick={() => handleContextMenuAction('rename', contextMenu.session)}
+          />
+          <ContextMenuItem
+            label="Duplicate"
+            icon="Copy"
+            onClick={() => handleContextMenuAction('duplicate', contextMenu.session)}
+          />
+          <ContextMenuItem
+            label="Export"
+            icon="Download"
+            onClick={() => handleContextMenuAction('export', contextMenu.session)}
+          />
+          <div className="mx-2 my-1 border-t border-border" />
+          <ContextMenuItem
+            label={contextMenu.session.pinned ? 'Unpin' : 'Pin'}
+            icon="Pin"
+            onClick={() => handleContextMenuAction('pin', contextMenu.session)}
+          />
+          <div className="mx-2 my-1 border-t border-border" />
+          <ContextMenuItem
+            label="Delete"
+            icon="Trash2"
+            destructive
+            onClick={() => handleContextMenuAction('delete', contextMenu.session)}
+          />
+        </div>
+      )}
     </>
+  )
+}
+
+// ── Context menu item ──────────────────────────────────────────────────────────
+function ContextMenuItem({
+  label, icon, destructive, onClick
+}: {
+  label: string
+  icon: string
+  destructive?: boolean
+  onClick: () => void
+}): React.ReactElement {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors',
+        destructive
+          ? 'text-destructive hover:bg-destructive/10'
+          : 'text-foreground hover:bg-accent'
+      )}
+    >
+      {label}
+    </button>
   )
 }

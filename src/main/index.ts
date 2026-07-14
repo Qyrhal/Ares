@@ -7,6 +7,7 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
   getSessions, createSession, updateSession, deleteSession,
   getMessages, addMessage, deleteMessage, updateMessage,
+  searchMessages,
   getTodos, addTodo, updateTodo, deleteTodo,
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
@@ -163,6 +164,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:addTodo', (_, sessionId: string, text: string) => addTodo(sessionId, text))
   ipcMain.handle('db:updateTodo', (_, id: string, updates: object) => updateTodo(id, updates as { text?: string; completed?: boolean }))
   ipcMain.handle('db:deleteTodo', (_, id: string) => deleteTodo(id))
+
+  // DB – search
+  ipcMain.handle('db:searchMessages', (_, query: string) => searchMessages(query))
 
   // Settings
   ipcMain.handle('settings:get', () => getSettings())
