@@ -54,6 +54,7 @@ export interface Session {
   workspacePath?: string
   parentId?: string | null
   agentStatus?: AgentStatus
+  isSideChat?: boolean
 }
 
 export interface Todo {

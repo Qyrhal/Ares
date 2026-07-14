@@ -4,7 +4,7 @@ import { vi } from 'vitest'
 const electronMock = {
   db: {
     getSessions: vi.fn().mockResolvedValue([]),
-    createSession: vi.fn().mockResolvedValue({ id: 's1', title: 'New session', model: 'gpt-4o-mini', created_at: Date.now(), updated_at: Date.now(), message_count: 0 }),
+    createSession: vi.fn().mockResolvedValue({ id: 's1', title: 'New session', model: 'gpt-4o-mini', created_at: Date.now(), updated_at: Date.now(), message_count: 0, is_side_chat: false }),
     updateSession: vi.fn().mockResolvedValue(undefined),
     deleteSession: vi.fn().mockResolvedValue(undefined),
     getMessages: vi.fn().mockResolvedValue([]),

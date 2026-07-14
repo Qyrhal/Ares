@@ -144,7 +144,7 @@ app.commandLine.appendSwitch('disable-web-security')
 function registerIpcHandlers(): void {
   // DB – sessions
   ipcMain.handle('db:getSessions', () => getSessions())
-  ipcMain.handle('db:createSession', (_, title: string, model?: string, parentId?: string | null) => createSession(title, model, parentId))
+  ipcMain.handle('db:createSession', (_, title: string, model?: string, parentId?: string | null, isSideChat?: boolean) => createSession(title, model, parentId, isSideChat))
   ipcMain.handle('db:updateSession', (_, id: string, updates: object) =>
     updateSession(id, updates as Parameters<typeof updateSession>[1]))
   ipcMain.handle('db:deleteSession', (_, id: string) => {
