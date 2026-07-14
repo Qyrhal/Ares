@@ -3,6 +3,7 @@ import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, R
 import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes, isMermaidCodeBlock, looksLikeJson } from '@/lib/utils'
 import { Message } from '@/types'
+import { AgentDiffView } from './AgentDiffView'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
   AttachmentDescription, AttachmentGroup
@@ -192,6 +193,22 @@ function CodeBlock({ className, children, ...props }: React.ComponentPropsWithou
 
 // ── Tool call block ───────────────────────────────────────────────────────────
 
+const FILE_EDIT_TOOLS = new Set(['editFile', 'writeFile', 'patchFile', 'applyFile', 'createFile'])
+
+function isFileEditTool(name: string | undefined): boolean {
+  return !!name && FILE_EDIT_TOOLS.has(name)
+}
+
+function extractFilePath(toolInput: string | undefined): string | undefined {
+  if (!toolInput) return undefined
+  try {
+    const parsed = JSON.parse(toolInput)
+    return parsed.path || parsed.filePath || parsed.file_path || undefined
+  } catch {
+    return undefined
+  }
+}
+
 function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
   const statusIcon = {
@@ -221,9 +238,14 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
         </pre>
       )}
       {expanded && message.toolOutput && (
-        <pre className="mt-1 p-2.5 text-[11px]">
-          <HighlightedCode text={message.toolOutput} language={looksLikeJson(message.toolOutput) ? 'json' : undefined} />
-        </pre>
+        <>
+          {isFileEditTool(message.toolName) && (
+            <AgentDiffView diff={message.toolOutput} filePath={extractFilePath(message.toolInput)} />
+          )}
+          <pre className="mt-1 p-2.5 text-[11px]">
+            <HighlightedCode text={message.toolOutput} language={looksLikeJson(message.toolOutput) ? 'json' : undefined} />
+          </pre>
+        </>
       )}
     </div>
   )
