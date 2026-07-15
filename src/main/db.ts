@@ -322,7 +322,7 @@ export function deleteMessage(id: string): void {
 
 export function updateMessage(
   id: string,
-  updates: Partial<Pick<DbMessage, 'tool_status' | 'tool_output' | 'content' | 'reactions' | 'reply_to'>>
+  updates: Partial<Pick<DbMessage, 'tool_status' | 'tool_output' | 'content' | 'reactions' | 'reply_to' | 'created_at'>>
 ): void {
   const store = readStore()
   store.messages = store.messages.map((m) => m.id === id ? { ...m, ...updates } : m)

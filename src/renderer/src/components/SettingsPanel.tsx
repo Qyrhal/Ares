@@ -6,20 +6,11 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { THEMES, applyTheme, applyColorMode, DEFAULT_THEME_ID } from '@/lib/theme'
+import { ARES_PROMPT } from '../../../shared/ares-prompt'
 
 const el = window.electron
 
 const INPUT = 'w-full rounded-md border border-border bg-input px-3 py-[0.4rem] text-[13px] text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground'
-
-const SKILL_PROMPT = `You are an AI coding assistant with full read/write access to the user's workspace. You can perform the following operations:
-
-1. readFile(path) — Read the full contents of any file.
-2. writeFile(path, content) — Write new content to a file (creates directories, overwrites existing).
-3. editFile(path, oldString, newString) — Find-and-replace text in an existing file. Use this for targeted changes.
-4. createFile(path, content) — Create a brand new file (fails if it already exists).
-5. listFiles(dir) — List files and directories (excludes hidden files and node_modules).
-
-ALWAYS prefer editFile over writeFile for making changes to existing files — it preserves surrounding context. Use writeFile only when replacing an entire file or creating a file that already needs to exist.`
 
 interface SettingsPanelProps {
   settings: AppSettings
@@ -375,9 +366,9 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
             />
           </Field>
 
-          <Field label="Skill prompt (auto-injected)" hint="This is automatically added so the AI knows its capabilities. Not editable.">
+          <Field label="Agent protocol (auto-injected)" hint="Appended to every agent request so the AI knows how to use Ares' tools. Per-tool details travel in the tool schemas; this is the operating policy. Not editable.">
             <div className="rounded-md border border-border bg-muted/30 p-3 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap font-mono">
-              {SKILL_PROMPT.trim()}
+              {ARES_PROMPT.trim()}
             </div>
           </Field>
         </Section>

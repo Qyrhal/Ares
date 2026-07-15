@@ -76,7 +76,7 @@ describe('SettingsPanel', () => {
     })
   })
 
-  it('shows skill prompt section', () => {
+  it('shows the injected agent protocol', () => {
     render(
       <SettingsPanel
         settings={BASE_SETTINGS}
@@ -86,11 +86,11 @@ describe('SettingsPanel', () => {
       />
     )
 
-    expect(screen.getByText(/readFile/)).toBeInTheDocument()
-    expect(screen.getByText(/writeFile/)).toBeInTheDocument()
-    expect(screen.getByText(/editFile/)).toBeInTheDocument()
-    expect(screen.getByText(/createFile/)).toBeInTheDocument()
-    expect(screen.getByText(/listFiles/)).toBeInTheDocument()
+    expect(screen.getByText(/Ares Agent Protocol/)).toBeInTheDocument()
+    expect(screen.getByText(/setTodos/)).toBeInTheDocument()
+    expect(screen.getByText(/spawnAgents/)).toBeInTheDocument()
+    expect(screen.getByText(/notifyComplete/)).toBeInTheDocument()
+    expect(screen.getByText(/webSearch/)).toBeInTheDocument()
   })
 
   it('shows system prompt textarea', () => {
