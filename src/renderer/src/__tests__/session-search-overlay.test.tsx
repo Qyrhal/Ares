@@ -282,3 +282,130 @@ describe('SessionSearchOverlay', () => {
     })
   })
 })
+
+describe('SessionSearchOverlay — date range filter', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('renders date preset buttons when open', () => {
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />
+    )
+    expect(screen.getByText('All time')).toBeDefined()
+    expect(screen.getByText('Today')).toBeDefined()
+    expect(screen.getByText('7 days')).toBeDefined()
+    expect(screen.getByText('30 days')).toBeDefined()
+  })
+
+  it('has All time selected by default', () => {
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />
+    )
+    const allTimeBtn = screen.getByText('All time')
+    // Default preset should have the active class (bg-primary/15)
+    expect(allTimeBtn.className).toContain('bg-primary/15')
+  })
+
+  it('resets date preset to All time when reopened', async () => {
+    const { rerender } = render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />
+    )
+
+    // Click "Today" preset
+    const { fireEvent } = await import('@testing-library/react')
+    fireEvent.click(screen.getByText('Today'))
+
+    // Today should now be active
+    expect(screen.getByText('Today').className).toContain('bg-primary/15')
+
+    // Reopen (close then open)
+    rerender(
+      <SessionSearchOverlay
+        open={false}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />
+    )
+    rerender(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />
+    )
+
+    // Should be back to All time
+    expect(screen.getByText('All time').className).toContain('bg-primary/15')
+  })
+
+  it('passes date range filters when searching with a preset selected', async () => {
+    const mock = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
+    const db = (mock as Record<string, Record<string, unknown>>).db
+
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />
+    )
+
+    const { fireEvent } = await import('@testing-library/react')
+
+    // First type a query to trigger search
+    const input = screen.getByPlaceholderText('Search across all sessions…')
+    fireEvent.change(input, { target: { value: 'hook' } })
+
+    await vi.waitFor(() => {
+      expect(db.searchMessages).toHaveBeenCalledWith('hook', {})
+    })
+
+    // Now click "Today" preset — triggers re-search with date filter
+    db.searchMessages = vi.fn().mockResolvedValue(mockResults)
+    fireEvent.click(screen.getByText('Today'))
+
+    await vi.waitFor(() => {
+      // Should have been called with date range filters
+      const calls = (db.searchMessages as ReturnType<typeof vi.fn>).mock.calls
+      const todayCall = calls.find((c: unknown[]) => c[0] === 'hook' && typeof c[1]?.startDate === 'number')
+      expect(todayCall).toBeDefined()
+      expect(todayCall![1].startDate).toBeGreaterThan(0)
+      expect(todayCall![1].endDate).toBeGreaterThan(0)
+    })
+  })
+
+  it('does not re-search when clicking a date preset with no query', async () => {
+    const mock = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
+    const db = (mock as Record<string, Record<string, unknown>>).db
+    db.searchMessages = vi.fn().mockResolvedValue([])
+
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />
+    )
+
+    const { fireEvent } = await import('@testing-library/react')
+
+    // Click a date preset without any query — should NOT trigger search
+    fireEvent.click(screen.getByText('Today'))
+
+    // searchMessages should not have been called (no query typed)
+    expect(db.searchMessages).not.toHaveBeenCalled()
+  })
+})
