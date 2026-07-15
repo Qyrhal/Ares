@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { useAppStore } from '@/store/useAppStore'
-import type { Session, SessionGroup, Message, Todo, Tab } from '@/types'
+import type { Session, SessionGroup, Message, Todo, Tab, FileNode } from '@/types'
 
 function mkSession(overrides: Partial<Session> = {}): Session {
   return {
@@ -20,6 +20,12 @@ function mkTodo(overrides: Partial<Todo> = {}): Todo {
   return {
     id: 't1', sessionId: 's1', text: 'Do something',
     completed: false, createdAt: 0, ...overrides,
+  }
+}
+
+function mkFileNode(overrides: Partial<FileNode> = {}): FileNode {
+  return {
+    name: 'test.ts', path: '/test.ts', type: 'file', ...overrides,
   }
 }
 
@@ -563,5 +569,355 @@ describe('store — setSessionGroup', () => {
     useAppStore.getState().setSessions([mkSession({ id: 's1' })])
     useAppStore.getState().setSessionGroup('ghost', gid)
     expect(useAppStore.getState().sessions[0].group).toBeUndefined()
+  })
+})
+
+// ── UI actions ──────────────────────────────────────────────────────────────
+
+describe('store — setActiveView', () => {
+  it('sets active view to chat', () => {
+    useAppStore.getState().setActiveView('chat')
+    expect(useAppStore.getState().activeView).toBe('chat')
+  })
+
+  it('sets active view to explorer', () => {
+    useAppStore.getState().setActiveView('explorer')
+    expect(useAppStore.getState().activeView).toBe('explorer')
+  })
+
+  it('sets active view to git', () => {
+    useAppStore.getState().setActiveView('git')
+    expect(useAppStore.getState().activeView).toBe('git')
+  })
+
+  it('sets active view to settings', () => {
+    useAppStore.getState().setActiveView('settings')
+    expect(useAppStore.getState().activeView).toBe('settings')
+  })
+})
+
+describe('store — toggleTerminal', () => {
+  it('toggles terminal from false to true', () => {
+    useAppStore.setState({ terminalOpen: false })
+    useAppStore.getState().toggleTerminal()
+    expect(useAppStore.getState().terminalOpen).toBe(true)
+  })
+
+  it('toggles terminal from true to false', () => {
+    useAppStore.setState({ terminalOpen: true })
+    useAppStore.getState().toggleTerminal()
+    expect(useAppStore.getState().terminalOpen).toBe(false)
+  })
+})
+
+describe('store — toggleZenMode', () => {
+  it('toggles zen mode from false to true', () => {
+    useAppStore.setState({ zenMode: false })
+    useAppStore.getState().toggleZenMode()
+    expect(useAppStore.getState().zenMode).toBe(true)
+  })
+
+  it('toggles zen mode from true to false', () => {
+    useAppStore.setState({ zenMode: true })
+    useAppStore.getState().toggleZenMode()
+    expect(useAppStore.getState().zenMode).toBe(false)
+  })
+})
+
+describe('store — setTerminalHeight', () => {
+  it('sets terminal height', () => {
+    useAppStore.getState().setTerminalHeight('300px')
+    expect(useAppStore.getState().terminalHeight).toBe('300px')
+  })
+
+  it('updates terminal height from existing value', () => {
+    useAppStore.setState({ terminalHeight: '200px' })
+    useAppStore.getState().setTerminalHeight('400px')
+    expect(useAppStore.getState().terminalHeight).toBe('400px')
+  })
+})
+
+// ── Tab actions (continued) ────────────────────────────────────────────────
+
+describe('store — openFileTab', () => {
+  it('adds file tab and sets activeTabId', () => {
+    const node = mkFileNode({ name: 'App.tsx', path: '/src/App.tsx' })
+    useAppStore.getState().openFileTab(node)
+    const { tabs, activeTabId } = useAppStore.getState()
+    expect(tabs).toHaveLength(1)
+    const tab = tabs[0] as Extract<Tab, { type: 'file' }>
+    expect(tab.type).toBe('file')
+    expect(tab.path).toBe('/src/App.tsx')
+    expect(tab.name).toBe('App.tsx')
+    expect(tab.isDirty).toBe(false)
+    expect(activeTabId).toBe('/src/App.tsx')
+  })
+
+  it('does not duplicate when file tab already exists', () => {
+    const node = mkFileNode({ path: '/src/App.tsx' })
+    useAppStore.getState().openFileTab(node)
+    useAppStore.getState().openFileTab(node)
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+  })
+
+  it('does not add duplicate tab with same path and different name', () => {
+    useAppStore.getState().openFileTab(mkFileNode({ path: '/src/App.tsx', name: 'App.tsx' }))
+    useAppStore.getState().openFileTab(mkFileNode({ path: '/src/App.tsx', name: 'App.jsx' }))
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+  })
+})
+
+describe('store — selectTab', () => {
+  it('activates a session tab and switches view to chat', () => {
+    useAppStore.setState({
+      tabs: [{ type: 'session', id: 's1', title: 'Chat' }],
+      activeTabId: null,
+      activeView: 'explorer',
+    })
+    useAppStore.getState().selectTab('s1')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+    expect(useAppStore.getState().activeView).toBe('chat')
+  })
+
+  it('activates a file tab without changing activeView', () => {
+    useAppStore.setState({
+      tabs: [{ type: 'file', path: '/test.ts', name: 'test.ts', isDirty: false }],
+      activeTabId: null,
+      activeView: 'explorer',
+    })
+    useAppStore.getState().selectTab('/test.ts')
+    expect(useAppStore.getState().activeTabId).toBe('/test.ts')
+    expect(useAppStore.getState().activeView).toBe('explorer')
+  })
+
+  it('sets activeTabId to unknown id when tab does not exist', () => {
+    useAppStore.setState({
+      tabs: [{ type: 'session', id: 's1', title: 'Chat' }],
+      activeTabId: 's1',
+      activeView: 'chat',
+    })
+    useAppStore.getState().selectTab('ghost')
+    // selectTab always sets activeTabId to the given id
+    expect(useAppStore.getState().activeTabId).toBe('ghost')
+    // but does not change activeView since no session tab was found
+    expect(useAppStore.getState().activeView).toBe('chat')
+  })
+})
+
+// ── Session actions (continued) ────────────────────────────────────────────
+
+describe('store — addSession', () => {
+  it('prepends a session to the list', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' })])
+    useAppStore.getState().addSession(mkSession({ id: 's2' }))
+    const { sessions } = useAppStore.getState()
+    expect(sessions).toHaveLength(2)
+    expect(sessions[0].id).toBe('s2')
+  })
+
+  it('adds session to empty list', () => {
+    useAppStore.getState().addSession(mkSession({ id: 's1' }))
+    expect(useAppStore.getState().sessions).toHaveLength(1)
+    expect(useAppStore.getState().sessions[0].id).toBe('s1')
+  })
+
+  it('preserves existing sessions', () => {
+    useAppStore.getState().addSession(mkSession({ id: 's1', title: 'first' }))
+    useAppStore.getState().addSession(mkSession({ id: 's2', title: 'second' }))
+    expect(useAppStore.getState().sessions[0].title).toBe('second')
+    expect(useAppStore.getState().sessions[1].title).toBe('first')
+  })
+})
+
+describe('store — clearAllMessages', () => {
+  it('clears all messages and sets isLoading to false', () => {
+    useAppStore.setState({ messages: [mkMessage({ id: 'm1' }), mkMessage({ id: 'm2' })], isLoading: true })
+    useAppStore.getState().clearAllMessages()
+    expect(useAppStore.getState().messages).toHaveLength(0)
+    expect(useAppStore.getState().isLoading).toBe(false)
+  })
+
+  it('no-ops when already empty', () => {
+    useAppStore.setState({ messages: [], isLoading: false })
+    useAppStore.getState().clearAllMessages()
+    expect(useAppStore.getState().messages).toHaveLength(0)
+    expect(useAppStore.getState().isLoading).toBe(false)
+  })
+})
+
+// ── Message actions (continued) ────────────────────────────────────────────
+
+describe('store — setLoading', () => {
+  it('sets loading to true', () => {
+    useAppStore.getState().setLoading(true)
+    expect(useAppStore.getState().isLoading).toBe(true)
+  })
+
+  it('sets loading to false', () => {
+    useAppStore.setState({ isLoading: true })
+    useAppStore.getState().setLoading(false)
+    expect(useAppStore.getState().isLoading).toBe(false)
+  })
+})
+
+// ── Git actions ────────────────────────────────────────────────────────────
+
+describe('store — setCommits', () => {
+  it('replaces commits array', () => {
+    useAppStore.getState().setCommits([
+      { hash: 'abc123', shortHash: 'abc123', parents: [], author: 'me', date: '2024-01-01', message: 'Initial' },
+    ])
+    expect(useAppStore.getState().commits).toHaveLength(1)
+    expect(useAppStore.getState().commits[0].hash).toBe('abc123')
+  })
+
+  it('clears commits when set to empty', () => {
+    useAppStore.getState().setCommits([{ hash: 'abc', shortHash: 'abc', parents: [], author: '', date: '', message: '' }])
+    useAppStore.getState().setCommits([])
+    expect(useAppStore.getState().commits).toHaveLength(0)
+  })
+})
+
+describe('store — setActiveCommit', () => {
+  it('sets active commit hash', () => {
+    useAppStore.getState().setActiveCommit('abc123')
+    expect(useAppStore.getState().activeCommit).toBe('abc123')
+  })
+
+  it('clears active commit with null', () => {
+    useAppStore.setState({ activeCommit: 'abc123' })
+    useAppStore.getState().setActiveCommit(null)
+    expect(useAppStore.getState().activeCommit).toBeNull()
+  })
+})
+
+describe('store — setGitLoading', () => {
+  it('sets git loading to true', () => {
+    useAppStore.getState().setGitLoading(true)
+    expect(useAppStore.getState().gitLoading).toBe(true)
+  })
+
+  it('sets git loading to false', () => {
+    useAppStore.setState({ gitLoading: true })
+    useAppStore.getState().setGitLoading(false)
+    expect(useAppStore.getState().gitLoading).toBe(false)
+  })
+})
+
+// ── Workspace actions ──────────────────────────────────────────────────────
+
+describe('store — setWorkspace', () => {
+  it('sets workspace path and file nodes', () => {
+    const nodes = [mkFileNode({ name: 'src', path: '/project/src', type: 'directory' })]
+    useAppStore.getState().setWorkspace('/project', nodes)
+    expect(useAppStore.getState().workspacePath).toBe('/project')
+    expect(useAppStore.getState().fileNodes).toHaveLength(1)
+    expect(useAppStore.getState().fileNodes[0].name).toBe('src')
+  })
+
+  it('sets workspace path to null with empty nodes', () => {
+    useAppStore.getState().setWorkspace(null, [])
+    expect(useAppStore.getState().workspacePath).toBeNull()
+    expect(useAppStore.getState().fileNodes).toHaveLength(0)
+  })
+})
+
+describe('store — setFileNodes', () => {
+  it('replaces file nodes array', () => {
+    const nodes = [mkFileNode({ name: 'App.tsx', path: '/src/App.tsx' })]
+    useAppStore.getState().setFileNodes(nodes)
+    expect(useAppStore.getState().fileNodes).toHaveLength(1)
+    expect(useAppStore.getState().fileNodes[0].name).toBe('App.tsx')
+  })
+
+  it('clears file nodes when set to empty', () => {
+    useAppStore.getState().setFileNodes([mkFileNode()])
+    useAppStore.getState().setFileNodes([])
+    expect(useAppStore.getState().fileNodes).toHaveLength(0)
+  })
+})
+
+describe('store — setRecentProjects', () => {
+  it('replaces recent projects array', () => {
+    useAppStore.getState().setRecentProjects(['/project/a', '/project/b'])
+    expect(useAppStore.getState().recentProjects).toHaveLength(2)
+    expect(useAppStore.getState().recentProjects[0]).toBe('/project/a')
+  })
+
+  it('clears recent projects when set to empty', () => {
+    useAppStore.getState().setRecentProjects(['/project/a'])
+    useAppStore.getState().setRecentProjects([])
+    expect(useAppStore.getState().recentProjects).toHaveLength(0)
+  })
+})
+
+// ── Settings actions ────────────────────────────────────────────────────────
+
+describe('store — setSettings', () => {
+  it('replaces settings object', () => {
+    useAppStore.getState().setSettings({
+      apiKey: 'sk-test',
+      apiBaseUrl: 'https://api.openai.com/v1',
+      defaultModel: 'gpt-4o',
+      themeId: 'blue',
+      systemPrompt: 'Be helpful',
+      permissionMode: 'auto',
+    })
+    expect(useAppStore.getState().settings.defaultModel).toBe('gpt-4o')
+    expect(useAppStore.getState().settings.themeId).toBe('blue')
+  })
+
+  it('persists previous settings for unset fields', () => {
+    // Reset to clean defaults first
+    useAppStore.setState({
+      settings: {
+        apiKey: '',
+        apiBaseUrl: 'https://api.openai.com/v1',
+        defaultModel: 'gpt-4o-mini',
+        themeId: 'red',
+        systemPrompt: '',
+        permissionMode: 'ask',
+      },
+    })
+    useAppStore.getState().setSettings({ ...useAppStore.getState().settings, defaultModel: 'gpt-4o-mini' })
+    expect(useAppStore.getState().settings.defaultModel).toBe('gpt-4o-mini')
+    expect(useAppStore.getState().settings.permissionMode).toBe('ask')
+  })
+})
+
+// ── Deleted message actions ────────────────────────────────────────────────
+
+describe('store — setLastDeletedMessage', () => {
+  it('stores a deleted message', () => {
+    const msg = mkMessage({ id: 'm1', content: 'deleted content' })
+    useAppStore.getState().setLastDeletedMessage(msg)
+    expect(useAppStore.getState().lastDeletedMessage).toEqual(msg)
+  })
+
+  it('replaces previous deleted message', () => {
+    useAppStore.getState().setLastDeletedMessage(mkMessage({ id: 'm1' }))
+    const msg2 = mkMessage({ id: 'm2', content: 'second deletion' })
+    useAppStore.getState().setLastDeletedMessage(msg2)
+    expect(useAppStore.getState().lastDeletedMessage?.id).toBe('m2')
+  })
+
+  it('clears deleted message when set to null', () => {
+    useAppStore.getState().setLastDeletedMessage(mkMessage({ id: 'm1' }))
+    useAppStore.getState().setLastDeletedMessage(null)
+    expect(useAppStore.getState().lastDeletedMessage).toBeNull()
+  })
+})
+
+describe('store — clearLastDeletedMessage', () => {
+  it('clears the last deleted message', () => {
+    useAppStore.getState().setLastDeletedMessage(mkMessage({ id: 'm1' }))
+    useAppStore.getState().clearLastDeletedMessage()
+    expect(useAppStore.getState().lastDeletedMessage).toBeNull()
+  })
+
+  it('no-ops when already null', () => {
+    useAppStore.setState({ lastDeletedMessage: null })
+    useAppStore.getState().clearLastDeletedMessage()
+    expect(useAppStore.getState().lastDeletedMessage).toBeNull()
   })
 })

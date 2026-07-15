@@ -92,6 +92,7 @@ interface AppStore {
   upsertMessage: (id: string, msg: Message) => void
   updateRunningTool: (patch: Partial<Message>) => void
   setLoading: (v: boolean) => void
+  clearAllMessages: () => void
 
   setCommits: (commits: GitCommit[]) => void
   setActiveCommit: (hash: string | null) => void
