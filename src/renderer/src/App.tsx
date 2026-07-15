@@ -446,9 +446,94 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'overview': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        store.appendMessage({
+          id: uuidv4(), sessionId: sess.id, role: 'user',
+          content: 'Generating project overview...', isStreaming: false, createdAt: Date.now(),
+        })
+        try {
+          // Read key project files
+          let readmeContent = ''
+          try { readmeContent = await el.fs.readFile(`${wsPath}/README.md`) } catch { /* no README */ }
+          let packageJson = ''
+          try { packageJson = await el.fs.readFile(`${wsPath}/package.json`) } catch { /* no package.json */ }
+
+          // Read file tree (top 2 levels)
+          const rootNodes = await el.fs.readDir(wsPath)
+          const formatTree = (nodes: import('@/types').FileNode[], depth = 0): string => {
+            let result = ''
+            for (const n of nodes) {
+              result += '  '.repeat(depth) + (n.type === 'folder' ? '📁' : '📄') + ' ' + n.name + '\n'
+              if (n.children && depth < 2) result += formatTree(n.children, depth + 1)
+            }
+            return result
+          }
+          const tree = formatTree(rootNodes)
+
+          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const hasAi = baseUrl.trim().length > 0
+
+          if (!hasAi) {
+            // Fallback: show structure without AI
+            const overview = [
+              `**Project Overview**\n`,
+              tree ? `**File Structure:**\n\`\`\`\n${tree}\`\`\`\n` : '',
+              packageJson ? `**package.json:**\n\`\`\`json\n${packageJson.slice(0, 2000)}\n\`\`\`\n` : '',
+              readmeContent ? `**README:**\n${readmeContent.slice(0, 1500)}\n` : '',
+            ].filter(Boolean).join('\n')
+            const msg = await el.db.addMessage(sess.id, 'system', overview)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            // Build AI prompt
+            const promptParts = [
+              'You are looking at a software project. Give a concise, friendly overview.',
+              '',
+              readmeContent ? `README:\n${readmeContent.slice(0, 3000)}\n` : '',
+              packageJson ? `package.json (key fields):\n${packageJson.slice(0, 2000)}\n` : '',
+              tree ? `Project structure:\n${tree}\n` : '',
+              'Provide: 1) What this project does, 2) Tech stack, 3) Main directories and their purpose.',
+              'Keep it under 300 words. Use plain Markdown.',
+            ].filter(Boolean).join('\n')
+
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                messages: [{ role: 'user', content: promptParts }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No overview generated.'
+
+            const msg = await el.db.addMessage(sess.id, 'system', content)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const errorMsg = `**Error generating overview:** ${(err as Error).message}`
+          const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
         break
       }
     }
