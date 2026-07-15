@@ -1,5 +1,29 @@
+// NOTE: vi.mock() calls must be at file top — vitest hoists them before imports
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
+
+// Mock xterm for TerminalView tests
+vi.mock('@xterm/xterm', () => ({
+  Terminal: vi.fn().mockImplementation(() => ({
+    loadAddon: vi.fn(),
+    open: vi.fn(),
+    focus: vi.fn(),
+    write: vi.fn(),
+    clear: vi.fn(),
+    onData: vi.fn().mockReturnValue(vi.fn()),
+    onResize: vi.fn().mockReturnValue(vi.fn()),
+    dispose: vi.fn(),
+    cols: 80,
+    rows: 24,
+  })),
+}))
+
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: vi.fn().mockImplementation(() => ({
+    fit: vi.fn(),
+    dispose: vi.fn(),
+  })),
+}))
 
 const electronMock = {
   db: {
@@ -18,7 +42,7 @@ const electronMock = {
     searchMessages: vi.fn().mockResolvedValue([]),
   },
   settings: {
-    get: vi.fn().mockResolvedValue({ apiKey: 'sk-test', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
+    get: vi.fn().mockResolvedValue({ apiKey: '***', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
     set: vi.fn().mockResolvedValue(undefined),
   },
   workspace: {
@@ -69,13 +93,10 @@ const electronMock = {
     onThinkingDelta: vi.fn().mockReturnValue(() => {}),
     onTodosUpdate: vi.fn().mockReturnValue(() => {}),
     onAskUser: vi.fn().mockReturnValue(() => {}),
-    sendUserAnswer: vi.fn(),
     onAgentSpawned: vi.fn().mockReturnValue(() => {}),
     onAgentStatus: vi.fn().mockReturnValue(() => {}),
     onCompaction: vi.fn().mockReturnValue(() => {}),
     onSessionComplete: vi.fn().mockReturnValue(() => {}),
-    onTodosUpdate: vi.fn().mockReturnValue(() => {}),
-    onAskUser: vi.fn().mockReturnValue(() => {}),
     sendUserAnswer: vi.fn(),
   },
   tools: {
@@ -119,6 +140,13 @@ Object.defineProperty(window, 'electron', { value: electronMock, writable: true 
 
 // jsdom doesn't implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn()
+
+// Mock ResizeObserver
+globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
+  observe: vi.fn(),
+  unobserve: vi.fn(),
+  disconnect: vi.fn(),
+}))
 
 vi.spyOn(console, 'error').mockImplementation(() => {})
 vi.spyOn(console, 'warn').mockImplementation(() => {})
