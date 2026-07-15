@@ -252,14 +252,23 @@ export interface SearchResult {
   role: string
 }
 
-export function searchMessages(query: string): SearchResult[] {
+export function searchMessages(query: string, filters?: { startDate?: number; endDate?: number }): SearchResult[] {
   const q = query.toLowerCase()
   const results: SearchResult[] = []
   const store = readStore()
+
+  const startMs = filters?.startDate ?? 0
+  const endMs = filters?.endDate ?? Infinity
+
   for (const s of store.sessions) {
-    if (s.title.toLowerCase().includes(q)) {
+    // Date filter: check session createdAt falls within the range
+    const sessionTime = s.created_at ?? 0
+    if (sessionTime < startMs || sessionTime > endMs) continue
+
+    if (q && s.title.toLowerCase().includes(q)) {
       results.push({ sessionId: s.id, sessionTitle: s.title, messageId: '', content: '(session title match)', role: '' })
     }
+    if (!q) continue // when no query, don't search messages
     const sessionMessages = store.messages.filter((m) => m.session_id === s.id)
     for (const m of sessionMessages) {
       if (m.content?.toLowerCase().includes(q)) {

@@ -41,7 +41,7 @@ declare global {
         addMessage(sessionId: string, role: string, content: string, opts?: object): Promise<RawMessage>
         deleteMessage(id: string): Promise<void>
         updateMessage(id: string, updates: object): Promise<void>
-        searchMessages(query: string): Promise<SearchResult[]>
+        searchMessages(query: string, filters?: { startDate?: number; endDate?: number }): Promise<SearchResult[]>
       }
       settings: {
         get(): Promise<AppSettings>

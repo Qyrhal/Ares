@@ -27,11 +27,36 @@ interface SessionSearchOverlayProps {
   onSelectSession: (id: string) => void
 }
 
+type DatePreset = 'all' | 'today' | '7days' | '30days'
+
+function datePresetRange(preset: DatePreset): { startDate?: number; endDate?: number } {
+  const now = Date.now()
+  const day = 86_400_000
+  switch (preset) {
+    case 'today':
+      return { startDate: now - day, endDate: now }
+    case '7days':
+      return { startDate: now - 7 * day, endDate: now }
+    case '30days':
+      return { startDate: now - 30 * day, endDate: now }
+    default:
+      return {}
+  }
+}
+
+const DATE_PRESETS: { value: DatePreset; label: string }[] = [
+  { value: 'all', label: 'All time' },
+  { value: 'today', label: 'Today' },
+  { value: '7days', label: '7 days' },
+  { value: '30days', label: '30 days' },
+]
+
 export function SessionSearchOverlay({ open, onClose, onSelectSession }: SessionSearchOverlayProps): React.ReactElement | null {
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SearchResult[]>([])
   const [loading, setLoading] = useState(false)
   const [selectedIdx, setSelectedIdx] = useState(0)
+  const [datePreset, setDatePreset] = useState<DatePreset>('all')
   const inputRef = useRef<HTMLInputElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout>>()
@@ -49,19 +74,21 @@ export function SessionSearchOverlay({ open, onClose, onSelectSession }: Session
     }
     setLoading(true)
     try {
-      const res = await el.db.searchMessages(q)
+      const filters = datePresetRange(datePreset)
+      const res = await el.db.searchMessages(q, filters)
       setResults(res)
     } catch {
       setResults([])
     }
     setLoading(false)
-  }, [])
+  }, [datePreset])
 
   useEffect(() => {
     if (open) {
       setQuery('')
       setResults([])
       setSelectedIdx(0)
+      setDatePreset('all')
       setLoading(false)
       setTimeout(() => inputRef.current?.focus(), 50)
     }
@@ -150,6 +177,27 @@ export function SessionSearchOverlay({ open, onClose, onSelectSession }: Session
               {flatResults.length} result{flatResults.length !== 1 ? 's' : ''}
             </span>
           )}
+        </div>
+
+        {/* Date filter chips */}
+        <div className="flex items-center gap-1.5 border-b border-border px-4 py-2">
+          {DATE_PRESETS.map((preset) => (
+            <button
+              key={preset.value}
+              onClick={() => {
+                setDatePreset(preset.value)
+                setSelectedIdx(0)
+                if (query.trim()) doSearch(query)
+              }}
+              className={`rounded-full px-2.5 py-0.5 text-[10px] font-medium transition-colors ${
+                datePreset === preset.value
+                  ? 'bg-primary/15 text-primary'
+                  : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
         </div>
 
         {/* Results */}

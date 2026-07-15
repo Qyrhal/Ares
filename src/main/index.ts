@@ -171,7 +171,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:deleteTodo', (_, id: string) => deleteTodo(id))
 
   // DB – search
-  ipcMain.handle('db:searchMessages', (_, query: string) => searchMessages(query))
+  ipcMain.handle('db:searchMessages', (_, query: string, filters?: { startDate?: number; endDate?: number }) => searchMessages(query, filters))
 
   // Settings
   ipcMain.handle('settings:get', () => getSettings())
