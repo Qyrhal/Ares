@@ -25,7 +25,8 @@
     "rebuild": "electron-rebuild -f -w node-pty",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "test:e2e": "electron-vite build && playwright test"
   },
   "build": {
     "appId": "com.ares.app",
@@ -81,6 +82,7 @@
   "devDependencies": {
     "@electron-toolkit/tsconfig": "^2.0.0",
     "@electron/rebuild": "^4.1.0",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.3.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

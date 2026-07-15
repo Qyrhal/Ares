@@ -28,6 +28,11 @@ import { getDiagnostics, hasLspSupport } from './lsp'
 import { getHooks, setHooks } from './hooks'
 import { exportSession, importSession } from './session-store'
 
+// E2E tests point this at a temp dir so runs never touch real app data
+if (process.env.ARES_USER_DATA) {
+  app.setPath('userData', process.env.ARES_USER_DATA)
+}
+
 const ptyProcesses = new Map<string, NodePty.IPty>()
 let nextTerminalId = 1
 

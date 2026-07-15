@@ -80,6 +80,7 @@ export interface AppSettings {
   apiBaseUrl: string
   defaultModel: string
   themeId: string
+  colorMode: 'dark' | 'light'
   systemPrompt: string
   permissionMode: PermissionMode
 }

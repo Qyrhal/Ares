@@ -23,7 +23,8 @@ import { SessionSearchOverlay } from '@/components/SessionSearchOverlay'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
-import { applyTheme } from '@/lib/theme'
+import { applyTheme, applyColorMode } from '@/lib/theme'
+import { SideChatInput } from '@/components/SideChatInput'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
 import { toast } from 'sonner'
@@ -107,6 +108,7 @@ export default function App(): React.ReactElement {
         const settings = parseSettings(rawSettings)
         store.setSettings(settings)
         applyTheme(settings.themeId)
+        applyColorMode(settings.colorMode)
 
         const sessions = rawSessions.map(parseSession)
         store.setSessions(sessions)
@@ -640,6 +642,15 @@ export default function App(): React.ReactElement {
     await el.settings.set(s)
     store.setSettings(s)
     applyTheme(s.themeId)
+    applyColorMode(s.colorMode)
+  }, [])
+
+  const handleToggleColorMode = useCallback(async () => {
+    const settings = useAppStore.getState().settings
+    const next = { ...settings, colorMode: settings.colorMode === 'dark' ? 'light' as const : 'dark' as const }
+    await el.settings.set(next)
+    useAppStore.getState().setSettings(next)
+    applyColorMode(next.colorMode)
   }, [])
 
   const handleDeleteAllSessions = useCallback(async () => {
@@ -718,6 +729,65 @@ export default function App(): React.ReactElement {
     store.setSideChatMessages([])
     store.setSideChatLoading(false)
   }, [store])
+
+  // Side chat runs in plain chat mode — no tools, just streaming Q&A next to the main session.
+  const handleSendSideChat = useCallback(async (text: string) => {
+    const { sideChatSessionId, sideChatIsLoading, sideChatMessages, settings } = useAppStore.getState()
+    if (!sideChatSessionId || sideChatIsLoading || !text.trim()) return
+
+    const sess = useAppStore.getState().sessions.find((s) => s.id === sideChatSessionId)
+    const rawUser = await el.db.addMessage(sideChatSessionId, 'user', text)
+    if (!rawUser) return
+    const userMsg = parseMessage(rawUser)
+    store.appendSideChatMessage(userMsg)
+
+    if (sideChatMessages.length === 0 && text.trim()) {
+      const title = text.slice(0, 60).trim()
+      await el.db.updateSession(sideChatSessionId, { title })
+      store.updateSession(sideChatSessionId, { title })
+    }
+
+    store.setSideChatLoading(true)
+    const streamingId = uuidv4()
+    let streamingMsg: Message = {
+      id: streamingId, sessionId: sideChatSessionId, role: 'assistant',
+      content: '', isStreaming: true, createdAt: Date.now(),
+    }
+
+    await sendMessage(
+      sess?.model || settings.defaultModel || 'gpt-4o-mini',
+      [...sideChatMessages, userMsg],
+      (chunk) => {
+        streamingMsg = { ...streamingMsg, content: chunk }
+        store.upsertSideChatMessage(streamingId, streamingMsg)
+      },
+      async (fullText) => {
+        const rawA = await el.db.addMessage(sideChatSessionId, 'assistant', fullText)
+        store.removeSideChatMessage(streamingId)
+        store.appendSideChatMessage(rawA ? parseMessage(rawA) : { ...streamingMsg, id: uuidv4(), isStreaming: false })
+        store.setSideChatLoading(false)
+      },
+      undefined,
+      undefined,
+      (err) => {
+        store.removeSideChatMessage(streamingId)
+        store.appendSideChatMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
+        store.setSideChatLoading(false)
+      },
+      undefined,
+      undefined,
+      null,
+      undefined,
+      undefined,
+      'chat',
+    )
+  }, [sendMessage, store])
+
+  const handleAbortSideChat = useCallback(() => {
+    const id = useAppStore.getState().sideChatSessionId
+    if (id) el.pi.abort(id)
+    useAppStore.getState().setSideChatLoading(false)
+  }, [])
 
   const handlePromoteSideChat = useCallback(async () => {
     const sideChatId = useAppStore.getState().sideChatSessionId
@@ -900,6 +970,8 @@ export default function App(): React.ReactElement {
                       }}
                       agentMode={agentMode}
                       onAgentModeChange={setAgentMode}
+                      colorMode={store.settings.colorMode}
+                      onToggleColorMode={handleToggleColorMode}
                       pluginSkills={agentSkills}
                       pluginCommands={agentCommands}
                       replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
@@ -930,7 +1002,13 @@ export default function App(): React.ReactElement {
                           messages={store.sideChatMessages}
                           sessionTitle={sideSession.title}
                           isLoading={store.sideChatIsLoading}
-                          onSuggestion={(text) => handleOpenSideChat()}
+                          onSuggestion={handleSendSideChat}
+                        />
+                        <SideChatInput
+                          onSend={handleSendSideChat}
+                          disabled={store.sideChatIsLoading}
+                          onCancel={handleAbortSideChat}
+                          placeholder={`Ask ${sideSession.model || store.settings.defaultModel}…`}
                         />
                       </div>
                     )

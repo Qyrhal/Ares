@@ -57,6 +57,7 @@ export interface DbSettings {
   apiBaseUrl: string
   defaultModel: string
   themeId: string
+  colorMode?: string
   systemPrompt: string
   permissionMode: string
 }
