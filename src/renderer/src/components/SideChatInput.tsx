@@ -26,7 +26,7 @@ export function SideChatInput({ onSend, disabled, onCancel, placeholder }: SideC
   const canSend = text.trim().length > 0 && !disabled
 
   return (
-    <div className="border-t border-border bg-card/80 px-2.5 py-2">
+    <div className="shrink-0 border-t border-border bg-card/80 px-2.5 py-2">
       <div className="flex items-end gap-1.5 rounded-lg border border-border bg-input px-2.5 py-1.5 transition-all focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
         <textarea
           ref={textareaRef}

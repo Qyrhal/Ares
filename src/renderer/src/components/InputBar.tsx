@@ -539,7 +539,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
   return (
     <div
-      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-3 py-2 shadow-[var(--shadow-highlight)]"
+      className="relative shrink-0 border-t border-border bg-card/80 backdrop-blur-sm px-3 py-2 shadow-[var(--shadow-highlight)]"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
