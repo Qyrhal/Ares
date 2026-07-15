@@ -41,6 +41,9 @@ export default function App(): React.ReactElement {
   const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
   const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
 
+  // ── Agent mode (chat vs agent) ──────────────────────────────────────────────
+  const [agentMode, setAgentMode] = useState<import('@/types').AgentMode>('agent')
+
   // ── Reply-to state ───────────────────────────────────────────────────────────
   const [replyTo, setReplyTo] = useState<Message | null>(null)
 
@@ -545,6 +548,7 @@ export default function App(): React.ReactElement {
         streamingMsg = { ...streamingMsg, thinking: thinkingChunk }
         store.upsertMessage(streamingId, streamingMsg)
       },
+      agentMode,
     )
   }, [activeSession, replyTo, sendMessage, expandMentions, onToolPermission, refreshTree])
 
@@ -894,6 +898,8 @@ export default function App(): React.ReactElement {
                         store.updateSession(activeSession.id, { permissionMode: m })
                         el.db.updateSession(activeSession.id, { permissionMode: m })
                       }}
+                      agentMode={agentMode}
+                      onAgentModeChange={setAgentMode}
                       pluginSkills={agentSkills}
                       pluginCommands={agentCommands}
                       replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
