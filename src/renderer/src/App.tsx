@@ -320,8 +320,16 @@ export default function App(): React.ReactElement {
   // Keyboard shortcuts — reads store state directly to avoid stale closures
   useEffect(() => {
     const handler = (e: KeyboardEvent): void => {
+      // Don't fire shortcuts when the user is typing in an input or textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+
       // Abort: Escape or Ctrl+C when agent is running
       if (e.key === 'Escape' && useAppStore.getState().isLoading) { e.preventDefault(); handleAbort(); return }
+      // Close tab on Escape when not loading
+      if (e.key === 'Escape') {
+        const { activeTabId } = useAppStore.getState()
+        if (activeTabId) { e.preventDefault(); handleCloseTab(activeTabId); return }
+      }
       if (e.ctrlKey && e.key === 'c' && useAppStore.getState().isLoading) { e.preventDefault(); handleAbort(); return }
 
       if (!(e.metaKey || e.ctrlKey)) return

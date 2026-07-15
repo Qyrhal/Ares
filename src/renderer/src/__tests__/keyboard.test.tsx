@@ -213,4 +213,150 @@ describe('Keyboard shortcuts — Escape close tab', () => {
     await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
     // Should not crash
   })
+
+  it('Escape with no loading state + one tab closes the active tab', async () => {
+    useAppStore.setState({
+      tabs: [{ type: 'session' as const, id: 's1', title: 'Only Tab' }],
+      activeTabId: 's1',
+      isLoading: false,
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+    expect(useAppStore.getState().tabs).toHaveLength(0)
+    expect(useAppStore.getState().activeTabId).toBeNull()
+  })
+
+  it('Escape with no loading state + multiple tabs closes the active tab', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+        { type: 'session' as const, id: 's2', title: 'Tab 2' },
+      ],
+      activeTabId: 's1',
+      isLoading: false,
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { key: 'Escape' }) })
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    // Closes s1 (active), s2 remains
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+  })
+})
+
+describe('Keyboard shortcuts — ⌘W close tab', () => {
+  it('⌘W closes the active tab (session tab)', async () => {
+    const deleteSession = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window.electron.db, { deleteSession })
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+        { type: 'session' as const, id: 's2', title: 'Tab 2' },
+      ],
+      activeTabId: 's1',
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 'w' }) })
+    await waitFor(() => expect(deleteSession).toHaveBeenCalledWith('s1'))
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+  })
+
+  it('⌘W closes the active file tab', async () => {
+    useAppStore.setState({
+      tabs: [{ type: 'file' as const, path: '/test.ts', name: 'test.ts', isDirty: false }],
+      activeTabId: '/test.ts',
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 'w' }) })
+    expect(useAppStore.getState().tabs).toHaveLength(0)
+    expect(useAppStore.getState().activeTabId).toBeNull()
+  })
+
+  it('⌘W no-ops when no tabs open', async () => {
+    await renderApp()
+    expect(() => fireEvent.keyDown(window, { metaKey: true, key: 'w' })).not.toThrow()
+  })
+})
+
+describe('Keyboard shortcuts — ⌘`/⌘J terminal toggle', () => {
+  it('⌘` toggles terminal from closed to open', async () => {
+    await renderApp()
+    expect(useAppStore.getState().terminalOpen).toBe(false)
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
+    expect(useAppStore.getState().terminalOpen).toBe(true)
+  })
+
+  it('⌘J toggles terminal from open to closed', async () => {
+    useAppStore.setState({ terminalOpen: true })
+    await renderApp()
+    expect(useAppStore.getState().terminalOpen).toBe(true)
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 'j' }) })
+    expect(useAppStore.getState().terminalOpen).toBe(false)
+  })
+
+  it('Multiple rapid toggles of terminal do not crash', async () => {
+    await renderApp()
+    expect(() => {
+      act(() => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
+      act(() => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
+      act(() => { fireEvent.keyDown(window, { metaKey: true, key: '`' }) })
+    }).not.toThrow()
+    // Odd number of toggles — terminal ends open
+    expect(useAppStore.getState().terminalOpen).toBe(true)
+  })
+})
+
+describe('Keyboard shortcuts — input-focused guard', () => {
+  it('shortcuts do not fire when an input element is focused', async () => {
+    const deleteSession = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window.electron.db, { deleteSession })
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+        { type: 'session' as const, id: 's2', title: 'Tab 2' },
+      ],
+      activeTabId: 's1',
+    })
+    await renderApp()
+
+    const input = document.createElement('input')
+    input.setAttribute('data-testid', 'guard-input')
+    document.body.appendChild(input)
+    input.focus()
+    expect(document.activeElement).toBe(input)
+
+    await act(async () => { fireEvent.keyDown(input, { metaKey: true, key: 'w' }) })
+
+    // Tab should NOT have been closed
+    expect(deleteSession).not.toHaveBeenCalled()
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+
+    document.body.removeChild(input)
+  })
+
+  it('shortcuts do not fire when a textarea element is focused', async () => {
+    const deleteSession = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window.electron.db, { deleteSession })
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'Tab 1' },
+      ],
+      activeTabId: 's1',
+    })
+    await renderApp()
+
+    const textarea = document.createElement('textarea')
+    textarea.setAttribute('data-testid', 'guard-textarea')
+    document.body.appendChild(textarea)
+    textarea.focus()
+    expect(document.activeElement).toBe(textarea)
+
+    await act(async () => { fireEvent.keyDown(textarea, { metaKey: true, key: '`' }) })
+
+    // Terminal should NOT have been toggled
+    expect(useAppStore.getState().terminalOpen).toBe(false)
+
+    document.body.removeChild(textarea)
+  })
 })
