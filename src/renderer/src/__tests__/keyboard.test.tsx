@@ -206,6 +206,22 @@ describe('Keyboard shortcuts — cross-platform ctrlKey', () => {
   })
 })
 
+describe('Keyboard shortcuts — metaKey session creation', () => {
+  it('⌘T creates session on macOS', async () => {
+    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 't' }) })
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
+  })
+
+  it('⌘N creates session on macOS', async () => {
+    const createSession = (window.electron.db as { createSession: ReturnType<typeof vi.fn> }).createSession
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: 'n' }) })
+    await waitFor(() => expect(createSession).toHaveBeenCalled())
+  })
+})
+
 describe('Keyboard shortcuts — Escape close tab', () => {
   it('Escape close tab when no loading', async () => {
     useAppStore.setState({ isLoading: false })
