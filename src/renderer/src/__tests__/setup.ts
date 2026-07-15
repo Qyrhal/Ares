@@ -2,28 +2,31 @@
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
-// Mock xterm for TerminalView tests
-vi.mock('@xterm/xterm', () => ({
-  Terminal: vi.fn().mockImplementation(() => ({
-    loadAddon: vi.fn(),
-    open: vi.fn(),
-    focus: vi.fn(),
-    write: vi.fn(),
-    clear: vi.fn(),
-    onData: vi.fn().mockReturnValue(vi.fn()),
-    onResize: vi.fn().mockReturnValue(vi.fn()),
-    dispose: vi.fn(),
-    cols: 80,
-    rows: 24,
-  })),
-}))
+// Mock xterm for TerminalView tests — use plain constructor functions
+// (vi.fn() is not available in hoisted vi.mock factory context)
+vi.mock('@xterm/xterm', () => {
+  function MockTerminal() {
+    this.loadAddon = function() {}
+    this.open = function() {}
+    this.focus = function() {}
+    this.write = function() {}
+    this.clear = function() {}
+    this.onData = function() { return function() {} }
+    this.onResize = function() { return function() {} }
+    this.dispose = function() {}
+    this.cols = 80
+    this.rows = 24
+  }
+  return { Terminal: MockTerminal as unknown as typeof import('@xterm/xterm').Terminal }
+})
 
-vi.mock('@xterm/addon-fit', () => ({
-  FitAddon: vi.fn().mockImplementation(() => ({
-    fit: vi.fn(),
-    dispose: vi.fn(),
-  })),
-}))
+vi.mock('@xterm/addon-fit', () => {
+  function MockFitAddon() {
+    this.fit = function() {}
+    this.dispose = function() {}
+  }
+  return { FitAddon: MockFitAddon as unknown as typeof import('@xterm/addon-fit').FitAddon }
+})
 
 const electronMock = {
   db: {
@@ -141,12 +144,12 @@ Object.defineProperty(window, 'electron', { value: electronMock, writable: true 
 // jsdom doesn't implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn()
 
-// Mock ResizeObserver
-globalThis.ResizeObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  unobserve: vi.fn(),
-  disconnect: vi.fn(),
-}))
+// Mock ResizeObserver — plain constructor, NOT vi.fn (needs new)
+globalThis.ResizeObserver = class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
 
 vi.spyOn(console, 'error').mockImplementation(() => {})
 vi.spyOn(console, 'warn').mockImplementation(() => {})
