@@ -9,6 +9,7 @@ import {
   AttachmentDescription, AttachmentActions, AttachmentAction, AttachmentGroup
 } from '@/components/ui/attachment'
 import { v4 as uuidv4 } from 'uuid'
+import { contextWindow, estimateTokens } from '@/lib/context'
 
 type PickerKind = 'builtin' | 'skill' | 'command'
 interface PickerItem {
@@ -73,20 +74,6 @@ const PERM_MODES: PermissionMode[] = ['ask', 'auto', 'yolo']
 const PERM_LABELS: Record<PermissionMode, string> = { ask: 'Ask', auto: 'Auto', yolo: 'Yolo' }
 const EFFORT_LEVELS = ['low', 'medium', 'high'] as const
 const EFFORT_LABELS: Record<string, string> = { low: 'Low', medium: 'Med', high: 'High' }
-
-function contextWindow(model: string): number {
-  const m = (model ?? '').toLowerCase()
-  if (m.includes('claude')) return 200000
-  if (m.includes('gpt-4.1') || m.includes('gpt-4o')) return 128000
-  if (m.includes('gpt-4')) return 8192
-  if (m.includes('gpt-3.5')) return 16385
-  if (m.includes('deepseek')) return 64000
-  return 128000
-}
-
-function estimateTokens(messages: Message[]): number {
-  return messages.reduce((sum, m) => sum + Math.ceil((m.content?.length ?? 0) / 4), 0)
-}
 
 function fmtTokens(n: number): string {
   if (n >= 1_000_000) return `${Math.round(n / 100_000) / 10}M`

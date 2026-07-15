@@ -24,6 +24,7 @@ import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme, applyColorMode } from '@/lib/theme'
+import { needsCompaction, compactConversation } from '@/lib/context'
 import { SideChatInput } from '@/components/SideChatInput'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
@@ -491,7 +492,26 @@ export default function App(): React.ReactElement {
       store.updateSession(sess.id, { title })
     }
 
-    const expandedMessages = await expandMentions([...messages, userMsg], workspacePath)
+    const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+
+    // Compact when the conversation nears the model's context limit
+    let history = [...messages, userMsg]
+    if (needsCompaction(history, model) && store.settings.apiBaseUrl.trim()) {
+      try {
+        const result = await compactConversation(sess.id, history, store.settings, model)
+        if (result.compacted > 0) {
+          history = result.messages
+          store.setMessages(history)
+          toast('Context compacted', {
+            description: `${result.compacted} earlier messages summarized to stay within the context window`,
+          })
+        }
+      } catch {
+        // Summarization failed — send uncompacted and let the provider complain if it must
+      }
+    }
+
+    const expandedMessages = await expandMentions(history, workspacePath)
 
     store.setLoading(true)
     const streamingId = uuidv4()
@@ -503,7 +523,7 @@ export default function App(): React.ReactElement {
     }
 
     await sendMessage(
-      sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+      model,
       expandedMessages,
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
@@ -747,6 +767,18 @@ export default function App(): React.ReactElement {
       store.updateSession(sideChatSessionId, { title })
     }
 
+    const sideModel = sess?.model || settings.defaultModel || 'gpt-4o-mini'
+    let sideHistory = [...sideChatMessages, userMsg]
+    if (needsCompaction(sideHistory, sideModel) && settings.apiBaseUrl.trim()) {
+      try {
+        const result = await compactConversation(sideChatSessionId, sideHistory, settings, sideModel)
+        if (result.compacted > 0) {
+          sideHistory = result.messages
+          store.setSideChatMessages(sideHistory)
+        }
+      } catch { /* send uncompacted */ }
+    }
+
     store.setSideChatLoading(true)
     const streamingId = uuidv4()
     let streamingMsg: Message = {
@@ -755,8 +787,8 @@ export default function App(): React.ReactElement {
     }
 
     await sendMessage(
-      sess?.model || settings.defaultModel || 'gpt-4o-mini',
-      [...sideChatMessages, userMsg],
+      sideModel,
+      sideHistory,
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
         store.upsertSideChatMessage(streamingId, streamingMsg)

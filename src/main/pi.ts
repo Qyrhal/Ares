@@ -9,6 +9,7 @@ import path from 'path'
 import { getAgentConfig, getSettings, replaceTodos, createSession, updateSession, addMessage, getSessions, getMessages, addTeamNote, getTeamNotes } from './db'
 import { createCheckpoint } from './checkpoints'
 import { buildAutoAnswerMessages, parseAutoAnswerResponse, findRootSessionId, briefWithTeamNotes } from './orchestration'
+import { ARES_PROMPT } from '../shared/ares-prompt'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
 // markAsUncloneable was added in Node.js 22; Electron 33 ships Node.js 20.
@@ -172,44 +173,9 @@ async function buildResourceLoader(cwd: string) {
 
   const settingsManager = SettingsManager.create(cwd, agentDir)
   const { systemPrompt } = getSettings()
-  const aresPrompt = [
-    '## Ares Agent Protocol',
-    '',
-    'You have access to several custom tools. Use them appropriately:',
-    '',
-    '### setTodos — Plan Mode',
-    'ALWAYS call setTodos at the start of any multi-step task. Show your plan as a checklist. Mark items complete ONE AT A TIME, immediately after finishing each — call setTodos again right then, not in a batch at the end. If you start a genuinely new, unrelated plan, call setTodos with ONLY the new items — this replaces the whole list, so don\'t carry stale items forward. The user sees this as a live progress tracker.',
-    '',
-    '### webSearch — Web Search',
-    'Use webSearch to look up current information, docs, APIs, news, or anything outside your training data. Results come from DuckDuckGo. Always cite sources.',
-    '',
-    '### Mermaid diagrams',
-    'When explaining architecture, a process, a sequence of calls, a data model, or any other structure/flow that benefits from a visual, write a fenced ```mermaid code block (flowchart, sequenceDiagram, classDiagram, erDiagram, stateDiagram, etc.). It renders as a live diagram in the chat — do not describe in prose what a diagram would show more clearly.',
-    '',
-    '### spawnAgent / spawnAgents — Sub-agents',
-    'Decompose complex work into independent subtasks and use spawnAgent (sequential) or spawnAgents (parallel) to delegate. Each sub-agent gets its own session, appears in the Agent Tree, and automatically receives any shareWithTeam notes in its briefing. Use spawnAgents only for truly independent subtasks. A sub-agent\'s own askUser calls are answered automatically on your behalf — you will not be interrupted for them.',
-    '',
-    '### messageAgent — Resume a sub-agent',
-    'If a spawned sub-agent errors, you get its recent activity and agentId back. Use messageAgent({ agentId, message }) to send corrective instructions and resume that SAME sub-agent instead of starting over. Also use it to keep directing a specific sub-agent mid-task.',
-    '',
-    '### shareWithTeam / getTeamNotes — Team coordination',
-    'Use shareWithTeam({ note }) to broadcast a finding, convention, or blocker to every agent in the current task tree (yourself and all sub-agents). Use getTeamNotes({}) to read what teammates have shared. New sub-agents automatically get existing team notes in their briefing.',
-    '',
-    '### askUser — Questions',
-    'Ask the user when you need clarification, preferences, or decisions. Provide concrete options when possible. Do NOT ask yes/no questions that the user could infer from context. (Only reaches a human at the top level — a sub-agent\'s askUser is auto-answered.)',
-    '',
-    '### notifyComplete — Done Signal',
-    'Call this ONLY when the ENTIRE goal is satisfied. Not for milestones.',
-    '',
-    '### Workflow',
-    '1. Understand the request',
-    '2. Call setTodos to show your plan',
-    '3. Work through items one at a time, marking each complete as you finish it — use spawnAgent/spawnAgents for subtasks, askUser for clarification, messageAgent to recover from a sub-agent error, shareWithTeam/getTeamNotes to coordinate',
-    '4. When ALL items are done, call notifyComplete',
-  ].join('\n')
   const fullSystemPrompt = systemPrompt.trim()
-    ? `${systemPrompt.trim()}\n\n${aresPrompt}`
-    : aresPrompt
+    ? `${systemPrompt.trim()}\n\n${ARES_PROMPT}`
+    : ARES_PROMPT
   const loader = new DefaultResourceLoader({
     cwd,
     agentDir,
