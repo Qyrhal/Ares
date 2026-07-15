@@ -446,8 +446,63 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /status - system health check, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'status': {
+        const lines: string[] = ['**Ares Status Report**\n']
+        const { sessions, workspacePath } = useAppStore.getState()
+        const settings = store.settings
+
+        // App version
+        const appVersion = '__VERSION__'  // replaced at build time
+        lines.push(`**App:** Ares ${appVersion}`)
+
+        // Session count
+        const running = sessions.filter((s: Session) => s.agentStatus === 'running').length
+        const done = sessions.filter((s: Session) => s.agentStatus === 'done').length
+        lines.push(`**Sessions:** ${sessions.length} total (${running} running, ${done} completed)`)
+
+        // Workspace
+        if (workspacePath) {
+          lines.push(`**Workspace:** \`${workspacePath}\``)
+        } else {
+          lines.push('**Workspace:** None — use /folder to open one')
+        }
+
+        // API connectivity
+        const baseUrl = (settings.apiBaseUrl || '').replace(/\/$/, '')
+        if (baseUrl) {
+          lines.push(`**API endpoint:** \`${baseUrl}\``)
+          lines.push(`**Default model:** ${settings.defaultModel || 'not set'}`)
+          try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 5000)
+            const resp = await fetch(`${baseUrl}/models`, {
+              signal: controller.signal,
+              headers: settings.apiKey
+                ? { Authorization: `Bearer ${settings.apiKey}` }
+                : {},
+            })
+            clearTimeout(timeout)
+            if (resp.ok) {
+              lines.push('**API status:** ✅ Connected')
+            } else if (resp.status === 401 || resp.status === 403) {
+              lines.push('**API status:** ⚠️ Reached endpoint but auth failed — check your API key')
+            } else {
+              lines.push(`**API status:** ⚠️ HTTP ${resp.status} — endpoint may not support /models`)
+            }
+          } catch {
+            lines.push('**API status:** ❌ Unreachable — check your API URL and network')
+          }
+        } else {
+          lines.push('**API:** Not configured — set apiBaseUrl in settings')
+        }
+
+        lines.push('\nRun `/help` for all available commands.')
+        const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
