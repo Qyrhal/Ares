@@ -128,6 +128,7 @@ declare global {
         onToolStart(cb: (reqId: string, name: string, input: string) => void): () => void
         onToolEnd(cb: (reqId: string, output: string, isError: boolean) => void): () => void
         onError(cb: (reqId: string, message: string) => void): () => void
+        onCompaction(cb: (sessionId: string, phase: 'start' | 'end') => void): () => void
         spawnFromUi(parentSessionId: string, task: string, title: string): Promise<unknown>
       }
     }

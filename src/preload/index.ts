@@ -139,6 +139,11 @@ const piApi = {
     ipcRenderer.on('pi:agent-spawned', listener)
     return () => ipcRenderer.off('pi:agent-spawned', listener)
   },
+  onCompaction: (cb: (sessionId: string, phase: 'start' | 'end') => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, sessionId: string, phase: 'start' | 'end'): void => cb(sessionId, phase)
+    ipcRenderer.on('pi:compaction', listener)
+    return () => ipcRenderer.off('pi:compaction', listener)
+  },
   onAgentStatus: (cb: (sessionId: string, status: string) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, sessionId: string, status: string): void => cb(sessionId, status)
     ipcRenderer.on('pi:agent-status', listener)

@@ -184,6 +184,14 @@ export default function App(): React.ReactElement {
       }
     })
 
+    const offCompaction = el.pi.onCompaction((_sessionId, phase) => {
+      if (phase === 'end') {
+        toast('Context compacted', {
+          description: 'Older agent conversation was summarized to stay within the context window',
+        })
+      }
+    })
+
     const offSessionComplete = el.pi.onSessionComplete((_, title, summary, childIds) => {
       for (const id of childIds) {
         el.db.deleteSession(id).catch(() => {})
@@ -192,7 +200,7 @@ export default function App(): React.ReactElement {
       toast.success(title, { description: summary, duration: 10_000 })
     })
 
-    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offSessionComplete() }
+    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete() }
   }, [])
 
   // Load messages and todos when active session changes
