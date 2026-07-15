@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { AppSettings, Message, PermissionMode } from '@/types'
+import { AppSettings, Message, PermissionMode, AgentMode } from '@/types'
 
 export type StreamCallback = (accumulated: string) => void
 export type DoneCallback = (fullText: string, thinking?: string) => void
@@ -22,6 +22,7 @@ export function useAI(settings: AppSettings) {
     workspacePath?: string | null,
     _effort?: string,
     onThinking?: ThinkingCallback,
+    agentMode?: AgentMode,
   ): Promise<void> => {
     const sessionId = messages[0]?.sessionId
     const lastUser = [...messages].reverse().find((m) => m.role === 'user')
@@ -32,6 +33,13 @@ export function useAI(settings: AppSettings) {
       return
     }
 
+    // Chat mode: no tools, plain streaming chat completion
+    if (agentMode === 'chat') {
+      await handleChatCompletion(model, messages, settings, onStream, onDone, onError)
+      return
+    }
+
+    // Agent mode: full Pi SDK pipeline with tools (existing behavior)
     const reqId = uuidv4()
     return new Promise<void>((resolve) => {
       const cleanups = [
@@ -62,6 +70,98 @@ export function useAI(settings: AppSettings) {
   const isConfigured = settings.apiBaseUrl.trim().length > 0
 
   return { sendMessage, isConfigured }
+}
+
+/**
+ * Chat mode: streaming chat completion via direct fetch.
+ * No tools, no agent session — just Q&A.
+ */
+async function handleChatCompletion(
+  model: string,
+  messages: Message[],
+  settings: AppSettings,
+  onStream: StreamCallback,
+  onDone: DoneCallback,
+  onError?: ErrorCallback,
+): Promise<void> {
+  const baseUrl = settings.apiBaseUrl.replace(/\/$/, '')
+  const url = `${baseUrl}/chat/completions`
+
+  const chatMessages = messages.map((m) => ({
+    role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+    content: m.content,
+  }))
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
+      },
+      body: JSON.stringify({
+        model,
+        messages: chatMessages,
+        stream: true,
+      }),
+    })
+
+    if (!response.ok) {
+      const errText = await response.text().catch(() => `HTTP ${response.status}`)
+      throw new Error(errText)
+    }
+
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let accumulated = ''
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+      const lines = buffer.split('\n')
+      buffer = lines.pop() ?? ''
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const data = line.slice(6).trim()
+          if (data === '[DONE]') continue
+          try {
+            const json = JSON.parse(data)
+            const content = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.text ?? ''
+            if (content) {
+              accumulated += content
+              onStream(accumulated)
+            }
+          } catch {
+            // Skip malformed SSE lines
+          }
+        }
+      }
+    }
+
+    // Process remaining buffer
+    if (buffer.startsWith('data: ')) {
+      const data = buffer.slice(6).trim()
+      if (data !== '[DONE]') {
+        try {
+          const json = JSON.parse(data)
+          const content = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.text ?? ''
+          if (content) accumulated += content
+        } catch { /* skip */ }
+      }
+    }
+
+    onDone(accumulated)
+  } catch (err) {
+    if (onError) {
+      onError(err instanceof Error ? err : new Error(String(err)))
+    } else {
+      onDone(`**Error:** ${(err as Error).message}`)
+    }
+  }
 }
 
 async function noEndpointFallback(onStream: StreamCallback, onDone: DoneCallback): Promise<void> {

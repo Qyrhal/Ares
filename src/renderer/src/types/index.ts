@@ -73,6 +73,7 @@ export interface Todo {
 }
 
 export type PermissionMode = 'ask' | 'auto' | 'yolo'
+export type AgentMode = 'chat' | 'agent'
 
 export interface AppSettings {
   apiKey: string

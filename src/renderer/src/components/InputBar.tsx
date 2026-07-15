@@ -2,7 +2,7 @@ import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
-import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand } from '@/types'
+import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand, AgentMode } from '@/types'
 import { ProjectPicker } from '@/components/ProjectPicker'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
@@ -59,6 +59,8 @@ interface InputBarProps {
   onEffortChange?: (effort: string) => void
   permissionMode?: PermissionMode
   onPermissionModeChange?: (mode: PermissionMode) => void
+  agentMode?: AgentMode
+  onAgentModeChange?: (mode: AgentMode) => void
   // reply
   replyTo?: { id: string; content: string; role: string } | null
   onCancelReply?: () => void
@@ -156,7 +158,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
@@ -780,20 +782,53 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       {/* ── Bottom toolbar ─────────────────────────────────────────── */}
       <div className="mt-1.5 flex items-center justify-between">
 
-        {/* Left: permission mode */}
-        <button
-          type="button"
-          onClick={() => {
-            const idx = PERM_MODES.indexOf(permissionMode)
-            const next = PERM_MODES[(idx + 1) % PERM_MODES.length]
-            onPermissionModeChange?.(next)
-          }}
-          className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="Click to cycle permission mode"
-        >
-          <Shield className="size-2.5 shrink-0" />
-          <span>{PERM_LABELS[permissionMode]}</span>
-        </button>
+        {/* Left: mode toggle + permission mode */}
+        <div className="flex items-center gap-1">
+          {/* Chat/Agent mode toggle */}
+          <div className="flex items-center overflow-hidden rounded-md border border-border">
+            <button
+              type="button"
+              onClick={() => onAgentModeChange?.('chat')}
+              className={cn(
+                'px-1.5 py-0.5 text-[10px] transition-colors',
+                agentMode === 'chat'
+                  ? 'bg-teal-500/15 text-teal-400 font-medium'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              )}
+              title="Chat mode — no tool execution, just Q&A"
+            >
+              Chat
+            </button>
+            <button
+              type="button"
+              onClick={() => onAgentModeChange?.('agent')}
+              className={cn(
+                'px-1.5 py-0.5 text-[10px] transition-colors',
+                agentMode === 'agent' || agentMode === undefined
+                  ? 'bg-primary/15 text-primary font-medium'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              )}
+              title="Agent mode — full autonomous execution with tools"
+            >
+              Agent
+            </button>
+          </div>
+
+          {/* Permission mode */}
+          <button
+            type="button"
+            onClick={() => {
+              const idx = PERM_MODES.indexOf(permissionMode)
+              const next = PERM_MODES[(idx + 1) % PERM_MODES.length]
+              onPermissionModeChange?.(next)
+            }}
+            className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title="Click to cycle permission mode"
+          >
+            <Shield className="size-2.5 shrink-0" />
+            <span>{PERM_LABELS[permissionMode]}</span>
+          </button>
+        </div>
 
         {/* Right: model · effort · context */}
         <div className="flex items-center gap-0.5">
