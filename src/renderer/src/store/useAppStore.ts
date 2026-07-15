@@ -6,6 +6,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiBaseUrl: 'https://api.openai.com/v1',
   defaultModel: 'gpt-4o-mini',
   themeId: 'red',
+  colorMode: 'dark',
   systemPrompt: '',
   permissionMode: 'ask',
 }
@@ -113,6 +114,9 @@ interface AppStore {
   setSideChat: (id: string | null) => void
   setSideChatMessages: (msgs: Message[]) => void
   setSideChatLoading: (v: boolean) => void
+  appendSideChatMessage: (msg: Message) => void
+  upsertSideChatMessage: (id: string, msg: Message) => void
+  removeSideChatMessage: (id: string) => void
 
   // ── Deleted message (for undo) ──────────────────────────────────────────────
   setLastDeletedMessage: (msg: Message | null) => void
@@ -338,4 +342,16 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setSideChat: (id) => set({ sideChatSessionId: id }),
   setSideChatMessages: (msgs) => set({ sideChatMessages: msgs }),
   setSideChatLoading: (v) => set({ sideChatIsLoading: v }),
+  appendSideChatMessage: (msg) => set((s) => ({ sideChatMessages: [...s.sideChatMessages, msg] })),
+  upsertSideChatMessage: (id, msg) => set((s) => {
+    const exists = s.sideChatMessages.some((m) => m.id === id)
+    return {
+      sideChatMessages: exists
+        ? s.sideChatMessages.map((m) => m.id === id ? msg : m)
+        : [...s.sideChatMessages, msg],
+    }
+  }),
+  removeSideChatMessage: (id) => set((s) => ({
+    sideChatMessages: s.sideChatMessages.filter((m) => m.id !== id),
+  })),
 }))

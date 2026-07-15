@@ -51,6 +51,44 @@
   --color-surface-overlay: #1c1c1c;
 }
 
+/* Light mode — overrides the dark-tuned palette when .light is set on <html> */
+.light {
+  --color-background: #f7f7f7;
+  --color-foreground: #1a1a1a;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1a1a;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a1a1a;
+  --color-secondary: #ececec;
+  --color-secondary-foreground: #52525b;
+  --color-muted: #ececec;
+  --color-muted-foreground: #737373;
+  --color-accent: #e8e8e8;
+  --color-accent-foreground: #1a1a1a;
+  --color-border: #d8d8d8;
+  --color-input: #ffffff;
+
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.06);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08), 0 1px 2px -1px rgb(0 0 0 / 0.06);
+  --shadow-md: 0 4px 8px -2px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.06);
+  --shadow-lg: 0 10px 20px -4px rgb(0 0 0 / 0.12), 0 4px 8px -4px rgb(0 0 0 / 0.08);
+  --shadow-xl: 0 20px 32px -8px rgb(0 0 0 / 0.14), 0 8px 12px -6px rgb(0 0 0 / 0.08);
+  --shadow-inset-sm: inset 0 1px 2px 0 rgb(0 0 0 / 0.08);
+  --shadow-highlight: inset 0 1px 0 0 rgb(255 255 255 / 0.6);
+
+  --gradient-surface: linear-gradient(180deg, rgb(0 0 0 / 0.015) 0%, rgb(0 0 0 / 0) 100%);
+  --gradient-surface-raised: linear-gradient(180deg, rgb(255 255 255 / 0.6) 0%, rgb(255 255 255 / 0) 40%);
+
+  --color-border-subtle: #e5e5e5;
+  --color-border-strong: #c4c4c4;
+  --color-surface-raised: #ffffff;
+  --color-surface-overlay: #ffffff;
+}
+
+.light ::-webkit-scrollbar-thumb:hover { background: #b8b8b8; }
+.light pre { background: #f2f2f2; }
+.light code:not(pre code) { background: #ececec; color: #7c3aed; }
+
 /* Skeuomorphic surface + press-state helpers, used by ui/ primitives and panels */
 .surface-card {
   background-image: var(--gradient-surface);

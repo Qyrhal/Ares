@@ -23,3 +23,10 @@ release
 .vscode/settings.json
 .idea/
 
+
+# Playwright
+test-results
+playwright-report
+
+# TypeScript incremental build
+*.tsbuildinfo

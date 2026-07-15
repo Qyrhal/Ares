@@ -1,15 +1,15 @@
-import React, { useCallback, useEffect, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, RefreshCw, Save, Trash2 } from 'lucide-react'
+import React, { useCallback, useEffect, useRef, useState } from 'react'
+import { AlertCircle, CheckCircle2, Loader2, Moon, RefreshCw, Sun, Trash2 } from 'lucide-react'
 import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
 import { AppSettings } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { THEMES, applyTheme, DEFAULT_THEME_ID } from '@/lib/theme'
+import { THEMES, applyTheme, applyColorMode, DEFAULT_THEME_ID } from '@/lib/theme'
 
 const el = window.electron
 
-const INPUT = 'w-full rounded border border-border bg-input px-3 py-[0.4rem] text-[13px] text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground'
+const INPUT = 'w-full rounded-md border border-border bg-input px-3 py-[0.4rem] text-[13px] text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground'
 
 const SKILL_PROMPT = `You are an AI coding assistant with full read/write access to the user's workspace. You can perform the following operations:
 
@@ -37,19 +37,43 @@ const PRESET_ENDPOINTS = [
 ]
 
 type ConnStatus = 'idle' | 'loading' | 'ok' | 'error'
+type SaveState = 'idle' | 'saving' | 'saved'
+
+const AUTOSAVE_DELAY = 600
 
 export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessions }: SettingsPanelProps): React.ReactElement {
   const [form, setForm] = useState<AppSettings>(settings)
   const [showKey, setShowKey] = useState(false)
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [saveState, setSaveState] = useState<SaveState>('idle')
   const [deletingAll, setDeletingAll] = useState(false)
 
   const [connStatus, setConnStatus] = useState<ConnStatus>('idle')
   const [connMessage, setConnMessage] = useState('')
   const [fetchedModels, setFetchedModels] = useState<SelectOption[]>([])
 
-  useEffect(() => { setForm(settings) }, [settings])
+  // Tracks the JSON of the last settings we saved (or received) so the
+  // autosave effect and the incoming-props effect don't feed each other.
+  const savedJson = useRef(JSON.stringify(settings))
+
+  useEffect(() => {
+    const json = JSON.stringify(settings)
+    if (json === savedJson.current) return
+    savedJson.current = json
+    setForm(settings)
+  }, [settings])
+
+  // ── Autosave: debounce every form change straight to disk ──────────────────
+  useEffect(() => {
+    const json = JSON.stringify(form)
+    if (json === savedJson.current) return
+    setSaveState('saving')
+    const timer = setTimeout(() => {
+      savedJson.current = json
+      onSave(form).then(() => setSaveState('saved'))
+    }, AUTOSAVE_DELAY)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form])
 
   // Auto-fetch models when URL or key changes
   useEffect(() => {
@@ -87,14 +111,6 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
 
   const set = (k: keyof AppSettings, v: string): void =>
     setForm((prev) => ({ ...prev, [k]: v }))
-
-  const handleSave = async (): Promise<void> => {
-    setSaving(true)
-    await onSave(form)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
-  }
 
   const handleTestAndFetch = useCallback(async (): Promise<void> => {
     const baseUrl = form.apiBaseUrl.replace(/\/$/, '')
@@ -137,8 +153,25 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
       <div className="mx-auto w-full max-w-2xl px-8 py-10">
-        <h1 className="mb-1 text-xl font-semibold text-foreground">Settings</h1>
-        <p className="mb-8 text-sm text-muted-foreground">Configure your AI endpoint and preferences.</p>
+        <div className="mb-8 flex items-start justify-between gap-4">
+          <div>
+            <h1 className="mb-1 text-xl font-semibold text-foreground">Settings</h1>
+            <p className="text-sm text-muted-foreground">Changes are saved automatically.</p>
+          </div>
+          <div
+            role="status"
+            className={cn(
+              'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+              saveState === 'saving' && 'border-border text-muted-foreground',
+              saveState === 'saved' && 'border-green-500/30 bg-green-500/10 text-green-400',
+              saveState === 'idle' && 'border-transparent text-transparent select-none'
+            )}
+          >
+            {saveState === 'saving' && <><Loader2 className="size-3 animate-spin" /> Saving…</>}
+            {saveState === 'saved' && <><CheckCircle2 className="size-3" /> Saved</>}
+            {saveState === 'idle' && <span className="size-3" />}
+          </div>
+        </div>
 
         {/* ── AI Endpoint ────────────────────────────────────────────── */}
         <Section title="AI endpoint" description="Connect to any OpenAI-compatible API. Ares uses Pi Agent as its runtime, so it works with any server that speaks the OpenAI chat completions protocol.">
@@ -260,48 +293,77 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </Field>
         </Section>
 
-        {/* ── Theme ─────────────────────────────────────────────────── */}
-        <Section title="Accent colour" description="Choose the highlight colour used throughout the interface.">
-          <div className="flex flex-wrap gap-3">
-            {THEMES.map((theme) => {
-              const active = (form.themeId || DEFAULT_THEME_ID) === theme.id
-              return (
+        {/* ── Appearance ─────────────────────────────────────────────── */}
+        <Section title="Appearance" description="Colour mode and the accent colour used throughout the interface.">
+          <Field label="Colour mode">
+            <div className="flex w-fit items-center overflow-hidden rounded-lg border border-border">
+              {([
+                { value: 'dark', label: 'Dark', icon: Moon },
+                { value: 'light', label: 'Light', icon: Sun },
+              ] as const).map((opt) => (
                 <button
-                  key={theme.id}
+                  key={opt.value}
                   type="button"
-                  title={theme.label}
                   onClick={() => {
-                    set('themeId', theme.id)
-                    applyTheme(theme.id)
+                    set('colorMode', opt.value)
+                    applyColorMode(opt.value)
                   }}
                   className={cn(
-                    'group flex flex-col items-center gap-1.5 rounded-xl p-2 transition-all',
-                    active
-                      ? 'ring-2 ring-offset-2 ring-offset-background'
-                      : 'hover:bg-accent/50'
+                    'flex items-center gap-1.5 px-3 py-1.5 text-xs transition-colors',
+                    (form.colorMode ?? 'dark') === opt.value
+                      ? 'bg-primary/15 font-medium text-primary'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                   )}
-                  style={active ? { ['--tw-ring-color' as string]: theme.primary } : {}}
                 >
-                  <span
-                    className="flex size-9 items-center justify-center rounded-full shadow-md transition-transform group-hover:scale-110"
-                    style={{ backgroundColor: theme.primary }}
-                  >
-                    {active && (
-                      <svg className="size-4 text-white" viewBox="0 0 16 16" fill="currentColor">
-                        <path d="M13.707 4.293a1 1 0 0 1 0 1.414l-7 7a1 1 0 0 1-1.414 0l-3-3a1 1 0 0 1 1.414-1.414L6 10.586l6.293-6.293a1 1 0 0 1 1.414 0z" />
-                      </svg>
-                    )}
-                  </span>
-                  <span className={cn('text-xs', active ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
-                    {theme.label}
-                  </span>
+                  <opt.icon className="size-3.5" />
+                  {opt.label}
                 </button>
-              )
-            })}
-          </div>
+              ))}
+            </div>
+          </Field>
+
+          <Field label="Accent colour">
+            <div className="flex flex-wrap gap-3">
+              {THEMES.map((theme) => {
+                const active = (form.themeId || DEFAULT_THEME_ID) === theme.id
+                return (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    title={theme.label}
+                    onClick={() => {
+                      set('themeId', theme.id)
+                      applyTheme(theme.id)
+                    }}
+                    className={cn(
+                      'group flex flex-col items-center gap-1.5 rounded-xl p-2 transition-all',
+                      active
+                        ? 'ring-2 ring-offset-2 ring-offset-background'
+                        : 'hover:bg-accent/50'
+                    )}
+                    style={active ? { ['--tw-ring-color' as string]: theme.primary } : {}}
+                  >
+                    <span
+                      className="flex size-9 items-center justify-center rounded-full shadow-md transition-transform group-hover:scale-110"
+                      style={{ backgroundColor: theme.primary }}
+                    >
+                      {active && (
+                        <svg className="size-4 text-white" viewBox="0 0 16 16" fill="currentColor">
+                          <path d="M13.707 4.293a1 1 0 0 1 0 1.414l-7 7a1 1 0 0 1-1.414 0l-3-3a1 1 0 0 1 1.414-1.414L6 10.586l6.293-6.293a1 1 0 0 1 1.414 0z" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className={cn('text-xs', active ? 'font-semibold text-foreground' : 'text-muted-foreground')}>
+                      {theme.label}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </Field>
         </Section>
 
-        {/* ── System prompt ─────────────────────────────��────────────── */}
+        {/* ── System prompt ───────────────────────────────────────────── */}
         <Section title="System prompt" description="Custom instructions injected before every AI request.">
           <Field label="System prompt">
             <textarea
@@ -320,7 +382,7 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </Field>
         </Section>
 
-        {/* ── Permissions ────────────────────────────���─────────────────── */}
+        {/* ── Permissions ─────────────────────────────────────────────── */}
         <Section title="Permissions" description="Control how tool calls are handled.">
           <Field label="Permission mode">
             <div className="flex flex-wrap gap-2">
@@ -348,15 +410,6 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </Field>
         </Section>
 
-        {/* Save */}
-        <div className="flex items-center gap-3 pt-2">
-          <Button onClick={handleSave} disabled={saving} className="gap-2">
-            {saved
-              ? <><CheckCircle2 className="size-4" /> Saved</>
-              : <><Save className="size-4" /> {saving ? 'Saving…' : 'Save settings'}</>}
-          </Button>
-        </div>
-
         {/* ── Data ──────────────────────────────────────────────────── */}
         <Section title="Data" description="Manage locally stored chat data.">
           <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
@@ -380,8 +433,8 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
         </Section>
 
         {/* About */}
-        <Section title="About" className="mt-10">
-          <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm text-muted-foreground space-y-1">
+        <Section title="About">
+          <div className="text-sm text-muted-foreground space-y-1">
             <p><span className="font-medium text-foreground">Ares</span> v0.1.0</p>
             <p>OpenCode-style AI desktop app — Electron · React · Tailwind v4 · shadcn · Pi Agent.</p>
           </div>
@@ -399,10 +452,10 @@ function Section({
   title: string; description?: string; children: React.ReactNode; className?: string
 }): React.ReactElement {
   return (
-    <div className={cn('mb-8', className)}>
+    <div className={cn('mb-5 rounded-xl border border-border bg-card p-5 surface-card', className)}>
       <h2 className="mb-0.5 text-sm font-semibold text-foreground">{title}</h2>
       {description && <p className="mb-4 text-xs text-muted-foreground">{description}</p>}
-      <div className="space-y-4">{children}</div>
+      <div className={cn('space-y-4', !description && 'mt-3')}>{children}</div>
     </div>
   )
 }

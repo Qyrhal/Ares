@@ -42,10 +42,16 @@ export const THEMES: Theme[] = [
 
 export const DEFAULT_THEME_ID = 'red'
 
+export type ColorMode = 'dark' | 'light'
+
 export function applyTheme(themeId: string): void {
   const theme = THEMES.find((t) => t.id === themeId) ?? THEMES[0]
   const root = document.documentElement
   root.style.setProperty('--color-primary', theme.primary)
   root.style.setProperty('--color-primary-foreground', theme.primaryForeground)
   root.style.setProperty('--color-ring', theme.primary)
+}
+
+export function applyColorMode(mode: ColorMode): void {
+  document.documentElement.classList.toggle('light', mode === 'light')
 }

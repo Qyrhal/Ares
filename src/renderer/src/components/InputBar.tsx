@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply } from 'lucide-react'
+import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply, Sun, Moon } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand, AgentMode } from '@/types'
@@ -61,6 +61,9 @@ interface InputBarProps {
   onPermissionModeChange?: (mode: PermissionMode) => void
   agentMode?: AgentMode
   onAgentModeChange?: (mode: AgentMode) => void
+  // color mode
+  colorMode?: 'dark' | 'light'
+  onToggleColorMode?: () => void
   // reply
   replyTo?: { id: string; content: string; role: string } | null
   onCancelReply?: () => void
@@ -158,7 +161,7 @@ interface ModelOption {
   label: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, colorMode = 'dark', onToggleColorMode, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
@@ -536,21 +539,10 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
   return (
     <div
-      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-3 pt-2.5 pb-2.5 shadow-[var(--shadow-highlight)]"
+      className="relative border-t border-border bg-card/80 backdrop-blur-sm px-3 py-2 shadow-[var(--shadow-highlight)]"
       onDrop={handleDrop}
       onDragOver={(e) => e.preventDefault()}
     >
-      {onOpenFinder && (
-        <div className="mb-2">
-          <ProjectPicker
-            workspacePath={workspacePath ?? null}
-            recentProjects={recentProjects}
-            onSelectPath={onSelectProject ?? (() => {})}
-            onOpenFinder={onOpenFinder}
-          />
-        </div>
-      )}
-
       {attachments.length > 0 && (
         <AttachmentGroup className="mb-1.5">
           {attachments.map((att) => (
@@ -782,8 +774,17 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       {/* ── Bottom toolbar ─────────────────────────────────────────── */}
       <div className="mt-1.5 flex items-center justify-between">
 
-        {/* Left: mode toggle + permission mode */}
+        {/* Left: project + mode toggle + permission mode */}
         <div className="flex items-center gap-1">
+          {onOpenFinder && (
+            <ProjectPicker
+              workspacePath={workspacePath ?? null}
+              recentProjects={recentProjects}
+              onSelectPath={onSelectProject ?? (() => {})}
+              onOpenFinder={onOpenFinder}
+            />
+          )}
+
           {/* Chat/Agent mode toggle */}
           <div className="flex items-center overflow-hidden rounded-md border border-border">
             <button
@@ -882,6 +883,21 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
           {/* Context donut */}
           <ContextDonut used={usedTokens} total={ctxWindow} />
+
+          {onToggleColorMode && (
+            <>
+              <span className="h-3 w-px shrink-0 bg-border" />
+              <button
+                type="button"
+                onClick={onToggleColorMode}
+                className="flex items-center justify-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                aria-label={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+                title={colorMode === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              >
+                {colorMode === 'dark' ? <Sun className="size-3" /> : <Moon className="size-3" />}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
