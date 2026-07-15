@@ -47,6 +47,60 @@ describe('MessageItem — mermaid diagram rendering', () => {
     expect(mermaidRender).not.toHaveBeenCalled()
   })
 
+  it('toggles between rendered preview and raw source', async () => {
+    mermaidParse.mockResolvedValue(true)
+    mermaidRender.mockResolvedValue({ svg: '<svg data-testid="fake-diagram"></svg>' })
+
+    render(<MessageItem message={mkMessage({ content: '```mermaid\ngraph TD; A-->B;\n```' })} />)
+    await waitFor(() => expect(document.querySelector('[data-testid="fake-diagram"]')).toBeInTheDocument())
+
+    // Preview is the default; source is not shown
+    expect(screen.queryByText('graph TD; A-->B;')).not.toBeInTheDocument()
+
+    // Switch to code view — raw mermaid shown, diagram hidden but still mounted
+    fireEvent.click(screen.getByRole('button', { name: 'Show mermaid source' }))
+    expect(screen.getByText('graph TD; A-->B;')).toBeInTheDocument()
+    const svgContainer = document.querySelector('[data-testid="fake-diagram"]')!.parentElement!
+    expect(svgContainer.className).toContain('hidden')
+
+    // Switch back without re-rendering mermaid
+    fireEvent.click(screen.getByRole('button', { name: 'Show rendered diagram' }))
+    expect(screen.queryByText('graph TD; A-->B;')).not.toBeInTheDocument()
+    expect(svgContainer.className).not.toContain('hidden')
+    expect(mermaidRender).toHaveBeenCalledTimes(1)
+  })
+
+  it('marks the active view with aria-pressed', async () => {
+    mermaidParse.mockResolvedValue(true)
+    mermaidRender.mockResolvedValue({ svg: '<svg></svg>' })
+
+    render(<MessageItem message={mkMessage({ content: '```mermaid\ngraph TD; A-->B;\n```' })} />)
+    await waitFor(() => expect(mermaidRender).toHaveBeenCalled())
+
+    const previewBtn = screen.getByRole('button', { name: 'Show rendered diagram' })
+    const codeBtn = screen.getByRole('button', { name: 'Show mermaid source' })
+    expect(previewBtn).toHaveAttribute('aria-pressed', 'true')
+    expect(codeBtn).toHaveAttribute('aria-pressed', 'false')
+
+    fireEvent.click(codeBtn)
+    expect(previewBtn).toHaveAttribute('aria-pressed', 'false')
+    expect(codeBtn).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('copy button copies the mermaid source in either view', async () => {
+    mermaidParse.mockResolvedValue(true)
+    mermaidRender.mockResolvedValue({ svg: '<svg></svg>' })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+
+    render(<MessageItem message={mkMessage({ content: '```mermaid\ngraph TD; A-->B;\n```' })} />)
+    await waitFor(() => expect(mermaidRender).toHaveBeenCalled())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show mermaid source' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Copy diagram source' }))
+    expect(writeText).toHaveBeenCalledWith('graph TD; A-->B;')
+  })
+
   it('does not treat a regular code block as a diagram', async () => {
     render(<MessageItem message={mkMessage({ content: '```ts\nconst x = 1\n```' })} />)
     await waitFor(() => expect(document.querySelector('code.hljs.language-ts')).toBeInTheDocument())

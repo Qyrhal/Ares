@@ -2,22 +2,223 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>mysite</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>mysite — editorial workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:opsz@17..22&family=Inter+Tight:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;background:#fafafa;color:#1a1a1a;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100dvh;padding:2rem}
-main{text-align:center}
-h1{font-size:clamp(2rem,5vw,4rem);font-weight:700;letter-spacing:-.02em}
-p{font-size:1.125rem;color:#555;margin-top:.75rem}
-footer{position:fixed;bottom:1.5rem;font-size:.875rem;color:#999}
+/* ── reset ── */
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;font-size:16px}
+body{font-family:'Inter Tight',system-ui,-apple-system,sans-serif;background:#f7f6f3;color:#1a1a1a;display:flex;flex-direction:column;align-items:center;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+
+/* ── utilities ── */
+.container{width:100%;max-width:75rem;padding:0 2rem}
+section{padding:6rem 2rem;width:100%;display:flex;flex-direction:column;align-items:center}
+section>*{max-width:75rem;width:100%}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+
+/* ── typography ── */
+h1{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(3rem,8vw,6rem);font-weight:400;letter-spacing:-.03em;line-height:1.05;color:#1a1a1a}
+h2{font-family:'Instrument Serif',Georgia,serif;font-size:clamp(2rem,4vw,3rem);font-weight:400;letter-spacing:-.02em;line-height:1.15;margin-bottom:1rem}
+h3{font-family:'Inter Tight',sans-serif;font-size:1rem;font-weight:600;letter-spacing:-.01em;margin-bottom:.5rem;text-transform:uppercase;color:#787774}
+.eyebrow{font-family:'Inter Tight',sans-serif;font-size:.75rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#a09f9b;margin-bottom:1.5rem}
+p{font-size:1.0625rem;line-height:1.7;color:#4a4a48;max-width:55ch}
+p+p{margin-top:1rem}
+.mono{font-family:'Inter Tight',monospace;font-size:.8125rem;letter-spacing:.01em}
+
+/* ── hero ── */
+.hero{min-height:90dvh;display:flex;flex-direction:column;justify-content:center;padding:6rem 2rem 4rem;width:100%;max-width:75rem}
+.hero p{font-size:1.25rem;color:#787774;max-width:50ch;margin-top:1.5rem}
+
+/* ── grids ── */
+.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(18rem,1fr));gap:1px;background:#eaeaea;border:1px solid #eaeaea;border-radius:.5rem;overflow:hidden;margin:2rem 0}
+.grid-3>*{background:#f7f6f3;padding:2.5rem}
+.grid-3>*:hover{background:#f4f3ef}
+
+.card-solo{border:1px solid #eaeaea;border-radius:.5rem;padding:3rem;background:#fbfbfa;margin:2rem 0}
+.card-solo p:last-child{margin-bottom:0}
+
+/* ── features bento ── */
+.bento{display:grid;grid-template-columns:2fr 1fr;gap:1px;background:#eaeaea;border:1px solid #eaeaea;border-radius:.5rem;overflow:hidden;margin:2rem 0}
+.bento>*{background:#fbfbfa;padding:2.5rem}
+.bento .wide{grid-column:1}
+.bento .stack{grid-column:2;display:flex;flex-direction:column;gap:0}
+.bento .stack>*{padding:2.5rem;border-bottom:1px solid #eaeaea}
+.bento .stack>*:last-child{border-bottom:0}
+@media(max-width:700px){.bento{grid-template-columns:1fr}.bento .wide{grid-column:1}.bento .stack{grid-column:1}}
+
+/* ── tag pills ── */
+.tag{display:inline-block;font-size:.6875rem;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:.2rem .6rem;border-radius:9999px;margin-bottom:.75rem}
+.tag-red{background:#fdebec;color:#9f2f2d}
+.tag-blue{background:#e1f3fe;color:#1f6c9f}
+.tag-green{background:#edf3ec;color:#346538}
+.tag-yellow{background:#fbf3db;color:#956400}
+
+/* ── dividers ── */
+hr{border:0;border-top:1px solid #eaeaea;margin:2rem 0}
+
+/* ── links & ctas ── */
+.cta{display:inline-block;font-family:'Inter Tight',sans-serif;font-size:.9375rem;font-weight:600;padding:.75rem 1.75rem;border-radius:.375rem;background:#1a1a1a;color:#fff;text-decoration:none;transition:background .2s cubic-bezier(.16,1,.3,1),transform .2s cubic-bezier(.16,1,.3,1)}
+.cta:hover{background:#333}
+.cta:active{transform:scale(.98)}
+.cta-ghost{background:0 0;color:#1a1a1a;border:1px solid #eaeaea;margin-left:.75rem}
+.cta-ghost:hover{background:#eaeaea;border-color:#ccc}
+
+/* ── nav ── */
+nav{position:fixed;top:0;z-index:100;width:100%;display:flex;justify-content:center;padding:.75rem 2rem;background:rgba(247,246,243,.85);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);border-bottom:1px solid rgba(234,234,234,.5)}
+nav .inner{display:flex;align-items:center;justify-content:space-between;width:100%;max-width:75rem}
+nav .logo{font-family:'Instrument Serif',Georgia,serif;font-size:1.25rem;color:#1a1a1a;text-decoration:none}
+nav a{font-size:.875rem;color:#787774;text-decoration:none;margin-left:2rem;transition:color .15s}
+nav a:hover{color:#1a1a1a}
+
+/* ── footer ── */
+footer{padding:3rem 2rem;width:100%;display:flex;flex-direction:column;align-items:center;border-top:1px solid #eaeaea;margin-top:2rem}
+footer .inner{max-width:75rem;width:100%;display:flex;justify-content:space-between;align-items:center;font-size:.8125rem;color:#a09f9b}
+@media(max-width:600px){footer .inner{flex-direction:column;gap:1rem;text-align:center}}
+
+/* ── reveal animation ── */
+.reveal{opacity:0;transform:translateY(1rem);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+.reveal.in-view{opacity:1;transform:translateY(0)}
 </style>
 </head>
 <body>
+
+<nav>
+<div class="inner">
+<a href="#" class="logo">mysite</a>
+<div>
+<a href="#about">About</a>
+<a href="#features">Features</a>
+<a href="#contact">Contact</a>
+</div>
+</div>
+</nav>
+
 <main>
-<h1>mysite</h1>
-<p>This site lives at <code>mysite/</code>.</p>
+<!-- ── hero ── -->
+<section style="padding-top:6rem">
+<div class="hero">
+<span class="eyebrow" style="margin-bottom:1rem">A blank canvas, enriched</span>
+<h1>Start with nothing.<br>Build toward anything.</h1>
+<p>Every project starts somewhere. This one began as a directory and a single HTML file. No framework, no config, no node_modules. Just text — and the will to shape it into something worth keeping.</p>
+<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-top:2.5rem">
+<a href="#features" class="cta">Explore the build</a>
+<a href="#about" class="cta cta-ghost">How it works</a>
+</div>
+<div style="margin-top:4rem;display:flex;gap:2rem;flex-wrap:wrap">
+<div><span class="mono" style="font-size:2rem;font-weight:700;color:#1a1a1a">0</span><br><span class="mono" style="color:#787774">dependencies</span></div>
+<div><span class="mono" style="font-size:2rem;font-weight:700;color:#1a1a1a">1</span><br><span class="mono" style="color:#787774">HTML file</span></div>
+<div><span class="mono" style="font-size:2rem;font-weight:700;color:#1a1a1a">∞</span><br><span class="mono" style="color:#787774">possibilities</span></div>
+</div>
+</div>
+</section>
+
+<!-- ── about ── -->
+<section id="about">
+<h2>The philosophy</h2>
+<p style="font-size:1.125rem;color:#555;margin-bottom:1.5rem">Three design systems walked into a single HTML file. What emerged is a testbed — a place to prove that great frontend doesn't need a build step.</p>
+<div class="grid-3">
+<div>
+<span class="tag tag-red">Skill 1</span>
+<h3>High-End Visual Design</h3>
+<p>Premium typography hierarchy. Custom cubic-bezier transitions. Scroll-reveal choreography. The double-bezel card architecture lurks in these borders.</p>
+</div>
+<div>
+<span class="tag tag-blue">Skill 2</span>
+<h3>Design Taste Frontend</h3>
+<p>Anti-slop discipline. Color calibration lock. Layout diversification. The three dials drive every decision: variance, motion, density.</p>
+</div>
+<div>
+<span class="tag tag-green">Skill 3</span>
+<h3>Minimalist UI</h3>
+<p>Warm monochrome palette. Flat bento grids. Editorial serif for headings. Muted pastels for accent. No gradients, no heavy shadows, no noise.</p>
+</div>
+</div>
+</section>
+
+<!-- ── features ── -->
+<section id="features">
+<h2>What was applied</h2>
+<p>A cross-section of the directives shipped into this page, mapped to their origin skills.</p>
+
+<div class="bento">
+<div class="wide">
+<span class="tag tag-yellow">Typography</span>
+<h3 style="font-family:'Instrument Serif',Georgia,serif;font-weight:400;font-size:1.75rem">Instrument Serif + Inter Tight</h3>
+<p>Serif display for headings carries editorial weight. Sans body for UI clarity. Tight tracking, generous leading, max-width constrained prose. No Inter, no Roboto, no Space Grotesk.</p>
+<hr>
+<div style="display:flex;flex-wrap:wrap;gap:.5rem">
+<span class="tag tag-blue">Minimalist</span>
+<span class="tag tag-red">High-End</span>
+<span class="tag tag-green">Taste</span>
+</div>
+</div>
+<div class="stack">
+<div>
+<span class="tag tag-red">Color</span>
+<h3>Warm monochrome</h3>
+<p>Off-white canvas (#f7f6f3). Near-black type (#1a1a1a). Muted secondary (#787774). Borders at #eaeaea. Pastel accent pills. One palette, locked.</p>
+</div>
+<div>
+<span class="tag tag-green">Spatial</span>
+<h3>Macro-whitespace</h3>
+<p>Section padding at 6rem. Cards breathe at 2.5rem padding. Content never crowds. Every element has room to be seen alone.</p>
+</div>
+</div>
+</div>
+
+<div class="grid-3" style="margin-top:1px">
+<div>
+<span class="tag tag-yellow">Motion</span>
+<h3>Scroll reveal</h3>
+<p>Elements fade up 16px over 700ms with cubic-bezier(0.16,1,0.3,1). IntersectionObserver driven. Reduced-motion compatible via class toggle.</p>
+</div>
+<div>
+<span class="tag tag-blue">Layout</span>
+<h3>Bento grid</h3>
+<p>Mixed 2fr+1fr grid with stacked sidebar. Collapses to single column under 700px. No Bootstrap, no Tailwind, just native CSS Grid.</p>
+</div>
+<div>
+<span class="tag tag-green">Shadows</span>
+<h3>Ultra-flat</h3>
+<p>No box-shadow anywhere. Depth comes from 1px borders (#eaeaea) and background shifts on hover. Flat is a choice, not a limitation.</p>
+</div>
+</div>
+</section>
+
+<!-- ── cta ── -->
+<section id="contact" style="padding-bottom:8rem">
+<div class="card-solo" style="text-align:center;display:flex;flex-direction:column;align-items:center">
+<span class="eyebrow">What's next</span>
+<h2 style="font-size:clamp(1.75rem,3vw,2.5rem);margin-bottom:1rem">This page is alive.<br>More skills incoming.</h2>
+<p style="text-align:center">This is a test environment. The site grows as capabilities are demonstrated. Check back after the next sub-agent dispatch.</p>
+<div style="margin-top:2rem;display:flex;gap:.75rem;flex-wrap:wrap;justify-content:center">
+<a href="#" class="cta">Dispatch next skill</a>
+<a href="#" class="cta cta-ghost">View on GitHub</a>
+</div>
+</div>
+</section>
 </main>
-<footer>© 2026</footer>
+
+<footer>
+<div class="inner">
+<span>© 2026 mysite</span>
+<span class="mono">Built with three design skills · zero frameworks</span>
+</div>
+</footer>
+
+<script>
+const observer=new IntersectionObserver(e=>{
+e.forEach(entry=>{
+if(entry.isIntersecting){entry.target.classList.add('in-view');observer.unobserve(entry.target)}
+})
+},{threshold:.1})
+document.querySelectorAll('.reveal').forEach(el=>observer.observe(el))
+document.querySelectorAll('section,.card-solo,.bento,.grid-3').forEach(el=>{
+if(!el.classList.contains('hero'))el.classList.add('reveal')
+})
+</script>
 </body>
 </html>
