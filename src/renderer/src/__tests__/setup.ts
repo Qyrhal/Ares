@@ -1,5 +1,32 @@
+// NOTE: vi.mock() calls must be at file top — vitest hoists them before imports
 import '@testing-library/jest-dom'
 import { vi } from 'vitest'
+
+// Mock xterm for TerminalView tests — use plain constructor functions
+// (vi.fn() is not available in hoisted vi.mock factory context)
+vi.mock('@xterm/xterm', () => {
+  function MockTerminal() {
+    this.loadAddon = function() {}
+    this.open = function() {}
+    this.focus = function() {}
+    this.write = function() {}
+    this.clear = function() {}
+    this.onData = function() { return function() {} }
+    this.onResize = function() { return function() {} }
+    this.dispose = function() {}
+    this.cols = 80
+    this.rows = 24
+  }
+  return { Terminal: MockTerminal as unknown as typeof import('@xterm/xterm').Terminal }
+})
+
+vi.mock('@xterm/addon-fit', () => {
+  function MockFitAddon() {
+    this.fit = function() {}
+    this.dispose = function() {}
+  }
+  return { FitAddon: MockFitAddon as unknown as typeof import('@xterm/addon-fit').FitAddon }
+})
 
 const electronMock = {
   db: {
@@ -18,7 +45,7 @@ const electronMock = {
     searchMessages: vi.fn().mockResolvedValue([]),
   },
   settings: {
-    get: vi.fn().mockResolvedValue({ apiKey: 'sk-test', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
+    get: vi.fn().mockResolvedValue({ apiKey: '***', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask' }),
     set: vi.fn().mockResolvedValue(undefined),
   },
   workspace: {
@@ -69,13 +96,10 @@ const electronMock = {
     onThinkingDelta: vi.fn().mockReturnValue(() => {}),
     onTodosUpdate: vi.fn().mockReturnValue(() => {}),
     onAskUser: vi.fn().mockReturnValue(() => {}),
-    sendUserAnswer: vi.fn(),
     onAgentSpawned: vi.fn().mockReturnValue(() => {}),
     onAgentStatus: vi.fn().mockReturnValue(() => {}),
     onCompaction: vi.fn().mockReturnValue(() => {}),
     onSessionComplete: vi.fn().mockReturnValue(() => {}),
-    onTodosUpdate: vi.fn().mockReturnValue(() => {}),
-    onAskUser: vi.fn().mockReturnValue(() => {}),
     sendUserAnswer: vi.fn(),
   },
   tools: {
@@ -119,6 +143,13 @@ Object.defineProperty(window, 'electron', { value: electronMock, writable: true 
 
 // jsdom doesn't implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn()
+
+// Mock ResizeObserver — plain constructor, NOT vi.fn (needs new)
+globalThis.ResizeObserver = class MockResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
 
 vi.spyOn(console, 'error').mockImplementation(() => {})
 vi.spyOn(console, 'warn').mockImplementation(() => {})
