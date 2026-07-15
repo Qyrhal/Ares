@@ -5,7 +5,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseUrl: 'https://api.openai.com/v1',
   defaultModel: 'gpt-4o-mini',
-  themeId: 'red',
+  themeId: 'steel',
   colorMode: 'dark',
   systemPrompt: '',
   permissionMode: 'ask',

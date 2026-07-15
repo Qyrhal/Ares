@@ -123,7 +123,7 @@ const DEFAULT_SETTINGS: DbSettings = {
   apiKey: '',
   apiBaseUrl: '',
   defaultModel: '',
-  themeId: 'red',
+  themeId: 'steel',
   systemPrompt: `You are Ares, an AI coding agent with full orchestration capabilities.
 
 ## Orchestration workflow — follow this for every substantive task

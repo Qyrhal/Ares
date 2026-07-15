@@ -812,8 +812,16 @@ export default function App(): React.ReactElement {
     <div className={cn('flex flex-col h-screen w-screen overflow-hidden bg-background', store.zenMode && 'zen-mode')}>
       {!store.zenMode && (
         <div className="drag-region relative flex h-10 shrink-0 items-center justify-center border-b border-border">
+          {/* HUD readouts — left offset clears the macOS traffic lights */}
+          <span className="pointer-events-none absolute left-20 flex select-none items-center gap-2 font-mono text-[9px] tracking-[0.2em] text-muted-foreground/60">
+            <span className="size-1 bg-primary" />
+            SYS // ARES 0.1.0
+          </span>
           <span className="no-drag pointer-events-none select-none font-display text-[11px] font-black tracking-[0.5em] text-foreground/40">
             ARES
+          </span>
+          <span className="pointer-events-none absolute right-4 select-none">
+            <HudClock />
           </span>
         </div>
       )}
@@ -1097,6 +1105,19 @@ function findFileNode(nodes: import('@/types').FileNode[], path: string): import
   return null
 }
 
+function HudClock(): React.ReactElement {
+  const [now, setNow] = useState(() => new Date().toISOString().slice(11, 19))
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date().toISOString().slice(11, 19)), 1000)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <span className="font-mono text-[9px] tracking-[0.2em] text-muted-foreground/60">
+      {now} UTC
+    </span>
+  )
+}
+
 function EmptyMain({
   onNewSession, onOpenFolder
 }: {
@@ -1104,7 +1125,7 @@ function EmptyMain({
   onOpenFolder: () => void
 }): React.ReactElement {
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-8">
+    <div className="hud-grid flex flex-1 flex-col items-center justify-center gap-4 text-center px-8">
       <p className="text-sm text-muted-foreground">Nothing open yet.</p>
       <div className="flex gap-2">
         <button

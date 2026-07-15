@@ -4,26 +4,36 @@
 @import "highlight.js/styles/github-dark.css";
 
 @theme {
-  --color-background: #0a0a0a;
-  --color-foreground: #e8e8e8;
-  --color-card: #111111;
-  --color-card-foreground: #e8e8e8;
-  --color-popover: #1a1a1a;
-  --color-popover-foreground: #e8e8e8;
-  --color-primary: #dc2626;
+  /* Palantir-style HUD chrome: cool blue-black surfaces, thin technical borders */
+  --color-background: #0d1015;
+  --color-foreground: #e2e6eb;
+  --color-card: #13171e;
+  --color-card-foreground: #e2e6eb;
+  --color-popover: #1a2029;
+  --color-popover-foreground: #e2e6eb;
+  --color-primary: #2d72d2;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #1e1e1e;
-  --color-secondary-foreground: #a1a1a1;
-  --color-muted: #1e1e1e;
-  --color-muted-foreground: #6b6b6b;
-  --color-accent: #1e1e1e;
-  --color-accent-foreground: #e8e8e8;
+  --color-secondary: #1b212b;
+  --color-secondary-foreground: #98a2ae;
+  --color-muted: #1b212b;
+  --color-muted-foreground: #75808d;
+  --color-accent: #1f2733;
+  --color-accent-foreground: #e2e6eb;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
-  --color-border: #2a2a2a;
-  --color-input: #1e1e1e;
-  --color-ring: #dc2626;
-  --radius: 0.5rem;
+  --color-border: #29323e;
+  --color-input: #161b23;
+  --color-ring: #2d72d2;
+  --radius: 3px;
+
+  /* Sharp, technical corners across the whole app (overrides Tailwind's scale) */
+  --radius-xs: 1px;
+  --radius-sm: 1px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+  --radius-3xl: 8px;
 
   --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Code", ui-monospace, monospace;
   --font-display: "Orbitron", sans-serif;
@@ -43,29 +53,42 @@
   --gradient-primary: linear-gradient(180deg, color-mix(in oklab, var(--color-primary) 100%, white 8%) 0%, var(--color-primary) 100%);
 
   /* Two-tier border strength for elevation hierarchy */
-  --color-border-subtle: #1f1f1f;
-  --color-border-strong: #3a3a3a;
+  --color-border-subtle: #1d232c;
+  --color-border-strong: #3a4552;
 
   /* Elevated surfaces, distinct from flat --color-card, for popovers/modals/floating panels */
-  --color-surface-raised: #151515;
-  --color-surface-overlay: #1c1c1c;
+  --color-surface-raised: #161b23;
+  --color-surface-overlay: #1c232d;
+}
+
+/* HUD grid — faint engineering-grid backdrop for empty states and panels */
+.hud-grid {
+  background-image:
+    linear-gradient(rgb(125 155 195 / 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(125 155 195 / 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+.light .hud-grid {
+  background-image:
+    linear-gradient(rgb(40 60 90 / 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(40 60 90 / 0.06) 1px, transparent 1px);
 }
 
 /* Light mode — overrides the dark-tuned palette when .light is set on <html> */
 .light {
-  --color-background: #f7f7f7;
-  --color-foreground: #1a1a1a;
+  --color-background: #f4f6f9;
+  --color-foreground: #171c22;
   --color-card: #ffffff;
-  --color-card-foreground: #1a1a1a;
+  --color-card-foreground: #171c22;
   --color-popover: #ffffff;
-  --color-popover-foreground: #1a1a1a;
-  --color-secondary: #ececec;
-  --color-secondary-foreground: #52525b;
-  --color-muted: #ececec;
-  --color-muted-foreground: #737373;
-  --color-accent: #e8e8e8;
-  --color-accent-foreground: #1a1a1a;
-  --color-border: #d8d8d8;
+  --color-popover-foreground: #171c22;
+  --color-secondary: #e7ebf0;
+  --color-secondary-foreground: #4b555f;
+  --color-muted: #e7ebf0;
+  --color-muted-foreground: #6b7683;
+  --color-accent: #e2e7ee;
+  --color-accent-foreground: #171c22;
+  --color-border: #d0d7e0;
   --color-input: #ffffff;
 
   --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.06);
@@ -79,15 +102,15 @@
   --gradient-surface: linear-gradient(180deg, rgb(0 0 0 / 0.015) 0%, rgb(0 0 0 / 0) 100%);
   --gradient-surface-raised: linear-gradient(180deg, rgb(255 255 255 / 0.6) 0%, rgb(255 255 255 / 0) 40%);
 
-  --color-border-subtle: #e5e5e5;
-  --color-border-strong: #c4c4c4;
+  --color-border-subtle: #dde3ea;
+  --color-border-strong: #b9c2cd;
   --color-surface-raised: #ffffff;
   --color-surface-overlay: #ffffff;
 }
 
-.light ::-webkit-scrollbar-thumb:hover { background: #b8b8b8; }
-.light pre { background: #f2f2f2; }
-.light code:not(pre code) { background: #ececec; color: #7c3aed; }
+.light ::-webkit-scrollbar-thumb:hover { background: #b9c2cd; }
+.light pre { background: #eef1f5; }
+.light code:not(pre code) { background: #e7ebf0; color: #0369a1; }
 
 /* Skeuomorphic surface + press-state helpers, used by ui/ primitives and panels */
 .surface-card {
@@ -121,17 +144,17 @@ html, body, #root {
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { @apply rounded-sm bg-border; }
-::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+::-webkit-scrollbar-thumb:hover { background: #3a4552; }
 
 /* Code blocks */
 pre {
   @apply my-0 overflow-x-auto rounded-lg border border-border p-4 font-mono text-[0.8125rem] leading-relaxed;
-  background: #0d0d0d;
+  background: #0a0d11;
 }
 
 code:not(pre code) {
-  @apply rounded border border-border px-[0.4em] py-[0.1em] font-mono text-[0.875em] text-violet-400;
-  background: #1e1e1e;
+  @apply rounded border border-border px-[0.4em] py-[0.1em] font-mono text-[0.875em] text-sky-400;
+  background: #1b212b;
 }
 
 /* Drag regions — no Tailwind equivalent */
