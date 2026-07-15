@@ -242,6 +242,15 @@ function extractFilePath(toolInput: string | undefined): string | undefined {
 
 function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
   const [expanded, setExpanded] = React.useState(false)
+  const [elapsed, setElapsed] = React.useState(0)
+
+  // Live elapsed-time counter for in-progress tool calls
+  React.useEffect(() => {
+    if (message.toolStatus !== 'running') return
+    const interval = setInterval(() => setElapsed((p) => p + 1), 1000)
+    return () => clearInterval(interval)
+  }, [message.toolStatus])
+
   const statusIcon = {
     running: <Loader2 className="size-3 animate-spin" />,
     done: <CheckCircle2 className="size-3 text-green-500" />,
@@ -256,7 +265,10 @@ function ToolCallBlock({ message }: { message: Message }): React.ReactElement {
           <TerminalIcon className="size-3" />
           <span className="font-mono text-[11px]">{message.toolName}</span>
           {message.toolStatus === 'running' && (
-            <span className="shimmer shimmer-color-primary text-muted-foreground text-[10px]">running…</span>
+            <span className="text-muted-foreground text-[10px] tabular-nums">{elapsed + 's'}</span>
+          )}
+          {message.toolStatus === 'done' && message.duration !== undefined && message.duration > 0 && (
+            <span className="text-muted-foreground text-[10px] tabular-nums">{(message.duration / 1000).toFixed(1) + 's'}</span>
           )}
         </MarkerContent>
         <span className="ml-auto">

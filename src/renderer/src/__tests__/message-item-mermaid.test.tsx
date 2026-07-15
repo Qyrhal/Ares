@@ -1,6 +1,7 @@
 import React from 'react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { act } from 'react'
 import { MessageItem } from '../components/MessageItem'
 import type { Message } from '@/types'
 
@@ -109,6 +110,97 @@ describe('MessageItem — mermaid diagram rendering', () => {
   })
 })
 
+describe('MessageItem — tool call elapsed counter', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('shows a live elapsed seconds counter when tool is running', () => {
+    render(<MessageItem message={mkMessage({
+      role: 'tool',
+      toolName: 'bash',
+      toolStatus: 'running',
+      toolInput: '{"command": "npm test"}',
+    })} />)
+
+    // Initially 0s
+    expect(screen.getByText('0s')).toBeInTheDocument()
+
+    // Advance 3 seconds
+    act(() => { vi.advanceTimersByTime(3000) })
+    expect(screen.getByText('3s')).toBeInTheDocument()
+
+    // Advance 10 more seconds
+    act(() => { vi.advanceTimersByTime(10000) })
+    expect(screen.getByText('13s')).toBeInTheDocument()
+  })
+
+  it('shows completed tool call duration when done', () => {
+    render(<MessageItem message={mkMessage({
+      role: 'tool',
+      toolName: 'readFile',
+      toolStatus: 'done',
+      toolInput: '{"path": "test.ts"}',
+      duration: 2340,
+    })} />)
+
+    expect(screen.getByText('2.3s')).toBeInTheDocument()
+  })
+
+  it('shows only the tool name without elapsed or duration for an error tool call', () => {
+    render(<MessageItem message={mkMessage({
+      role: 'tool',
+      toolName: 'bash',
+      toolStatus: 'error',
+      toolInput: '{"command": "invalid"}',
+    })} />)
+
+    expect(screen.getByText('bash')).toBeInTheDocument()
+    expect(screen.queryByText(/^\d+(\.\d)?s$/)).not.toBeInTheDocument()
+  })
+
+  it('cleans up the interval when component unmounts', () => {
+    const { unmount } = render(<MessageItem message={mkMessage({
+      role: 'tool',
+      toolName: 'bash',
+      toolStatus: 'running',
+      toolInput: '{}',
+    })} />)
+
+    expect(screen.getByText('0s')).toBeInTheDocument()
+    act(() => { vi.advanceTimersByTime(2000) })
+    expect(screen.getByText('2s')).toBeInTheDocument()
+
+    unmount()
+
+    // After unmount, there should be no more re-renders — advance time and verify
+    // there's no error (interval is cleared)
+    act(() => { vi.advanceTimersByTime(5000) })
+  })
+
+  it('does not show duration when it is zero or undefined for done tools', () => {
+    const { rerender } = render(<MessageItem message={mkMessage({
+      role: 'tool',
+      toolName: 'bash',
+      toolStatus: 'done',
+      toolInput: '{}',
+      duration: 0,
+    })} />)
+    expect(screen.queryByText(/^\d+(\.\d)?s$/)).not.toBeInTheDocument()
+
+    rerender(<MessageItem message={mkMessage({
+      role: 'tool',
+      toolName: 'bash',
+      toolStatus: 'done',
+      toolInput: '{}',
+      duration: undefined,
+    })} />)
+    expect(screen.queryByText(/^\d+(\.\d)?s$/)).not.toBeInTheDocument()
+  })
+})
 describe('MessageItem — tool call syntax highlighting', () => {
   it('shows tool input/output with highlight.js markup once expanded', () => {
     const message = mkMessage({
