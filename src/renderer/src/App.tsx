@@ -446,7 +446,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /status - system health check, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /status - system health check, /summary - session summary, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -504,6 +504,82 @@ export default function App(): React.ReactElement {
         lines.push('\nRun `/help` for all available commands.')
         const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'summary': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const em = await el.db.addMessage(sess.id, 'system', 'No messages in this session to summarize.')
+          if (em) store.appendMessage(parseMessage(em))
+          break
+        }
+
+        store.appendMessage({
+          id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+          content: 'Generating session summary...', isStreaming: false, createdAt: Date.now(),
+        })
+
+        const userAndAssistant = msgs.filter((m: Message) => m.role === 'user' || m.role === 'assistant')
+        const conversation = userAndAssistant.map((m: Message) =>
+          `**${m.role === 'user' ? 'User' : 'Assistant'}**: ${m.content.slice(0, 2000)}`
+        ).join('\n\n')
+
+        const apiBaseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        if (apiBaseUrl.trim().length > 0) {
+          try {
+            const prompt = [
+              'Summarize this coding assistant conversation concisely. Cover:',
+              '1) What the user wanted to accomplish',
+              '2) Key decisions or approaches discussed',
+              '3) What was built or changed',
+              '4) Any open questions or next steps',
+              '',
+              conversation.slice(0, 12000),
+              '',
+              'Provide a brief markdown summary (3-5 bullet points).',
+            ].filter(Boolean).join('\n')
+
+            const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No summary generated.'
+            const finalMsg = await el.db.addMessage(sess.id, 'system', `**Session Summary**\n\n${content}`)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          } catch (err) {
+            const errorMsg = `**Error generating summary:** ${(err as Error).message}`
+            const finalMsg = await el.db.addMessage(sess.id, 'system', errorMsg)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          }
+        } else {
+          // Fallback: basic stats without AI
+          const userCount = userAndAssistant.filter((m: Message) => m.role === 'user').length
+          const assistantCount = userAndAssistant.filter((m: Message) => m.role === 'assistant').length
+          const totalChars = msgs.reduce((sum: number, m: Message) => sum + (m.content?.length ?? 0), 0)
+          const stats = [
+            '**Session Summary (offline)**\n',
+            `- ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant)`,
+            `- ~${Math.round(totalChars / 4)} estimated tokens`,
+            `- Session started ${new Date(sess.createdAt).toLocaleString()}`,
+            '\nConfigure an API endpoint to get AI-powered summaries.',
+          ].filter(Boolean).join('\n')
+          const finalMsg = await el.db.addMessage(sess.id, 'system', stats)
+          if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+        }
         break
       }
       case 'overview': {
