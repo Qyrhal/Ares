@@ -120,11 +120,11 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
     return (
       <div className="flex flex-1 flex-col min-h-0 overflow-y-auto">
         {todos !== undefined && <TodoPanel todos={todos} />}
-        <div className="flex flex-1 flex-col items-center justify-center gap-4 text-center px-8 py-4">
-          <svg viewBox="0 0 64 64" className="size-20" fill="none" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="32" cy="32" r="29" stroke="#ef4444" strokeWidth="2" strokeOpacity="0.9" />
-            <rect x="13" y="13" width="38" height="38" rx="4" stroke="#ef4444" strokeWidth="2.2" />
-            <rect x="18.5" y="18.5" width="27" height="27" rx="3" stroke="#ef4444" strokeWidth="2.2" transform="rotate(45 32 32)" />
+        <div className="hud-grid flex flex-1 flex-col items-center justify-center gap-4 text-center px-8 py-4">
+          <svg viewBox="0 0 64 64" className="size-20 text-primary" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="32" cy="32" r="29" strokeWidth="2" strokeOpacity="0.9" />
+            <rect x="13" y="13" width="38" height="38" rx="4" strokeWidth="2.2" />
+            <rect x="18.5" y="18.5" width="27" height="27" rx="3" strokeWidth="2.2" transform="rotate(45 32 32)" />
           </svg>
           <div>
             <h2 className="text-lg font-semibold text-foreground">{sessionTitle}</h2>

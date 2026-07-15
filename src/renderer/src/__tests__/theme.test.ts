@@ -2,13 +2,17 @@ import { describe, it, expect, beforeEach } from 'vitest'
 import { applyTheme, THEMES, DEFAULT_THEME_ID } from '../lib/theme'
 
 describe('THEMES constant', () => {
-  it('exports exactly 5 themes', () => {
-    expect(THEMES).toHaveLength(5)
+  it('exports exactly 6 themes', () => {
+    expect(THEMES).toHaveLength(6)
   })
 
-  it('has red as the first/default theme', () => {
-    expect(THEMES[0].id).toBe('red')
-    expect(DEFAULT_THEME_ID).toBe('red')
+  it('has steel as the first/default theme', () => {
+    expect(THEMES[0].id).toBe('steel')
+    expect(DEFAULT_THEME_ID).toBe('steel')
+  })
+
+  it('still offers red as an option', () => {
+    expect(THEMES.some((t) => t.id === 'red')).toBe(true)
   })
 
   it('does not include purple', () => {
@@ -54,9 +58,9 @@ describe('applyTheme', () => {
     expect(root.style.getPropertyValue('--color-ring')).not.toBe('')
   })
 
-  it('falls back to red for an unknown id', () => {
+  it('falls back to steel for an unknown id', () => {
     applyTheme('__unknown__')
-    expect(root.style.getPropertyValue('--color-primary')).toBe('#dc2626')
+    expect(root.style.getPropertyValue('--color-primary')).toBe('#2d72d2')
   })
 
   it('applies each named theme without error', () => {

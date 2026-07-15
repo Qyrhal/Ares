@@ -9,6 +9,13 @@ export interface Theme {
 
 export const THEMES: Theme[] = [
   {
+    // Palantir Blueprint blue — the default HUD accent
+    id: 'steel',
+    label: 'Steel',
+    primary: '#2d72d2',
+    primaryForeground: '#ffffff',
+  },
+  {
     id: 'red',
     label: 'Red',
     primary: '#dc2626',
@@ -40,7 +47,7 @@ export const THEMES: Theme[] = [
   },
 ]
 
-export const DEFAULT_THEME_ID = 'red'
+export const DEFAULT_THEME_ID = 'steel'
 
 export type ColorMode = 'dark' | 'light'
 

@@ -49,7 +49,7 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, className
   const mcpTotal = mcpStatus.length
 
   return (
-    <div className={cn('flex h-6 shrink-0 items-center gap-3 border-t border-border bg-card/80 px-3 text-[10px] text-muted-foreground shadow-[var(--shadow-inset-sm)]', className)}>
+    <div className={cn('flex h-6 shrink-0 items-center gap-3 border-t border-border bg-card/80 px-3 font-mono text-[9.5px] tracking-wide text-muted-foreground shadow-[var(--shadow-inset-sm)]', className)}>
       {workspacePath ? (
         <span className="flex items-center gap-1 truncate max-w-[300px]" title={workspacePath}>
           <FolderOpen className="size-3 shrink-0" />

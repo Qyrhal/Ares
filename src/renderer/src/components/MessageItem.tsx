@@ -27,7 +27,7 @@ function loadMermaid(): Promise<typeof import('mermaid')['default']> {
       mod.default.initialize({
         startOnLoad: false,
         theme: 'dark',
-        themeVariables: { primaryColor: '#dc2626', primaryBorderColor: '#dc2626', lineColor: '#6b6b6b' },
+        themeVariables: { primaryColor: '#2d72d2', primaryBorderColor: '#2d72d2', lineColor: '#75808d' },
         securityLevel: 'strict',
       })
       return mod.default

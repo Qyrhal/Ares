@@ -47,7 +47,7 @@ export const AppSettingsSchema = z.object({
   apiKey: z.string().default(''),
   apiBaseUrl: z.string().default(''),
   defaultModel: z.string().default(''),
-  themeId: z.string().default('red'),
+  themeId: z.string().default('steel'),
   colorMode: z.enum(['dark', 'light']).default('dark'),
   systemPrompt: z.string().default(''),
   permissionMode: z.enum(['ask', 'auto', 'yolo']).default('ask'),
