@@ -10,8 +10,9 @@ export interface LaunchedApp {
 }
 
 /** Launch the built app with an isolated temp userData dir. */
-export async function launchApp(): Promise<LaunchedApp> {
+export async function launchApp(seed?: (userData: string) => void): Promise<LaunchedApp> {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'ares-e2e-'))
+  seed?.(userData)
   const app = await electron.launch({
     args: ['.'],
     env: { ...process.env, ARES_USER_DATA: userData },

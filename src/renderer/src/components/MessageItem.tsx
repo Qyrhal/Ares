@@ -83,6 +83,7 @@ function MermaidDiagram({ code }: { code: string }): React.ReactElement {
   const containerRef = React.useRef<HTMLDivElement>(null)
   const [error, setError] = React.useState<string | null>(null)
   const [copied, setCopied] = React.useState(false)
+  const [view, setView] = React.useState<'preview' | 'code'>('preview')
   const idRef = React.useRef(`mermaid-${++mermaidRenderCounter}`)
 
   React.useEffect(() => {
@@ -122,15 +123,45 @@ function MermaidDiagram({ code }: { code: string }): React.ReactElement {
   }
 
   return (
-    <div className="group relative my-1 overflow-x-auto rounded-lg border border-border bg-[#0d0d0d] p-3">
-      <button
-        onClick={handleCopy}
-        className="absolute top-2 right-2 flex size-7 items-center justify-center rounded-md bg-muted/80 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground transition-opacity z-10"
-        aria-label={copied ? 'Copied' : 'Copy diagram source'}
-      >
-        {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
-      </button>
-      <div ref={containerRef} className="flex justify-center [&_svg]:max-w-full" />
+    <div className="group relative my-1 overflow-x-auto rounded-lg border border-border bg-card p-3">
+      <div className="absolute top-2 right-2 flex items-center gap-1 z-10">
+        <div className="flex items-center overflow-hidden rounded-md border border-border bg-muted/80 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => setView('preview')}
+            className={cn(
+              'px-2 py-1 text-[10px] transition-colors',
+              view === 'preview' ? 'bg-primary/15 font-medium text-primary' : 'text-muted-foreground hover:text-foreground'
+            )}
+            aria-label="Show rendered diagram"
+            aria-pressed={view === 'preview'}
+          >
+            Preview
+          </button>
+          <button
+            onClick={() => setView('code')}
+            className={cn(
+              'px-2 py-1 text-[10px] transition-colors',
+              view === 'code' ? 'bg-primary/15 font-medium text-primary' : 'text-muted-foreground hover:text-foreground'
+            )}
+            aria-label="Show mermaid source"
+            aria-pressed={view === 'code'}
+          >
+            Code
+          </button>
+        </div>
+        <button
+          onClick={handleCopy}
+          className="flex size-7 items-center justify-center rounded-md bg-muted/80 text-muted-foreground opacity-0 group-hover:opacity-100 hover:bg-accent hover:text-foreground transition-opacity"
+          aria-label={copied ? 'Copied' : 'Copy diagram source'}
+        >
+          {copied ? <Check className="size-3.5 text-green-500" /> : <Copy className="size-3.5" />}
+        </button>
+      </div>
+      {/* Keep the rendered container mounted so toggling doesn't re-run mermaid */}
+      <div ref={containerRef} className={cn('flex justify-center [&_svg]:max-w-full', view !== 'preview' && 'hidden')} />
+      {view === 'code' && (
+        <pre className="my-0 border-none bg-transparent p-0 text-[11px]"><code>{code}</code></pre>
+      )}
     </div>
   )
 }
