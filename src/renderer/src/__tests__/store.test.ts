@@ -921,3 +921,46 @@ describe('store — clearLastDeletedMessage', () => {
     expect(useAppStore.getState().lastDeletedMessage).toBeNull()
   })
 })
+
+// ── Side Chat actions ─────────────────────────────────────────────────────
+
+describe('store — setSideChat', () => {
+  it('sets side chat session id', () => {
+    useAppStore.getState().setSideChat('sc-1')
+    expect(useAppStore.getState().sideChatSessionId).toBe('sc-1')
+  })
+
+  it('clears side chat with null', () => {
+    useAppStore.setState({ sideChatSessionId: 'sc-1' })
+    useAppStore.getState().setSideChat(null)
+    expect(useAppStore.getState().sideChatSessionId).toBeNull()
+  })
+})
+
+describe('store — setSideChatMessages', () => {
+  it('replaces side chat messages array', () => {
+    const msgs = [mkMessage({ id: 'sm1' }), mkMessage({ id: 'sm2' })]
+    useAppStore.getState().setSideChatMessages(msgs)
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(2)
+    expect(useAppStore.getState().sideChatMessages[0].id).toBe('sm1')
+  })
+
+  it('clears side chat messages when set to empty', () => {
+    useAppStore.setState({ sideChatMessages: [mkMessage({ id: 'sm1' })] })
+    useAppStore.getState().setSideChatMessages([])
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(0)
+  })
+})
+
+describe('store — setSideChatLoading', () => {
+  it('sets side chat loading to true', () => {
+    useAppStore.getState().setSideChatLoading(true)
+    expect(useAppStore.getState().sideChatIsLoading).toBe(true)
+  })
+
+  it('sets side chat loading to false', () => {
+    useAppStore.setState({ sideChatIsLoading: true })
+    useAppStore.getState().setSideChatLoading(false)
+    expect(useAppStore.getState().sideChatIsLoading).toBe(false)
+  })
+})
