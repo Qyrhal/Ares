@@ -72,6 +72,7 @@ const electronMock = {
     sendUserAnswer: vi.fn(),
     onAgentSpawned: vi.fn().mockReturnValue(() => {}),
     onAgentStatus: vi.fn().mockReturnValue(() => {}),
+    onCompaction: vi.fn().mockReturnValue(() => {}),
     onSessionComplete: vi.fn().mockReturnValue(() => {}),
     onTodosUpdate: vi.fn().mockReturnValue(() => {}),
     onAskUser: vi.fn().mockReturnValue(() => {}),

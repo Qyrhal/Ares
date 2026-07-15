@@ -10,6 +10,7 @@ import { getAgentConfig, getSettings, replaceTodos, createSession, updateSession
 import { createCheckpoint } from './checkpoints'
 import { buildAutoAnswerMessages, parseAutoAnswerResponse, findRootSessionId, briefWithTeamNotes } from './orchestration'
 import { ARES_PROMPT } from '../shared/ares-prompt'
+import { contextWindow } from '../shared/context-window'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
 // markAsUncloneable was added in Node.js 22; Electron 33 ships Node.js 20.
@@ -281,8 +282,10 @@ async function getOrCreate(
       reasoning: false,
       input: ['text' as const],
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128_000,
-      maxTokens: 16_384,
+      // Drives the SDK's auto-compaction threshold — a wrong (too large) value
+      // means Pi never compacts and small-window models overflow instead.
+      contextWindow: contextWindow(modelId),
+      maxTokens: Math.min(16_384, Math.floor(contextWindow(modelId) / 2)),
     }],
   })
 
@@ -710,6 +713,10 @@ export async function handlePiSend(
 
     if (event.type === 'tool_execution_start') {
       win.webContents.send('pi:tool-start', reqId, event.toolName, JSON.stringify(event.args ?? {}))
+    }
+
+    if (event.type === 'compaction_start' || event.type === 'compaction_end') {
+      win.webContents.send('pi:compaction', sessionId, event.type === 'compaction_start' ? 'start' : 'end')
     }
 
     if (event.type === 'tool_execution_end') {
