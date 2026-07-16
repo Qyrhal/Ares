@@ -11,6 +11,7 @@ import {
   getTodos, addTodo, updateTodo, deleteTodo,
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
+  getMcpProfiles, saveMcpProfile, deleteMcpProfile,
 } from './db'
 import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions, getMcpStatus, resolveUserQuestion } from './pi'
 import { runBackgroundScan } from './scanner'
@@ -182,6 +183,13 @@ function registerIpcHandlers(): void {
     setAgentConfig(config as Parameters<typeof setAgentConfig>[0])
     clearAllPiSessions()
   })
+
+  // MCP Profiles
+  ipcMain.handle('mcpProfiles:list', () => getMcpProfiles())
+  ipcMain.handle('mcpProfiles:save', (_, profile: object) => {
+    saveMcpProfile(profile as Parameters<typeof saveMcpProfile>[0])
+  })
+  ipcMain.handle('mcpProfiles:delete', (_, id: string) => deleteMcpProfile(id))
 
   // Workspace
   ipcMain.handle('workspace:getPath', () => getWorkspacePath())

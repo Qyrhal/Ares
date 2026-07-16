@@ -121,6 +121,13 @@ export interface McpServer {
   enabled: boolean
 }
 
+export interface McpProfile {
+  id: string
+  name: string
+  servers: McpServer[]
+  createdAt: number
+}
+
 export interface SlashCommand {
   id: string
   name: string
