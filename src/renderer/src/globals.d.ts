@@ -118,6 +118,11 @@ declare global {
         set(config: object): Promise<void>
         onScanResult(cb: (result: { skills: number; extensions: number; mcpServers: number; commands: number }) => void): () => void
       }
+      mcpProfiles: {
+        list(): Promise<import('./types').McpProfile[]>
+        save(profile: import('./types').McpProfile): Promise<void>
+        delete(id: string): Promise<void>
+      }
       pi: {
         send(reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: string, cwd: string | null): void
         abort(sessionId: string): void

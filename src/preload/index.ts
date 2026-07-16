@@ -177,6 +177,12 @@ const agentConfigApi = {
   },
 }
 
+const mcpProfilesApi = {
+  list: () => ipcRenderer.invoke('mcpProfiles:list'),
+  save: (profile: object) => ipcRenderer.invoke('mcpProfiles:save', profile),
+  delete: (id: string) => ipcRenderer.invoke('mcpProfiles:delete', id),
+}
+
 // ── LSP ────────────────────────────────────────────────────────────────────
 
 const lspApi = {
@@ -213,7 +219,7 @@ const inlineEditApi = {
     ipcRenderer.invoke('inlineEdit:apply', code, instruction, model, apiBaseUrl, apiKey),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi }
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

@@ -86,6 +86,13 @@ export interface DbMcpServer {
   enabled: boolean
 }
 
+export interface DbMcpProfile {
+  id: string
+  name: string
+  servers: DbMcpServer[]
+  created_at: number
+}
+
 export interface DbSlashCommand {
   id: string
   name: string
@@ -118,6 +125,7 @@ interface Store {
   workspacePath: string | null
   recentProjects: string[]
   agentConfig: DbAgentConfig
+  mcpProfiles: DbMcpProfile[]
 }
 
 const DEFAULT_SETTINGS: DbSettings = {
@@ -187,7 +195,7 @@ function readStore(): Store {
     const raw = JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
     return { todos: [], teamNotes: [], ...raw }
   } catch {
-    return { sessions: [], messages: [], todos: [], teamNotes: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
+    return { sessions: [], messages: [], todos: [], teamNotes: [], mcpProfiles: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
   }
 }
 
@@ -464,5 +472,28 @@ export function getAgentConfig(): DbAgentConfig {
 export function setAgentConfig(config: DbAgentConfig): void {
   const store = readStore()
   store.agentConfig = config
+  writeStore(store)
+}
+
+// ── MCP Profiles ──────────────────────────────────────────────────────────────
+
+export function getMcpProfiles(): DbMcpProfile[] {
+  return readStore().mcpProfiles ?? []
+}
+
+export function saveMcpProfile(profile: DbMcpProfile): void {
+  const store = readStore()
+  const idx = store.mcpProfiles.findIndex((p) => p.id === profile.id)
+  if (idx >= 0) {
+    store.mcpProfiles[idx] = profile
+  } else {
+    store.mcpProfiles.push(profile)
+  }
+  writeStore(store)
+}
+
+export function deleteMcpProfile(id: string): void {
+  const store = readStore()
+  store.mcpProfiles = store.mcpProfiles.filter((p) => p.id !== id)
   writeStore(store)
 }

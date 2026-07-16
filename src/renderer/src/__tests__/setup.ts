@@ -114,6 +114,11 @@ const electronMock = {
     set: vi.fn().mockResolvedValue(undefined),
     onScanResult: vi.fn().mockReturnValue(() => {}),
   },
+  mcpProfiles: {
+    list: vi.fn().mockResolvedValue([]),
+    save: vi.fn().mockResolvedValue(undefined),
+    delete: vi.fn().mockResolvedValue(undefined),
+  },
   checkpoint: {
     create: vi.fn().mockResolvedValue({ id: 'stash@{0}', index: 0, message: 'test', date: '', branch: 'main' }),
     list: vi.fn().mockResolvedValue([]),

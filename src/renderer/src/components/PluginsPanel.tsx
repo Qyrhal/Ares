@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle2, ChevronDown, ChevronRight, Plug, Plus, Trash2 } from 'lucide-react'
-import { AgentConfig, McpServer, PiExtension } from '@/types'
+import { AgentConfig, McpProfile, McpServer, PiExtension } from '@/types'
 import { cn } from '@/lib/utils'
 import { v4 as uuidv4 } from 'uuid'
 
@@ -12,11 +12,13 @@ const EMPTY: AgentConfig = { skills: [], extensions: [], mcpServers: [], command
 
 export function PluginsPanel(): React.ReactElement {
   const [config, setConfig] = useState<AgentConfig>(EMPTY)
+  const [profiles, setProfiles] = useState<McpProfile[]>([])
   const [saved, setSaved] = useState(false)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useEffect(() => {
     el.agentConfig.get().then((c) => setConfig(c ?? EMPTY))
+    el.mcpProfiles.list().then(setProfiles)
   }, [])
 
   const persist = useCallback((next: AgentConfig) => {
@@ -56,6 +58,33 @@ export function PluginsPanel(): React.ReactElement {
         <McpServersSection
           servers={config.mcpServers}
           onChange={(mcpServers) => patchConfig({ mcpServers })}
+        />
+
+        <div className="my-10 border-t border-border" />
+
+        {/* MCP Profiles */}
+        <McpProfilesSection
+          profiles={profiles}
+          currentServers={config.mcpServers}
+          onSaveProfile={(name) => {
+            const profile: McpProfile = {
+              id: uuidv4(),
+              name,
+              servers: JSON.parse(JSON.stringify(config.mcpServers)),
+              createdAt: Date.now(),
+            }
+            el.mcpProfiles.save(profile).then(() => {
+              el.mcpProfiles.list().then(setProfiles)
+            })
+          }}
+          onDeleteProfile={(id) => {
+            el.mcpProfiles.delete(id).then(() => {
+              el.mcpProfiles.list().then(setProfiles)
+            })
+          }}
+          onActivateProfile={(servers) => {
+            patchConfig({ mcpServers: JSON.parse(JSON.stringify(servers)) })
+          }}
         />
 
         <div className="my-10 border-t border-border" />
@@ -316,7 +345,161 @@ function ExtensionRow({ ext, open, onToggle, onUpdate, onRemove }: {
   )
 }
 
-// ── Shared ────────────────────────────────────────────────────────────────────
+// ── MCP Profiles ───────────────────────────────────────────────────────────────
+
+function McpProfilesSection({
+  profiles, currentServers,
+  onSaveProfile, onDeleteProfile, onActivateProfile,
+}: {
+  profiles: McpProfile[]
+  currentServers: McpServer[]
+  onSaveProfile: (name: string) => void
+  onDeleteProfile: (id: string) => void
+  onActivateProfile: (servers: McpServer[]) => void
+}) {
+  const [profileName, setProfileName] = useState('')
+  const [showSave, setShowSave] = useState(false)
+
+  const handleSave = () => {
+    if (!profileName.trim()) return
+    onSaveProfile(profileName.trim())
+    setProfileName('')
+    setShowSave(false)
+  }
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-between">
+        <div>
+          <h2 className="text-sm font-semibold text-foreground">MCP Profiles</h2>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            Save and switch between named MCP server configurations. Activating a profile replaces the current server list.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowSave(!showSave)}
+          className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+        >
+          <Plus className="size-3.5" /> Save current
+        </button>
+      </div>
+
+      {showSave && (
+        <div className="mb-4 flex items-center gap-2">
+          <input
+            value={profileName}
+            onChange={(e) => setProfileName(e.target.value)}
+            placeholder="Profile name..."
+            className="flex-1 rounded border border-border bg-input px-3 py-[0.4rem] text-xs text-foreground outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/20 placeholder:text-muted-foreground"
+            onKeyDown={(e) => { if (e.key === 'Enter') handleSave() }}
+            autoFocus
+          />
+          <button
+            onClick={handleSave}
+            disabled={!profileName.trim()}
+            className="rounded-lg bg-primary px-3 py-[0.4rem] text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
+          >
+            Save
+          </button>
+          <button
+            onClick={() => { setShowSave(false); setProfileName('') }}
+            className="rounded-lg border border-border px-3 py-[0.4rem] text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {profiles.length === 0 ? (
+        <EmptyState label="No profiles" hint="Save your current MCP server setup as a reusable profile to switch between configurations quickly." onAdd={() => setShowSave(true)} />
+      ) : (
+        <div className="space-y-2">
+          {profiles.map((p) => (
+            <ProfileRow
+              key={p.id}
+              profile={p}
+              isActive={profileMatches(p.servers, currentServers)}
+              onActivate={() => onActivateProfile(p.servers)}
+              onDelete={() => onDeleteProfile(p.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function profileMatches(a: McpServer[], b: McpServer[]): boolean {
+  if (a.length !== b.length) return false
+  const aIds = new Set(a.map((s) => s.id))
+  return b.every((s) => aIds.has(s.id))
+}
+
+function ProfileRow({
+  profile, isActive, onActivate, onDelete,
+}: {
+  profile: McpProfile
+  isActive: boolean
+  onActivate: () => void
+  onDelete: () => void
+}) {
+  const [confirming, setConfirming] = useState(false)
+  const serverCount = profile.servers.length
+  const enabledCount = profile.servers.filter((s) => s.enabled).length
+
+  return (
+    <div className={cn(
+      'rounded-xl border overflow-hidden transition-shadow hover:shadow-sm',
+      isActive ? 'border-primary/40 bg-primary/[0.03]' : 'border-border',
+    )}>
+      <div className="flex items-center gap-3 px-4 py-3">
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-foreground">{profile.name}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {serverCount} server{serverCount !== 1 ? 's' : ''} · {enabledCount} enabled · {new Date(profile.createdAt).toLocaleDateString()}
+          </p>
+        </div>
+        {!isActive && (
+          <button
+            onClick={onActivate}
+            className="rounded-lg border border-border bg-card px-3 py-1 text-xs font-medium text-foreground hover:bg-accent transition-colors"
+          >
+            Activate
+          </button>
+        )}
+        {isActive && (
+          <span className="rounded-lg bg-primary/10 px-3 py-1 text-xs font-medium text-primary">
+            Active
+          </span>
+        )}
+        {confirming ? (
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { onDelete(); setConfirming(false) }}
+              className="rounded-lg bg-destructive px-2 py-1 text-xs font-medium text-destructive-foreground hover:bg-destructive/90 transition-colors"
+            >
+              Delete
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="rounded-lg border border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setConfirming(true)}
+            className="shrink-0 rounded p-1 text-muted-foreground hover:bg-destructive/15 hover:text-destructive transition-colors"
+            title="Delete profile"
+          >
+            <Trash2 className="size-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
 
 function EmptyState({ label, hint, onAdd }: { label: string; hint: string; onAdd: () => void }) {
   return (
