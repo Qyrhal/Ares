@@ -43,9 +43,17 @@ export const RawMessageSchema = z.object({
   created_at: z.number(),
 })
 
+export const ProviderConfigSchema = z.object({
+  id: z.string(),
+  label: z.string(),
+  baseUrl: z.string(),
+  apiKey: z.string().default(''),
+})
+
 export const AppSettingsSchema = z.object({
   apiKey: z.string().default(''),
   apiBaseUrl: z.string().default(''),
+  providers: z.array(ProviderConfigSchema).default([]),
   defaultModel: z.string().default(''),
   themeId: z.string().default('steel'),
   colorMode: z.enum(['dark', 'light']).default('dark'),
@@ -105,5 +113,10 @@ export function parseMessage(raw: unknown): Message {
 }
 
 export function parseSettings(raw: unknown): AppSettings {
-  return AppSettingsSchema.parse(raw)
+  const s = AppSettingsSchema.parse(raw)
+  // Migrate the legacy single endpoint into the providers list
+  if (s.providers.length === 0 && s.apiBaseUrl.trim()) {
+    s.providers = [{ id: 'default', label: 'Default', baseUrl: s.apiBaseUrl, apiKey: s.apiKey }]
+  }
+  return s
 }

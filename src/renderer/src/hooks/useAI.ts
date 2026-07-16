@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { AppSettings, Message, PermissionMode, AgentMode } from '@/types'
+import { resolveProvider, hasProvider, type ResolvedProvider } from '@/lib/providers'
 
 export type StreamCallback = (accumulated: string) => void
 export type DoneCallback = (fullText: string, thinking?: string) => void
@@ -28,14 +29,17 @@ export function useAI(settings: AppSettings) {
     const lastUser = [...messages].reverse().find((m) => m.role === 'user')
     if (!sessionId || !lastUser) return
 
-    if (!settings.apiBaseUrl.trim()) {
+    if (!hasProvider(settings)) {
       await noEndpointFallback(onStream, onDone)
       return
     }
 
+    // "providerId::modelId" refs route to the matching provider
+    const resolved = resolveProvider(model, settings)
+
     // Chat mode: no tools, plain streaming chat completion
     if (agentMode === 'chat') {
-      await handleChatCompletion(model, messages, settings, onStream, onDone, onError)
+      await handleChatCompletion(resolved, messages, onStream, onDone, onError)
       return
     }
 
@@ -63,11 +67,11 @@ export function useAI(settings: AppSettings) {
           resolve()
         }),
       ]
-      window.electron.pi.send(reqId, sessionId, lastUser.content, model, settings.apiBaseUrl, settings.apiKey, workspacePath ?? null)
+      window.electron.pi.send(reqId, sessionId, lastUser.content, resolved.modelId, resolved.baseUrl, resolved.apiKey, workspacePath ?? null)
     })
-  }, [settings.apiBaseUrl, settings.apiKey])
+  }, [settings])
 
-  const isConfigured = settings.apiBaseUrl.trim().length > 0
+  const isConfigured = hasProvider(settings)
 
   return { sendMessage, isConfigured }
 }
@@ -77,14 +81,13 @@ export function useAI(settings: AppSettings) {
  * No tools, no agent session — just Q&A.
  */
 async function handleChatCompletion(
-  model: string,
+  resolved: ResolvedProvider,
   messages: Message[],
-  settings: AppSettings,
   onStream: StreamCallback,
   onDone: DoneCallback,
   onError?: ErrorCallback,
 ): Promise<void> {
-  const baseUrl = settings.apiBaseUrl.replace(/\/$/, '')
+  const baseUrl = resolved.baseUrl.replace(/\/$/, '')
   const url = `${baseUrl}/chat/completions`
 
   const chatMessages = messages.map((m) => ({
@@ -97,10 +100,10 @@ async function handleChatCompletion(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
+        ...(resolved.apiKey ? { Authorization: `Bearer ${resolved.apiKey}` } : {}),
       },
       body: JSON.stringify({
-        model,
+        model: resolved.modelId,
         messages: chatMessages,
         stream: true,
       }),

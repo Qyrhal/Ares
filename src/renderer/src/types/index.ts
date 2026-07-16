@@ -75,9 +75,18 @@ export interface Todo {
 export type PermissionMode = 'ask' | 'auto' | 'yolo'
 export type AgentMode = 'chat' | 'agent'
 
+export interface ProviderConfig {
+  id: string
+  label: string
+  baseUrl: string
+  apiKey: string
+}
+
 export interface AppSettings {
+  /** Legacy single-endpoint fields — migrated into providers[0] on load */
   apiKey: string
   apiBaseUrl: string
+  providers: ProviderConfig[]
   defaultModel: string
   themeId: string
   colorMode: 'dark' | 'light'

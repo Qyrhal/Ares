@@ -55,6 +55,7 @@ export interface DbTeamNote {
 export interface DbSettings {
   apiKey: string
   apiBaseUrl: string
+  providers?: { id: string; label: string; baseUrl: string; apiKey: string }[]
   defaultModel: string
   themeId: string
   colorMode?: string

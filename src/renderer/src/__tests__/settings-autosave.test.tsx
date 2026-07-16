@@ -7,6 +7,7 @@ import { AppSettings } from '@/types'
 const BASE_SETTINGS: AppSettings = {
   apiKey: '',
   apiBaseUrl: '',
+  providers: [],
   defaultModel: '',
   themeId: 'red',
   colorMode: 'dark',
