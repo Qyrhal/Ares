@@ -23,11 +23,13 @@ interface PickerItem {
 }
 
 const BUILTIN_COMMANDS: PickerItem[] = [
-  { kind: 'builtin', name: 'model',     description: 'Change the model for this session' },
-  { kind: 'builtin', name: 'folder',    description: 'Open or switch workspace folder' },
-  { kind: 'builtin', name: 'overview',  description: 'Get an AI-generated summary of the current project' },
-  { kind: 'builtin', name: 'clear',     description: 'Clear all messages in the current session' },
-  { kind: 'builtin', name: 'help',      description: 'Show available slash commands' },
+  { kind: 'builtin', name: 'model',        description: 'Change the model for this session' },
+  { kind: 'builtin', name: 'folder',       description: 'Open or switch workspace folder' },
+  { kind: 'builtin', name: 'overview',     description: 'Get an AI-generated summary of the current project' },
+  { kind: 'builtin', name: 'clear',        description: 'Clear all messages in the current session' },
+  { kind: 'builtin', name: 'helpful',      description: 'Mark the last assistant response as helpful' },
+  { kind: 'builtin', name: 'not-helpful',  description: 'Mark the last assistant response as not helpful' },
+  { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
 function expandTemplate(prompt: string, args: string): string {
@@ -359,6 +361,11 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
         case 'help':
           setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
           onCommand?.('help', '')
+          return
+        case 'helpful':
+        case 'not-helpful':
+          setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
+          onCommand?.(item.name, '')
           return
       }
     }
