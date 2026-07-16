@@ -755,9 +755,9 @@ export default function App(): React.ReactElement {
         streamTotalChars = chunk.length
         store.upsertMessage(streamingId, streamingMsg)
       },
-      async (fullText, thinking) => {
+      async (fullText, thinking, usage) => {
         const duration = Date.now() - streamStartTime
-        const tokenCount = Math.round(fullText.length / 4)
+        const tokenCount = usage?.completionTokens ?? Math.round(fullText.length / 4)
         const rawA = await el.db.addMessage(sess.id, 'assistant', fullText, { thinking })
         const aMsg = rawA
           ? { ...parseMessage(rawA), tokenCount, duration }
@@ -1018,10 +1018,15 @@ export default function App(): React.ReactElement {
         streamingMsg = { ...streamingMsg, content: chunk }
         store.upsertSideChatMessage(streamingId, streamingMsg)
       },
-      async (fullText) => {
-        const rawA = await el.db.addMessage(sideChatSessionId, 'assistant', fullText)
+      async (_fullText, _thinking, usage) => {
+        const duration = Date.now() - streamStartTime
+        const tokenCount = usage?.completionTokens ?? Math.round(_fullText.length / 4)
+        const rawA = await el.db.addMessage(sideChatSessionId, 'assistant', _fullText)
         store.removeSideChatMessage(streamingId)
-        store.appendSideChatMessage(rawA ? parseMessage(rawA) : { ...streamingMsg, id: uuidv4(), isStreaming: false })
+        const aMsg = rawA
+          ? { ...parseMessage(rawA), tokenCount, duration }
+          : { ...streamingMsg, id: uuidv4(), isStreaming: false, tokenCount, duration }
+        store.appendSideChatMessage(aMsg)
         store.setSideChatLoading(false)
       },
       undefined,

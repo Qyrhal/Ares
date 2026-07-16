@@ -4,7 +4,7 @@ import { AppSettings, Message, PermissionMode, AgentMode } from '@/types'
 import { resolveProvider, hasProvider, type ResolvedProvider } from '@/lib/providers'
 
 export type StreamCallback = (accumulated: string) => void
-export type DoneCallback = (fullText: string, thinking?: string) => void
+export type DoneCallback = (fullText: string, thinking?: string, usage?: { promptTokens?: number; completionTokens?: number }) => void
 export type ThinkingCallback = (accumulated: string) => void
 export type ToolCallCallback = (name: string, input: string) => void
 export type ErrorCallback = (err: Error) => void
@@ -118,6 +118,7 @@ async function handleChatCompletion(
     const decoder = new TextDecoder()
     let accumulated = ''
     let buffer = ''
+    let usage: { promptTokens?: number; completionTokens?: number } | undefined
 
     while (true) {
       const { done, value } = await reader.read()
@@ -138,6 +139,13 @@ async function handleChatCompletion(
               accumulated += content
               onStream(accumulated)
             }
+            // Extract usage from the final chunk (OpenAI-compatible APIs include it on the last delta)
+            if (json.usage) {
+              usage = {
+                promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
+                completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
+              }
+            }
           } catch {
             // Skip malformed SSE lines
           }
@@ -153,11 +161,17 @@ async function handleChatCompletion(
           const json = JSON.parse(data)
           const content = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.text ?? ''
           if (content) accumulated += content
+          if (json.usage) {
+            usage = {
+              promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
+              completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
+            }
+          }
         } catch { /* skip */ }
       }
     }
 
-    onDone(accumulated)
+    onDone(accumulated, undefined, usage)
   } catch (err) {
     if (onError) {
       onError(err instanceof Error ? err : new Error(String(err)))
