@@ -156,3 +156,17 @@ describe('TerminalView', () => {
     })
   })
 })
+
+describe('TerminalView — search', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    el.terminal.create.mockResolvedValue('term-search')
+    el.terminal.onOutput.mockReturnValue(() => {})
+    el.terminal.kill = vi.fn()
+  })
+
+  it('search bar is hidden by default', () => {
+    render(<TerminalView cwd="/test" onClose={vi.fn()} />)
+    expect(screen.queryByPlaceholderText('Find…')).not.toBeInTheDocument()
+  })
+})

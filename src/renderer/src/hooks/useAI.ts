@@ -221,7 +221,7 @@ async function handlePlanCompletion(
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(resolved.apiKey ? { Authorization: *** ${resolved.apiKey}` } : {}),
+        ...(resolved.apiKey ? { Authorization: `Bearer ${resolved.apiKey}` } : {}),
       },
       body: JSON.stringify({
         model: resolved.modelId,
