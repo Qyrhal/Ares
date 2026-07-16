@@ -99,6 +99,24 @@ describe('InputBar — slash commands', () => {
     fireEvent.change(textarea, { target: { value: '/cl' } })
     expect(screen.queryByText('/model')).not.toBeInTheDocument()
   })
+
+  it('passes lowercased cmdName for uppercase slash commands', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/CLEAR' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onCommand).toHaveBeenCalledWith('clear', '')
+  })
+
+  it('passes lowercased cmdName for mixed-case slash commands', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/Model gpt-4o' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onCommand).toHaveBeenCalledWith('model', 'gpt-4o')
+  })
 })
 
 describe('InputBar — @ mentions', () => {
