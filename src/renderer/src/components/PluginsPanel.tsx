@@ -187,7 +187,14 @@ function McpServerRow({ server, open, onToggle, onUpdate, onRemove }: {
           <span className={cn('inline-block size-2.5 rounded-full transition-colors', server.enabled ? 'bg-green-500' : 'bg-muted-foreground/30')} />
         </button>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-foreground truncate">{server.name || 'Unnamed'}</p>
+          <p className="text-sm font-medium text-foreground truncate flex items-center gap-1.5">
+            {server.name || 'Unnamed'}
+            {server.discovered && (
+              <span className="inline-flex items-center rounded-full border border-border bg-muted/60 px-1.5 py-[1px] text-[9px] font-normal text-muted-foreground leading-tight">
+                discovered
+              </span>
+            )}
+          </p>
           <p className="text-xs text-muted-foreground font-mono truncate mt-0.5">
             {server.command} {server.args.slice(0, 2).join(' ')}{server.args.length > 2 ? ' …' : ''}
           </p>

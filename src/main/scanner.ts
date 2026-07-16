@@ -243,7 +243,7 @@ function collectCommands(): DbSlashCommand[] {
 
 type McpServerMap = Record<string, { command?: string; args?: string[]; env?: Record<string, string>; url?: string; type?: string }>
 
-function mcpFromMap(map: McpServerMap): DbMcpServer[] {
+function mcpFromMap(map: McpServerMap, discovered = false): DbMcpServer[] {
   return Object.entries(map).map(([name, cfg]) => ({
     id: uuidv4(),
     name,
@@ -251,6 +251,7 @@ function mcpFromMap(map: McpServerMap): DbMcpServer[] {
     args: cfg.args ?? (cfg.url ? [cfg.url] : []),
     env: cfg.env ?? {},
     enabled: true,
+    discovered,
   }))
 }
 
@@ -260,17 +261,17 @@ function collectMcpServers(): DbMcpServer[] {
 
   // ~/.pi/agent/mcp.json
   const piMcp = readJsonSafe<{ mcpServers?: McpServerMap }>(path.join(home, '.pi', 'agent', 'mcp.json'))
-  if (piMcp?.mcpServers) servers.push(...mcpFromMap(piMcp.mcpServers))
+  if (piMcp?.mcpServers) servers.push(...mcpFromMap(piMcp.mcpServers, true))
 
   // ~/.omp/agent/mcp.json
   const ompMcp = readJsonSafe<{ mcpServers?: McpServerMap }>(path.join(home, '.omp', 'agent', 'mcp.json'))
-  if (ompMcp?.mcpServers) servers.push(...mcpFromMap(ompMcp.mcpServers))
+  if (ompMcp?.mcpServers) servers.push(...mcpFromMap(ompMcp.mcpServers, true))
 
   // ~/.claude/settings.json (mcpServers field)
   const claudeSettings = readJsonSafe<{ mcpServers?: McpServerMap }>(
     path.join(home, '.claude', 'settings.json')
   )
-  if (claudeSettings?.mcpServers) servers.push(...mcpFromMap(claudeSettings.mcpServers))
+  if (claudeSettings?.mcpServers) servers.push(...mcpFromMap(claudeSettings.mcpServers, true))
 
   // Deduplicate by name
   const seen = new Set<string>()
