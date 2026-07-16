@@ -34,6 +34,7 @@ export interface Message {
   createdAt: number
   replyTo?: ReplyTo
   reactions?: MessageReactions
+  feedback?: 'helpful' | 'not-helpful'
   tokenCount?: number
   duration?: number
 }

@@ -32,6 +32,7 @@ export interface DbMessage {
   thinking: string | null
   reply_to: string | null
   reactions: string | null
+  feedback: string | null
   created_at: number
 }
 
@@ -341,7 +342,7 @@ export function deleteMessage(id: string): void {
 
 export function updateMessage(
   id: string,
-  updates: Partial<Pick<DbMessage, 'tool_status' | 'tool_output' | 'content' | 'reactions' | 'reply_to' | 'created_at'>>
+  updates: Partial<Pick<DbMessage, 'tool_status' | 'tool_output' | 'content' | 'reactions' | 'reply_to' | 'created_at' | 'feedback'>>
 ): void {
   const store = readStore()
   store.messages = store.messages.map((m) => m.id === id ? { ...m, ...updates } : m)

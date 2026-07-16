@@ -117,6 +117,40 @@ describe('InputBar — slash commands', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
     expect(onCommand).toHaveBeenCalledWith('model', 'gpt-4o')
   })
+
+  it('shows /helpful in the command picker', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/helpful' } })
+    // Text appears in both textarea and picker item
+    const items = screen.getAllByText('/helpful')
+    expect(items.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows /not-helpful in the command picker', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/not' } })
+    expect(screen.getByText('/not-helpful')).toBeInTheDocument()
+  })
+
+  it('calls onCommand with helpful when /helpful is entered', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/helpful' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onCommand).toHaveBeenCalledWith('helpful', '')
+  })
+
+  it('calls onCommand with not-helpful when /not-helpful is entered', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/not-helpful' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onCommand).toHaveBeenCalledWith('not-helpful', '')
+  })
 })
 
 describe('InputBar — @ mentions', () => {

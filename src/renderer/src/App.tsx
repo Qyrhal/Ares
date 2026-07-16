@@ -669,6 +669,24 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'helpful':
+      case 'not-helpful': {
+        const feedbackType = cmd === 'helpful' ? 'helpful' : 'not-helpful'
+        const msgs = useAppStore.getState().messages
+        // Find the last assistant message (skip system messages)
+        const lastAssistant = msgs.filter((m) => m.role === 'assistant').at(-1)
+        if (!lastAssistant) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No assistant response found to rate.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        await el.db.updateMessage(lastAssistant.id, { feedback: feedbackType })
+        store.upsertMessage(lastAssistant.id, { ...lastAssistant, feedback: feedbackType })
+        const emoji = feedbackType === 'helpful' ? '👍' : '👎'
+        const msg = await el.db.addMessage(sess.id, 'system', `Feedback recorded — marked as ${feedbackType} ${emoji}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
     }
   }, [activeSession, store])
 
