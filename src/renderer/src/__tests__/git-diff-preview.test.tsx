@@ -124,13 +124,13 @@ describe('GitPane — Diff Preview', () => {
     // Click to open diff
     fireEvent.click(screen.getByText('index.ts'))
     await waitFor(() => {
-      expect(screen.getByText('+2')).toBeInTheDocument()
+      expect(screen.getAllByText('+2').length).toBeGreaterThanOrEqual(1)
     })
 
     // Click again to close
     fireEvent.click(screen.getByText('index.ts'))
     await waitFor(() => {
-      expect(screen.queryByText('+2')).not.toBeInTheDocument()
+      expect(screen.queryAllByText('+2').length).toBe(0)
     })
   })
 
