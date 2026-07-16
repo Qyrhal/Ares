@@ -8,6 +8,7 @@ import type { AppSettings, Message } from '@/types'
 const SETTINGS: AppSettings = {
   apiKey: 'sk-test',
   apiBaseUrl: 'http://localhost:11434/v1',
+  providers: [],
   defaultModel: 'gpt-4',
   themeId: 'steel',
   colorMode: 'dark',

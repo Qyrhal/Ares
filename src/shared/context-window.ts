@@ -5,7 +5,10 @@
  * auto-compaction threshold).
  */
 export function contextWindow(model: string): number {
-  const m = (model ?? '').toLowerCase()
+  // Accept both plain model ids and "providerId::modelId" refs
+  const ref = model ?? ''
+  const sep = ref.indexOf('::')
+  const m = (sep === -1 ? ref : ref.slice(sep + 2)).toLowerCase()
   if (m.includes('claude')) return 200000
   if (m.includes('gpt-4.1') || m.includes('gpt-4o')) return 128000
   if (m.includes('gpt-4')) return 8192

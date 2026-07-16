@@ -1,11 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, Moon, RefreshCw, Sun, Trash2 } from 'lucide-react'
+import { AlertCircle, CheckCircle2, Loader2, Moon, Plus, RefreshCw, Sun, Trash2 } from 'lucide-react'
 import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
-import { AppSettings } from '@/types'
+import { AppSettings, ProviderConfig } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { THEMES, applyTheme, applyColorMode, DEFAULT_THEME_ID } from '@/lib/theme'
+import { makeModelRef } from '@/lib/providers'
 import { ARES_PROMPT } from '../../../shared/ares-prompt'
 
 const el = window.electron
@@ -25,22 +26,28 @@ const PRESET_ENDPOINTS = [
   { label: 'LM Studio',   url: 'http://localhost:1234/v1' },
   { label: 'Groq',        url: 'https://api.groq.com/openai/v1' },
   { label: 'Together AI', url: 'https://api.together.xyz/v1' },
+  { label: 'OpenRouter',  url: 'https://openrouter.ai/api/v1' },
 ]
 
 type ConnStatus = 'idle' | 'loading' | 'ok' | 'error'
 type SaveState = 'idle' | 'saving' | 'saved'
+interface ProviderStatus { status: ConnStatus; message: string }
+interface FetchedModel { value: string; label: string; provider: string }
 
 const AUTOSAVE_DELAY = 600
 
+function slugify(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'provider'
+}
+
 export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessions }: SettingsPanelProps): React.ReactElement {
   const [form, setForm] = useState<AppSettings>(settings)
-  const [showKey, setShowKey] = useState(false)
+  const [showKey, setShowKey] = useState<Record<string, boolean>>({})
   const [saveState, setSaveState] = useState<SaveState>('idle')
   const [deletingAll, setDeletingAll] = useState(false)
 
-  const [connStatus, setConnStatus] = useState<ConnStatus>('idle')
-  const [connMessage, setConnMessage] = useState('')
-  const [fetchedModels, setFetchedModels] = useState<SelectOption[]>([])
+  const [provStatus, setProvStatus] = useState<Record<string, ProviderStatus>>({})
+  const [fetchedModels, setFetchedModels] = useState<FetchedModel[]>([])
 
   // Tracks the JSON of the last settings we saved (or received) so the
   // autosave effect and the incoming-props effect don't feed each other.
@@ -52,6 +59,17 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
     savedJson.current = json
     setForm(settings)
   }, [settings])
+
+  // Materialize the legacy single endpoint as a provider card
+  useEffect(() => {
+    if (form.providers.length === 0 && form.apiBaseUrl.trim()) {
+      setForm((prev) => prev.providers.length > 0 ? prev : {
+        ...prev,
+        providers: [{ id: 'default', label: 'Default', baseUrl: prev.apiBaseUrl, apiKey: prev.apiKey }],
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.providers.length, form.apiBaseUrl])
 
   // ── Autosave: debounce every form change straight to disk ──────────────────
   useEffect(() => {
@@ -66,69 +84,64 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form])
 
-  // Auto-fetch models when URL or key changes
-  useEffect(() => {
-    const baseUrl = form.apiBaseUrl.replace(/\/$/, '')
-    if (!baseUrl) return
+  // ── Providers ───────────────────────────────────────────────────────────────
+  const setProviders = (providers: ProviderConfig[]): void =>
+    setForm((prev) => ({ ...prev, providers }))
 
-    const timer = setTimeout(async () => {
-      setConnStatus('loading')
-      setConnMessage('')
-      setFetchedModels([])
+  const updateProvider = (id: string, patch: Partial<ProviderConfig>): void =>
+    setProviders(form.providers.map((p) => p.id === id ? { ...p, ...patch } : p))
 
-      try {
-        const json = await el.ext.fetchModels(baseUrl, form.apiKey)
-        const models: SelectOption[] = (json.data ?? [])
-          .map((m: { id: string }) => ({ value: m.id, label: m.id }))
-          .sort((a: SelectOption, b: SelectOption) => a.value.localeCompare(b.value))
+  const removeProvider = (id: string): void => {
+    setProviders(form.providers.filter((p) => p.id !== id))
+    setFetchedModels((prev) => prev.filter((m) => !m.value.startsWith(`${id}::`)))
+  }
 
-        setFetchedModels(models)
-        setConnStatus('ok')
-        setConnMessage(`Connected · ${models.length} model${models.length !== 1 ? 's' : ''} available`)
+  const addProvider = (label: string, url: string): void => {
+    const base = slugify(label)
+    let id = base
+    let n = 2
+    while (form.providers.some((p) => p.id === id)) id = `${base}-${n++}`
+    setProviders([...form.providers, { id, label, baseUrl: url, apiKey: '' }])
+  }
 
-        if (!form.defaultModel && models.length > 0) {
-          setForm((prev) => ({ ...prev, defaultModel: models[0].value }))
-        }
-      } catch (err) {
-        if ((err as Error).name === 'AbortError') return
-        setConnStatus('error')
-        setConnMessage((err as Error).message)
+  const testProvider = useCallback(async (p: ProviderConfig, multi: boolean): Promise<FetchedModel[]> => {
+    setProvStatus((prev) => ({ ...prev, [p.id]: { status: 'loading', message: '' } }))
+    try {
+      const json = await el.ext.fetchModels(p.baseUrl.replace(/\/$/, ''), p.apiKey)
+      const models: FetchedModel[] = ((json.data ?? []) as { id: string }[])
+        .map((m) => ({ value: multi ? makeModelRef(p.id, m.id) : m.id, label: m.id, provider: p.label }))
+        .sort((a, b) => a.label.localeCompare(b.label))
+      setProvStatus((prev) => ({
+        ...prev,
+        [p.id]: { status: 'ok', message: `Connected · ${models.length} model${models.length !== 1 ? 's' : ''} available` },
+      }))
+      return models
+    } catch (err) {
+      if ((err as Error).name !== 'AbortError') {
+        setProvStatus((prev) => ({ ...prev, [p.id]: { status: 'error', message: (err as Error).message } }))
       }
-    }, 600)
+      return []
+    }
+  }, [])
 
-    return () => { clearTimeout(timer) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form.apiBaseUrl, form.apiKey])
+  const refreshAllModels = useCallback(async (providers: ProviderConfig[]): Promise<void> => {
+    const usable = providers.filter((p) => p.baseUrl.trim())
+    const multi = usable.length > 1
+    const results = await Promise.all(usable.map((p) => testProvider(p, multi)))
+    setFetchedModels(results.flat())
+  }, [testProvider])
+
+  // Auto-fetch models whenever the provider list changes
+  const providersJson = JSON.stringify(form.providers)
+  useEffect(() => {
+    const providers = JSON.parse(providersJson) as ProviderConfig[]
+    if (providers.every((p) => !p.baseUrl.trim())) return
+    const timer = setTimeout(() => { refreshAllModels(providers) }, 600)
+    return () => clearTimeout(timer)
+  }, [providersJson, refreshAllModels])
 
   const set = (k: keyof AppSettings, v: string): void =>
     setForm((prev) => ({ ...prev, [k]: v }))
-
-  const handleTestAndFetch = useCallback(async (): Promise<void> => {
-    const baseUrl = form.apiBaseUrl.replace(/\/$/, '')
-    const apiKey = form.apiKey
-
-    setConnStatus('loading')
-    setConnMessage('')
-    setFetchedModels([])
-
-    try {
-      const json = await el.ext.fetchModels(baseUrl, apiKey)
-      const models: SelectOption[] = (json.data ?? [])
-        .map((m: { id: string }) => ({ value: m.id, label: m.id }))
-        .sort((a: SelectOption, b: SelectOption) => a.value.localeCompare(b.value))
-
-      setFetchedModels(models)
-      setConnStatus('ok')
-      setConnMessage(`Connected · ${models.length} model${models.length !== 1 ? 's' : ''} available`)
-
-      if (!form.defaultModel && models.length > 0) {
-        set('defaultModel', models[0].value)
-      }
-    } catch (err) {
-      setConnStatus('error')
-      setConnMessage((err as Error).message)
-    }
-  }, [form.apiBaseUrl, form.apiKey, form.defaultModel])
 
   const handleDeleteAllSessions = async (): Promise<void> => {
     if (sessionCount === 0) return
@@ -138,7 +151,11 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
     setDeletingAll(false)
   }
 
-  const modelOptions: SelectOption[] = fetchedModels
+  const multiProvider = form.providers.filter((p) => p.baseUrl.trim()).length > 1
+  const modelOptions: SelectOption[] = fetchedModels.map((m) => ({
+    value: m.value,
+    label: multiProvider ? `${m.label} — ${m.provider}` : m.label,
+  }))
   const currentModelInList = modelOptions.some((m) => m.value === form.defaultModel)
 
   return (
@@ -164,93 +181,116 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </div>
         </div>
 
-        {/* ── AI Endpoint ────────────────────────────────────────────── */}
-        <Section title="AI endpoint" description="Connect to any OpenAI-compatible API. Ares uses Pi Agent as its runtime, so it works with any server that speaks the OpenAI chat completions protocol.">
+        {/* ── Providers ─────────────────────────────────────────────── */}
+        <Section title="Providers" description="Connect any number of OpenAI-compatible endpoints — a local server and hosted APIs side by side. Every session picks its model from any of them.">
+
+          {form.providers.map((p) => {
+            const status = provStatus[p.id] ?? { status: 'idle' as ConnStatus, message: '' }
+            return (
+              <div key={p.id} className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={p.label}
+                    onChange={(e) => updateProvider(p.id, { label: e.target.value })}
+                    aria-label="Provider name"
+                    className="w-40 rounded-md border border-transparent bg-transparent px-1.5 py-0.5 text-xs font-semibold text-foreground outline-none transition-colors hover:border-border focus:border-primary"
+                  />
+                  <div className="flex-1" />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => refreshAllModels(form.providers)}
+                    disabled={status.status === 'loading' || !p.baseUrl}
+                    className="h-6 shrink-0 gap-1.5 px-2 text-[11px]"
+                  >
+                    {status.status === 'loading'
+                      ? <Loader2 className="size-3 animate-spin" />
+                      : <RefreshCw className="size-3" />}
+                    Test & fetch models
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => removeProvider(p.id)}
+                    className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Remove ${p.label}`}
+                  >
+                    <Trash2 className="size-3.5" />
+                  </button>
+                </div>
+
+                <input
+                  type="url"
+                  value={p.baseUrl}
+                  onChange={(e) => updateProvider(p.id, { baseUrl: e.target.value })}
+                  placeholder="https://api.openai.com/v1"
+                  aria-label={`${p.label} base URL`}
+                  className={INPUT}
+                />
+
+                <div className="relative">
+                  <input
+                    type={showKey[p.id] ? 'text' : 'password'}
+                    value={p.apiKey}
+                    onChange={(e) => updateProvider(p.id, { apiKey: e.target.value })}
+                    placeholder="sk-… (leave blank for local servers)"
+                    aria-label={`${p.label} API key`}
+                    className={cn(INPUT, 'pr-10')}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey((prev) => ({ ...prev, [p.id]: !prev[p.id] }))}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showKey[p.id] ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
+                  </button>
+                </div>
+
+                {status.status !== 'idle' && (
+                  <div className={cn(
+                    'flex items-center gap-2 rounded-md border px-3 py-2 text-xs',
+                    status.status === 'ok'      && 'border-green-500/30 bg-green-500/10 text-green-400',
+                    status.status === 'error'   && 'border-destructive/30 bg-destructive/10 text-destructive',
+                    status.status === 'loading' && 'border-border bg-muted/30 text-muted-foreground'
+                  )}>
+                    {status.status === 'ok'      && <WifiIcon className="size-3.5 shrink-0" />}
+                    {status.status === 'error'   && <WifiOffIcon className="size-3.5 shrink-0" />}
+                    {status.status === 'loading' && <Loader2 className="size-3.5 shrink-0 animate-spin" />}
+                    {status.status === 'loading' ? 'Connecting…' : status.message}
+                  </div>
+                )}
+              </div>
+            )
+          })}
 
           <div>
-            <label className="mb-2 block text-xs font-medium text-muted-foreground">Quick select</label>
+            <label className="mb-2 block text-xs font-medium text-muted-foreground">Add provider</label>
             <div className="flex flex-wrap gap-2">
-              {PRESET_ENDPOINTS.map((p) => (
+              {PRESET_ENDPOINTS.map((preset) => (
                 <button
-                  key={p.url}
-                  onClick={() => set('apiBaseUrl', p.url)}
-                  className={cn(
-                    'rounded-full border px-3 py-1 text-xs transition-colors',
-                    form.apiBaseUrl === p.url
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground'
-                  )}
+                  key={preset.url}
+                  onClick={() => addProvider(preset.label, preset.url)}
+                  className="flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
                 >
-                  {p.label}
+                  <Plus className="size-3" />
+                  {preset.label}
                 </button>
               ))}
+              <button
+                onClick={() => addProvider('Custom', '')}
+                className="flex items-center gap-1 rounded-full border border-dashed border-border px-3 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-foreground"
+              >
+                <Plus className="size-3" />
+                Custom
+              </button>
             </div>
           </div>
 
-          <Field label="API Base URL">
-            <input
-              type="url"
-              value={form.apiBaseUrl}
-              onChange={(e) => set('apiBaseUrl', e.target.value)}
-              placeholder="https://api.openai.com/v1"
-              className={INPUT}
-            />
-          </Field>
-
-          <Field label="API Key">
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  type={showKey ? 'text' : 'password'}
-                  value={form.apiKey}
-                  onChange={(e) => set('apiKey', e.target.value)}
-                  placeholder="sk-… (leave blank for local servers)"
-                  className={cn(INPUT, 'pr-10')}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey((v) => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                >
-                  {showKey ? <EyeOffIcon className="size-4" /> : <EyeIcon className="size-4" />}
-                </button>
-              </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleTestAndFetch}
-                disabled={connStatus === 'loading' || !form.apiBaseUrl}
-                className="shrink-0 gap-1.5"
-              >
-                {connStatus === 'loading'
-                  ? <Loader2 className="size-3.5 animate-spin" />
-                  : <RefreshCw className="size-3.5" />}
-                Test & fetch models
-              </Button>
-            </div>
-
-            {connStatus !== 'idle' && (
-              <div className={cn(
-                'mt-2 flex items-center gap-2 rounded-md border px-3 py-2 text-xs',
-                connStatus === 'ok'      && 'border-green-500/30 bg-green-500/10 text-green-400',
-                connStatus === 'error'   && 'border-destructive/30 bg-destructive/10 text-destructive',
-                connStatus === 'loading' && 'border-border bg-muted/30 text-muted-foreground'
-              )}>
-                {connStatus === 'ok'      && <WifiIcon className="size-3.5 shrink-0" />}
-                {connStatus === 'error'   && <WifiOffIcon className="size-3.5 shrink-0" />}
-                {connStatus === 'loading' && <Loader2 className="size-3.5 shrink-0 animate-spin" />}
-                {connStatus === 'loading' ? 'Connecting…' : connMessage}
-              </div>
-            )}
-          </Field>
-
           <Field
             label="Default model"
-            hint={connStatus === 'ok'
-              ? `${fetchedModels.length} models fetched from your endpoint`
-              : connStatus === 'error'
-                ? 'Could not fetch models — type a model ID below'
-                : undefined}
+            hint={fetchedModels.length > 0
+              ? `${fetchedModels.length} models fetched from ${multiProvider ? 'your providers' : 'your endpoint'}`
+              : undefined}
           >
             <div className="space-y-2">
               {modelOptions.length > 0 ? (

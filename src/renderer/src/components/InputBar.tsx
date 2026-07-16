@@ -10,6 +10,8 @@ import {
 } from '@/components/ui/attachment'
 import { v4 as uuidv4 } from 'uuid'
 import { contextWindow, estimateTokens } from '@/lib/context'
+import { effectiveProviders, makeModelRef, displayModel } from '@/lib/providers'
+import type { ProviderConfig } from '@/types'
 
 type PickerKind = 'builtin' | 'skill' | 'command'
 interface PickerItem {
@@ -49,6 +51,7 @@ interface InputBarProps {
   fileNodes?: FileNode[]
   apiBaseUrl?: string
   apiKey?: string
+  providers?: ProviderConfig[]
   recentProjects?: string[]
   onSelectProject?: (path: string) => void
   onOpenFinder?: () => void
@@ -147,9 +150,10 @@ function flattenNodes(nodes: FileNode[], basePath = ''): { name: string; relPath
 interface ModelOption {
   value: string
   label: string
+  provider?: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, colorMode = 'dark', onToggleColorMode, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, providers = [], workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, colorMode = 'dark', onToggleColorMode, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
@@ -221,7 +225,8 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
   const filteredModels = useMemo(() => {
     if (!modelSearch) return modelOptions
     const q = modelSearch.toLowerCase()
-    return modelOptions.filter((m) => m.value.toLowerCase().includes(q))
+    return modelOptions.filter((m) =>
+      m.label.toLowerCase().includes(q) || (m.provider ?? '').toLowerCase().includes(q))
   }, [modelOptions, modelSearch])
 
   const openMentions = useCallback((cursor: number, query: string) => {
@@ -277,25 +282,36 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
     })
   }, [text, mentionIndex, mentionCursor, closeMentions])
 
-  // Fetch models for the model picker
+  // Fetch models from every configured provider, grouped for the picker
   const fetchModels = useCallback(async () => {
     setModelLoading(true)
     setModelError('')
     try {
-      const baseUrl = (apiBaseUrl || '').replace(/\/$/, '')
-      if (!baseUrl) { setModelError('No API endpoint configured'); setModelLoading(false); return }
-      const json = await window.electron.ext.fetchModels(baseUrl, apiKey || '')
-      const models: ModelOption[] = (json.data ?? [])
-        .map((m: { id: string }) => ({ value: m.id, label: m.id }))
-        .sort((a: ModelOption, b: ModelOption) => a.value.localeCompare(b.value))
+      const provs = effectiveProviders({ providers, apiBaseUrl: apiBaseUrl || '', apiKey: apiKey || '' })
+      if (provs.length === 0) { setModelError('No API endpoint configured'); setModelLoading(false); return }
+      const multi = provs.length > 1
+      const results = await Promise.allSettled(provs.map(async (p) => {
+        const json = await window.electron.ext.fetchModels(p.baseUrl.replace(/\/$/, ''), p.apiKey)
+        return ((json.data ?? []) as { id: string }[])
+          .map((m): ModelOption => ({
+            value: multi ? makeModelRef(p.id, m.id) : m.id,
+            label: m.id,
+            provider: p.label,
+          }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+      }))
+      const models = results.flatMap((r) => r.status === 'fulfilled' ? r.value : [])
       setModelOptions(models)
-      if (models.length === 0) setModelError('No models available')
+      if (models.length === 0) {
+        const firstErr = results.find((r): r is PromiseRejectedResult => r.status === 'rejected')
+        setModelError(firstErr ? (firstErr.reason as Error).message : 'No models available')
+      }
     } catch (err) {
       setModelError((err as Error).message)
     } finally {
       setModelLoading(false)
     }
-  }, [apiBaseUrl, apiKey])
+  }, [apiBaseUrl, apiKey, providers])
 
   // Insert /commandname into textarea (for Tab-completion of command name)
   const insertCommand = useCallback((cmdName: string) => {
@@ -744,17 +760,26 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             {!modelLoading && !modelError && filteredModels.length === 0 && (
               <p className="px-2 py-3 text-[11px] text-muted-foreground text-center">No models found</p>
             )}
-            {filteredModels.map((m, i) => (
-              <button
-                key={m.value}
-                type="button"
-                className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === modelHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
-                onMouseDown={(e) => { e.preventDefault(); handleModelSelect(m.value) }}
-                onMouseEnter={() => setModelHighlight(i)}
-              >
-                <span className="truncate">{m.label}</span>
-              </button>
-            ))}
+            {filteredModels.map((m, i) => {
+              const firstOfProvider = i === 0 || filteredModels[i - 1].provider !== m.provider
+              return (
+                <React.Fragment key={m.value}>
+                  {m.provider && firstOfProvider && (
+                    <p className="px-2 pt-2 pb-0.5 text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
+                      {m.provider}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === modelHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
+                    onMouseDown={(e) => { e.preventDefault(); handleModelSelect(m.value) }}
+                    onMouseEnter={() => setModelHighlight(i)}
+                  >
+                    <span className="truncate">{m.label}</span>
+                  </button>
+                </React.Fragment>
+              )
+            })}
           </div>
         </div>
       )}
@@ -828,7 +853,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             className="flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-w-[140px]"
             title="Change model"
           >
-            <span className="truncate">{currentModel || 'No model'}</span>
+            <span className="truncate">{displayModel(currentModel) || 'No model'}</span>
           </button>
 
           {/* Separator */}

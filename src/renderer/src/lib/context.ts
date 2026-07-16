@@ -1,5 +1,6 @@
 import type { AppSettings, Message } from '@/types'
 import { parseMessage } from '@/schemas'
+import { resolveProvider } from '@/lib/providers'
 import { contextWindow } from '../../../shared/context-window'
 
 export { contextWindow }
@@ -49,15 +50,16 @@ async function summarize(older: Message[], settings: AppSettings, model: string)
     .map((m) => `${m.role}: ${m.content}`)
     .join('\n\n')
 
-  const baseUrl = settings.apiBaseUrl.replace(/\/$/, '')
+  const resolved = resolveProvider(model, settings)
+  const baseUrl = resolved.baseUrl.replace(/\/$/, '')
   const response = await fetch(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      ...(settings.apiKey ? { Authorization: `Bearer ${settings.apiKey}` } : {}),
+      ...(resolved.apiKey ? { Authorization: `Bearer ${resolved.apiKey}` } : {}),
     },
     body: JSON.stringify({
-      model,
+      model: resolved.modelId,
       messages: [
         { role: 'system', content: SUMMARIZE_INSTRUCTION },
         { role: 'user', content: transcript },

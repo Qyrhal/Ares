@@ -25,6 +25,7 @@ import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme, applyColorMode } from '@/lib/theme'
 import { needsCompaction, compactConversation } from '@/lib/context'
+import { hasProvider, displayModel } from '@/lib/providers'
 import { SideChatInput } from '@/components/SideChatInput'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
@@ -720,7 +721,7 @@ export default function App(): React.ReactElement {
 
     // Compact when the conversation nears the model's context limit
     let history = [...messages, userMsg]
-    if (needsCompaction(history, model) && store.settings.apiBaseUrl.trim()) {
+    if (needsCompaction(history, model) && hasProvider(store.settings)) {
       try {
         const result = await compactConversation(sess.id, history, store.settings, model)
         if (result.compacted > 0) {
@@ -993,7 +994,7 @@ export default function App(): React.ReactElement {
 
     const sideModel = sess?.model || settings.defaultModel || 'gpt-4o-mini'
     let sideHistory = [...sideChatMessages, userMsg]
-    if (needsCompaction(sideHistory, sideModel) && settings.apiBaseUrl.trim()) {
+    if (needsCompaction(sideHistory, sideModel) && hasProvider(settings)) {
       try {
         const result = await compactConversation(sideChatSessionId, sideHistory, settings, sideModel)
         if (result.compacted > 0) {
@@ -1212,11 +1213,12 @@ export default function App(): React.ReactElement {
                         }
                       }}
                       disabled={store.isLoading}
-                      placeholder={`Ask ${activeSession.model || store.settings.defaultModel}…`}
+                      placeholder={`Ask ${displayModel(activeSession.model || store.settings.defaultModel)}…`}
                       workspacePath={store.workspacePath}
                       fileNodes={store.fileNodes}
                       apiBaseUrl={store.settings.apiBaseUrl}
                       apiKey={store.settings.apiKey}
+                      providers={store.settings.providers}
                       recentProjects={store.recentProjects}
                       onSelectProject={handleSelectProject}
                       onOpenFinder={handleOpenFolder}
@@ -1272,7 +1274,7 @@ export default function App(): React.ReactElement {
                           onSend={handleSendSideChat}
                           disabled={store.sideChatIsLoading}
                           onCancel={handleAbortSideChat}
-                          placeholder={`Ask ${sideSession.model || store.settings.defaultModel}…`}
+                          placeholder={`Ask ${displayModel(sideSession.model || store.settings.defaultModel)}…`}
                         />
                       </div>
                     )
@@ -1300,7 +1302,7 @@ export default function App(): React.ReactElement {
       </div>
       <StatusBar
         workspacePath={store.workspacePath}
-        currentModel={activeSession?.model ?? store.settings.defaultModel}
+        currentModel={displayModel(activeSession?.model ?? store.settings.defaultModel)}
         sessionCount={store.sessions.length}
       />
       <Toaster />
