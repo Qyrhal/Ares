@@ -472,7 +472,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
     if (trimmed.startsWith('/')) {
       const spaceIdx = trimmed.indexOf(' ')
-      const cmdName = spaceIdx === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIdx)
+      const cmdName = (spaceIdx === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIdx)).toLowerCase()
       const args = spaceIdx === -1 ? '' : trimmed.slice(spaceIdx + 1).trim()
 
       // Skill or plugin command — expand template and send as regular message

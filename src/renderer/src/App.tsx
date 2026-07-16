@@ -424,6 +424,7 @@ export default function App(): React.ReactElement {
     const sess = activeSession
     if (!sess) return
 
+    cmd = cmd.toLowerCase()
     switch (cmd) {
       case 'model': {
         if (!args) {
