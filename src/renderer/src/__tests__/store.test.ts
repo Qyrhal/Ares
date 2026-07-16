@@ -38,6 +38,9 @@ beforeEach(() => {
     activeTabId: null,
     activeView: 'chat',
     sessionGroups: [],
+    sideChatMessages: [],
+    sideChatSessionId: null,
+    sideChatIsLoading: false,
   })
 })
 
@@ -962,5 +965,76 @@ describe('store — setSideChatLoading', () => {
     useAppStore.setState({ sideChatIsLoading: true })
     useAppStore.getState().setSideChatLoading(false)
     expect(useAppStore.getState().sideChatIsLoading).toBe(false)
+  })
+})
+
+describe('store — appendSideChatMessage', () => {
+  it('appends a message to side chat messages', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1' }))
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(1)
+    expect(useAppStore.getState().sideChatMessages[0].id).toBe('sm1')
+  })
+
+  it('preserves existing side chat messages', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1', content: 'first' }))
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm2', content: 'second' }))
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(2)
+    expect(useAppStore.getState().sideChatMessages[0].content).toBe('first')
+    expect(useAppStore.getState().sideChatMessages[1].content).toBe('second')
+  })
+
+  it('does not affect main messages', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1' }))
+    expect(useAppStore.getState().messages).toHaveLength(0)
+  })
+})
+
+describe('store — upsertSideChatMessage', () => {
+  it('appends when message id does not exist', () => {
+    useAppStore.getState().upsertSideChatMessage('sm1', mkMessage({ id: 'sm1' }))
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(1)
+  })
+
+  it('replaces existing side chat message by id', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1', content: 'old' }))
+    useAppStore.getState().upsertSideChatMessage('sm1', mkMessage({ id: 'sm1', content: 'updated' }))
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(1)
+    expect(useAppStore.getState().sideChatMessages[0].content).toBe('updated')
+  })
+
+  it('upserts only the matching message', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1', content: 'keep' }))
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm2', content: 'update me' }))
+    useAppStore.getState().upsertSideChatMessage('sm2', mkMessage({ id: 'sm2', content: 'done' }))
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(2)
+    expect(useAppStore.getState().sideChatMessages[0].content).toBe('keep')
+    expect(useAppStore.getState().sideChatMessages[1].content).toBe('done')
+  })
+})
+
+describe('store — removeSideChatMessage', () => {
+  it('removes a side chat message by id', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1' }))
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm2' }))
+    useAppStore.getState().removeSideChatMessage('sm1')
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(1)
+    expect(useAppStore.getState().sideChatMessages[0].id).toBe('sm2')
+  })
+
+  it('no-ops when id not found', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1' }))
+    useAppStore.getState().removeSideChatMessage('ghost')
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(1)
+  })
+
+  it('removes last remaining side chat message', () => {
+    useAppStore.getState().appendSideChatMessage(mkMessage({ id: 'sm1' }))
+    useAppStore.getState().removeSideChatMessage('sm1')
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(0)
+  })
+
+  it('no-ops when side chat messages are already empty', () => {
+    useAppStore.getState().removeSideChatMessage('anything')
+    expect(useAppStore.getState().sideChatMessages).toHaveLength(0)
   })
 })
