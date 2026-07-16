@@ -73,7 +73,7 @@ export interface Todo {
 }
 
 export type PermissionMode = 'ask' | 'auto' | 'yolo'
-export type AgentMode = 'chat' | 'agent'
+export type AgentMode = 'chat' | 'plan' | 'agent'
 
 export interface ProviderConfig {
   id: string

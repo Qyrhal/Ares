@@ -798,7 +798,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             />
           )}
 
-          {/* Chat/Agent mode toggle */}
+          {/* Chat/Plan/Agent mode toggle */}
           <div className="flex items-center overflow-hidden rounded-md border border-border">
             <button
               type="button"
@@ -812,6 +812,19 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
               title="Chat mode — no tool execution, just Q&A"
             >
               Chat
+            </button>
+            <button
+              type="button"
+              onClick={() => onAgentModeChange?.('plan')}
+              className={cn(
+                'px-1.5 py-0.5 text-[10px] transition-colors',
+                agentMode === 'plan'
+                  ? 'bg-amber-500/15 text-amber-400 font-medium'
+                  : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              )}
+              title="Plan mode — describe approach without executing tools"
+            >
+              Plan
             </button>
             <button
               type="button"

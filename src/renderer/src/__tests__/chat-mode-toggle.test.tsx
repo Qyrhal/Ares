@@ -27,9 +27,10 @@ function renderInputBar(overrides: Record<string, unknown> = {}): ReturnType<typ
 }
 
 describe('Chat Mode Toggle', () => {
-  it('renders Chat and Agent toggle buttons', () => {
+  it('renders Chat, Plan, and Agent toggle buttons', () => {
     renderInputBar()
     expect(screen.getByText('Chat')).toBeDefined()
+    expect(screen.getByText('Plan')).toBeDefined()
     expect(screen.getByText('Agent')).toBeDefined()
   })
 
@@ -46,11 +47,24 @@ describe('Chat Mode Toggle', () => {
     expect(chatBtn.className).toContain('bg-teal')
   })
 
+  it('shows Plan as active when agentMode is plan', () => {
+    renderInputBar({ agentMode: 'plan' })
+    const planBtn = screen.getByText('Plan')
+    expect(planBtn.className).toContain('bg-amber')
+  })
+
   it('calls onAgentModeChange with chat when Chat is clicked', () => {
     const onAgentModeChange = vi.fn()
     renderInputBar({ agentMode: 'agent', onAgentModeChange })
     fireEvent.click(screen.getByText('Chat'))
     expect(onAgentModeChange).toHaveBeenCalledWith('chat')
+  })
+
+  it('calls onAgentModeChange with plan when Plan is clicked', () => {
+    const onAgentModeChange = vi.fn()
+    renderInputBar({ agentMode: 'chat', onAgentModeChange })
+    fireEvent.click(screen.getByText('Plan'))
+    expect(onAgentModeChange).toHaveBeenCalledWith('plan')
   })
 
   it('calls onAgentModeChange with agent when Agent is clicked', () => {
