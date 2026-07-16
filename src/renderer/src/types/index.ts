@@ -128,6 +128,7 @@ export interface McpServer {
   args: string[]
   env: Record<string, string>
   enabled: boolean
+  discovered?: boolean
 }
 
 export interface McpProfile {

@@ -78,6 +78,25 @@ describe('PluginsPanel', () => {
     expect(screen.getByText(/npx -y mcp-server/)).toBeDefined()
   })
 
+  it('shows discovered badge for auto-detected MCP servers', async () => {
+    el.agentConfig.get.mockResolvedValue({
+      skills: [], extensions: [], commands: [],
+      mcpServers: [
+        { id: 'm1', name: 'AutoFiles', command: 'npx', args: [], env: {}, enabled: true, discovered: true },
+        { id: 'm2', name: 'ManualDB', command: 'npx', args: [], env: {}, enabled: true },
+      ],
+    })
+    render(<PluginsPanel />)
+    await waitFor(() => {
+      expect(screen.getByText('AutoFiles')).toBeDefined()
+    })
+    // The "discovered" badge should be visible for AutoFiles
+    const badges = screen.getAllByText('discovered')
+    expect(badges.length).toBe(1)
+    // ManualDB should have no badge
+    expect(screen.queryByText(/ManualDB.*discovered/)).toBeNull()
+  })
+
   it('expands and collapses MCP server row', async () => {
     el.agentConfig.get.mockResolvedValue({
       skills: [], extensions: [], commands: [],

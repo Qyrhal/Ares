@@ -84,6 +84,7 @@ export interface DbMcpServer {
   args: string[]
   env: Record<string, string>
   enabled: boolean
+  discovered?: boolean
 }
 
 export interface DbMcpProfile {
