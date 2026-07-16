@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
+import { SearchAddon } from '@xterm/addon-search'
 import '@xterm/xterm/css/xterm.css'
-import { PlusIcon, XIcon, ChevronDownIcon } from '@animateicons/react/lucide'
-import { GripHorizontal } from 'lucide-react'
+import { PlusIcon, XIcon, ChevronDownIcon, SearchIcon } from '@animateicons/react/lucide'
+import { GripHorizontal, ArrowUp, ArrowDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface TerminalTab {
@@ -38,6 +39,14 @@ function TerminalInstance({
   onDispose: (id: string) => void
 }): React.ReactElement {
   const containerRef = useRef<HTMLDivElement>(null)
+  const searchAddonRef = useRef<SearchAddon | null>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
+  const searchOpenRef = useRef(false)
+
+  // Keep the ref in sync for the keyboard event listener closure
+  useEffect(() => { searchOpenRef.current = searchOpen }, [searchOpen])
 
   useEffect(() => {
     const el = containerRef.current
@@ -71,8 +80,27 @@ function TerminalInstance({
 
     const fitAddon = new FitAddon()
     term.loadAddon(fitAddon)
+
+    const searchAddon = new SearchAddon()
+    term.loadAddon(searchAddon)
+    searchAddonRef.current = searchAddon
+
     term.open(el)
     term.focus()
+
+    const handleKeyDown = (e: KeyboardEvent): void => {
+      if ((e.key === 'f' || e.key === 'F') && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault()
+        setSearchOpen(true)
+        setTimeout(() => searchInputRef.current?.focus(), 0)
+      }
+      if (e.key === 'Escape' && searchOpenRef.current) {
+        setSearchOpen(false)
+        setSearchQuery('')
+        term.focus()
+      }
+    }
+    el.addEventListener('keydown', handleKeyDown)
 
     const doFit = (): void => { try { fitAddon.fit() } catch { /* noop */ } }
     requestAnimationFrame(doFit)
@@ -93,6 +121,7 @@ function TerminalInstance({
 
     return () => {
       onDispose(id)
+      el.removeEventListener('keydown', handleKeyDown)
       ro.disconnect()
       clearTimeout(fitTimer)
       term.dispose()
@@ -100,7 +129,56 @@ function TerminalInstance({
     }
   }, [id])
 
-  return <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
+  return (
+    <div className="relative min-h-0 flex-1 overflow-hidden">
+      <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
+      {searchOpen && (
+        <div className="absolute top-0 left-0 right-0 flex items-center gap-1 bg-card border-b border-border px-2 py-1 z-10">
+          <SearchIcon className="size-3 shrink-0 text-muted-foreground" />
+          <input
+            ref={searchInputRef}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery) {
+                searchAddonRef.current?.findNext(searchQuery)
+              }
+              if (e.key === 'Escape') {
+                setSearchOpen(false)
+                setSearchQuery('')
+              }
+            }}
+            placeholder="Find…"
+            className="flex-1 min-w-0 bg-transparent text-xs text-foreground outline-none placeholder:text-muted-foreground"
+          />
+          <button
+            onClick={() => searchAddonRef.current?.findPrevious(searchQuery)}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+            title="Previous match"
+          >
+            <ArrowUp className="size-3" />
+          </button>
+          <button
+            onClick={() => searchAddonRef.current?.findNext(searchQuery)}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+            title="Next match"
+          >
+            <ArrowDown className="size-3" />
+          </button>
+          <button
+            onClick={() => {
+              setSearchOpen(false)
+              setSearchQuery('')
+            }}
+            className="rounded p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+            title="Close search"
+          >
+            <XIcon className="size-3" />
+          </button>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export function TerminalView({ cwd, onClose, onHeightChange }: TerminalViewProps): React.ReactElement {
