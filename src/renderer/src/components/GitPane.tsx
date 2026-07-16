@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { GitHistory } from '@/components/GitHistory'
 import { CheckpointPanel } from '@/components/CheckpointPanel'
 import { useAppStore } from '@/store/useAppStore'
+import { AgentDiffView } from './AgentDiffView'
 
 const el = window.electron
 
@@ -39,13 +40,15 @@ function statusChar(file: GitFile, area: 'staged' | 'unstaged'): string {
 // ── File Row ──────────────────────────────────────────────────────────────────
 
 function FileRow({
-  file, area, onAction, onDiscard, onOpenFile
+  file, area, onAction, onDiscard, onOpenFile, onToggleDiff, diffStats
 }: {
   file: GitFile
   area: 'staged' | 'unstaged' | 'untracked'
   onAction: (f: GitFile) => void
   onDiscard?: (f: GitFile) => void
   onOpenFile?: (f: GitFile) => void
+  onToggleDiff?: (f: GitFile) => void
+  diffStats?: { added: number; deleted: number } | null
 }): React.ReactElement {
   const char = area === 'staged' ? file.index : (file.working === ' ' ? '?' : file.working)
   const color = STATUS_COLOR[char] ?? 'text-muted-foreground'
@@ -59,12 +62,18 @@ function FileRow({
       </span>
       <span
         className="flex-1 truncate text-foreground/90 cursor-pointer hover:text-primary transition-colors"
-        title={file.path}
-        onClick={() => onOpenFile?.(file)}
+        title={`${file.path} — click to view diff`}
+        onClick={() => onToggleDiff?.(file)}
       >
         {name}
         {dir && <span className="ml-1 text-muted-foreground/50">{dir}</span>}
       </span>
+      {diffStats && (
+        <span className="shrink-0 text-[10px] tabular-nums mr-1">
+          <span className="text-green-500">+{diffStats.added}</span>
+          <span className="text-red-500 ml-0.5">-{diffStats.deleted}</span>
+        </span>
+      )}
       <div className="flex shrink-0 items-center gap-0.5 opacity-0 group-hover:opacity-100">
         {onDiscard && (
           <button
@@ -73,6 +82,15 @@ function FileRow({
             className="flex size-5 items-center justify-center rounded hover:bg-destructive/20 hover:text-destructive text-muted-foreground"
           >
             <RotateCcw className="size-3" />
+          </button>
+        )}
+        {onOpenFile && (
+          <button
+            onClick={() => onOpenFile(file)}
+            title="Open file"
+            className="flex size-5 items-center justify-center rounded hover:bg-accent text-muted-foreground hover:text-foreground"
+          >
+            <FileCode className="size-3" />
           </button>
         )}
         <button
@@ -290,6 +308,38 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
   const handleResizeHistory = useCallback((dy: number) => {
     setHistoryHeight((prev) => Math.max(80, Math.min(600, prev - dy)))
   }, [])
+
+  const [selectedDiff, setSelectedDiff] = useState<{
+    file: GitFile
+    diff: string
+    loading: boolean
+    added: number
+    deleted: number
+  } | null>(null)
+
+  const handleToggleDiff = useCallback((file: GitFile, area: 'staged' | 'unstaged' | 'untracked') => {
+    if (!workspacePath) return
+    // Toggle off if already selected
+    if (selectedDiff?.file.path === file.path && selectedDiff?.file.originalPath === file.originalPath) {
+      setSelectedDiff(null)
+      return
+    }
+    // For untracked files, show empty diff
+    if (area === 'untracked') {
+      setSelectedDiff({ file, diff: '', loading: false, added: 0, deleted: 0 })
+      return
+    }
+    const isStaged = area === 'staged'
+    setSelectedDiff({ file, diff: '', loading: true, added: 0, deleted: 0 })
+    el.git.diff(workspacePath, file.path, isStaged).then((diff: string) => {
+      const lines = diff.split('\n')
+      const added = lines.filter((l: string) => l.startsWith('+') && !l.startsWith('+++')).length
+      const deleted = lines.filter((l: string) => l.startsWith('-') && !l.startsWith('---')).length
+      setSelectedDiff({ file, diff, loading: false, added, deleted })
+    }).catch(() => {
+      setSelectedDiff({ file, diff: '', loading: false, added: 0, deleted: 0 })
+    })
+  }, [workspacePath, selectedDiff])
 
   const setActiveCommit = useAppStore((s) => s.setActiveCommit)
   const activeCommit = useAppStore((s) => s.activeCommit)
@@ -511,13 +561,27 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
               bulkLabel="Unstage all"
             >
               {status!.staged.map((f) => (
-                <FileRow
-                  key={`staged-${f.path}`}
-                  file={f}
-                  area="staged"
-                  onAction={(f) => run(`unstage ${f.path}`, () => el.git.unstageFile(workspacePath, f.path))}
-                  onOpenFile={handleOpenFile}
-                />
+                <React.Fragment key={`staged-${f.path}`}>
+                  <FileRow
+                    file={f}
+                    area="staged"
+                    onAction={(f) => run(`unstage ${f.path}`, () => el.git.unstageFile(workspacePath, f.path))}
+                    onOpenFile={handleOpenFile}
+                    onToggleDiff={(file) => handleToggleDiff(file, 'staged')}
+                    diffStats={selectedDiff?.file.path === f.path ? { added: selectedDiff.added, deleted: selectedDiff.deleted } : null}
+                  />
+                  {selectedDiff?.file.path === f.path && selectedDiff.loading && (
+                    <div className="flex items-center gap-2 px-6 py-1 text-[10px] text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" />
+                      Loading diff…
+                    </div>
+                  )}
+                  {selectedDiff?.file.path === f.path && !selectedDiff.loading && selectedDiff.diff && (
+                    <div className="pl-4">
+                      <AgentDiffView diff={selectedDiff.diff} filePath={f.path} />
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </Section>
           )}
@@ -533,14 +597,28 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
               bulkLabel="Stage all"
             >
               {status!.unstaged.map((f) => (
-                <FileRow
-                  key={`unstaged-${f.path}`}
-                  file={f}
-                  area="unstaged"
-                  onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
-                  onDiscard={(f) => run(`discard ${f.path}`, () => el.git.discardFile(workspacePath, f.path))}
-                  onOpenFile={handleOpenFile}
-                />
+                <React.Fragment key={`unstaged-${f.path}`}>
+                  <FileRow
+                    file={f}
+                    area="unstaged"
+                    onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
+                    onDiscard={(f) => run(`discard ${f.path}`, () => el.git.discardFile(workspacePath, f.path))}
+                    onOpenFile={handleOpenFile}
+                    onToggleDiff={(file) => handleToggleDiff(file, 'unstaged')}
+                    diffStats={selectedDiff?.file.path === f.path ? { added: selectedDiff.added, deleted: selectedDiff.deleted } : null}
+                  />
+                  {selectedDiff?.file.path === f.path && selectedDiff.loading && (
+                    <div className="flex items-center gap-2 px-6 py-1 text-[10px] text-muted-foreground">
+                      <Loader2 className="size-3 animate-spin" />
+                      Loading diff…
+                    </div>
+                  )}
+                  {selectedDiff?.file.path === f.path && !selectedDiff.loading && selectedDiff.diff && (
+                    <div className="pl-4">
+                      <AgentDiffView diff={selectedDiff.diff} filePath={f.path} />
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </Section>
           )}
@@ -556,13 +634,20 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
               bulkLabel="Stage all"
             >
               {status!.untracked.map((f) => (
-                <FileRow
-                  key={`untracked-${f.path}`}
-                  file={f}
-                  area="untracked"
-                  onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
-                  onOpenFile={handleOpenFile}
-                />
+                <React.Fragment key={`untracked-${f.path}`}>
+                  <FileRow
+                    file={f}
+                    area="untracked"
+                    onAction={(f) => run(`stage ${f.path}`, () => el.git.stageFile(workspacePath, f.path))}
+                    onOpenFile={handleOpenFile}
+                    onToggleDiff={(file) => handleToggleDiff(file, 'untracked')}
+                  />
+                  {selectedDiff?.file.path === f.path && !selectedDiff.loading && !selectedDiff.diff && (
+                    <div className="px-6 py-1 text-[10px] text-muted-foreground italic">
+                      Untracked file — no diff available
+                    </div>
+                  )}
+                </React.Fragment>
               ))}
             </Section>
           )}
