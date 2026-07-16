@@ -151,6 +151,26 @@ describe('InputBar — slash commands', () => {
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
     expect(onCommand).toHaveBeenCalledWith('not-helpful', '')
   })
+
+  it('shows /pr in the command picker', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/pr' } })
+    // Text appears in both textarea and picker item
+    const items = screen.getAllByText('/pr')
+    expect(items.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('calls onCommand with pr when /pr is entered', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/pr' } })
+    // Click the send button to trigger handleSend
+    const sendBtn = screen.getByLabelText('Send message')
+    fireEvent.click(sendBtn)
+    expect(onCommand).toHaveBeenCalledWith('pr', '')
+  })
 })
 
 describe('InputBar — @ mentions', () => {

@@ -687,6 +687,138 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'pr': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        store.appendMessage({
+          id: uuidv4(), sessionId: sess.id, role: 'user',
+          content: 'Generating pull request from session context...', isStreaming: false, createdAt: Date.now(),
+        })
+        try {
+          // Gather git context
+          const status = await el.git.status(wsPath)
+          const log = await el.git.log(wsPath, 5)
+          const branch = status.branch || '(detached)'
+
+          // Gather changed files
+          const changedFiles: string[] = []
+          for (const f of status.staged) changedFiles.push(f.path)
+          for (const f of status.unstaged) changedFiles.push(f.path)
+          for (const f of status.untracked) changedFiles.push(f.path)
+
+          // Gather session messages for context
+          const msgs = useAppStore.getState().messages
+          const userAndAssistant = msgs.filter((m: Message) => m.role === 'user' || m.role === 'assistant')
+          const conversationSummary = userAndAssistant.slice(-10).map((m: Message) =>
+            `**${m.role === 'user' ? 'User' : 'Assistant'}**: ${m.content.slice(0, 1000)}`
+          ).join('\n\n')
+          const userCount = userAndAssistant.filter((m: Message) => m.role === 'user').length
+          const assistantCount = userAndAssistant.filter((m: Message) => m.role === 'assistant').length
+
+          // Build git context string
+          const commitsStr = log.length > 0
+            ? log.map((c: import('@/types').GitCommit) => `- ${c.shortHash} - ${c.message}`).join('\n')
+            : 'No recent commits found.'
+          const changesStr = changedFiles.length > 0
+            ? changedFiles.map((p) => {
+                const staged = status.staged.some((f) => f.path === p)
+                const untracked = status.untracked.some((f) => f.path === p)
+                const prefix = untracked ? 'Added' : staged ? 'Modified' : 'Modified'
+                return `- ${prefix}: ${p}`
+              }).join('\n')
+            : 'No uncommitted changes.'
+
+          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const hasAi = baseUrl.trim().length > 0
+
+          if (hasAi) {
+            // AI-powered PR generation
+            const prompt = [
+              'You are generating a pull request title and body based on git context and session conversation.',
+              '',
+              `**Branch:** ${branch}`,
+              `**Upstream:** ${status.upstream || 'none'}`,
+              status.ahead > 0 ? `**Ahead by:** ${status.ahead} commit(s)` : '',
+              status.behind > 0 ? `**Behind by:** ${status.behind} commit(s)` : '',
+              '',
+              '**Recent commits:**',
+              commitsStr,
+              '',
+              '**Changed files:**',
+              changesStr,
+              '',
+              '**Session conversation (last messages):**',
+              conversationSummary || 'No conversation messages.',
+              '',
+              `Session stats: ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant)`,
+              '',
+              'Generate a concise pull request title and a well-structured markdown body. Include:',
+              '1) A clear one-line PR title starting with the conventional commit type (feat:, fix:, chore:, docs:, refactor:, etc.)',
+              '2) **What changed** — bullet list of key changes',
+              '3) **Why** — brief motivation or context',
+              '4) **How to test** — verification instructions',
+              'Use plain Markdown. Start with the title on the first line, then a blank line, then the body.',
+            ].filter(Boolean).join('\n')
+
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No PR generated.'
+            const finalMsg = await el.db.addMessage(sess.id, 'system', `**Pull Request from Session**\n\n${content}`)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          } else {
+            // Structured PR from git data without AI
+            const sessionStart = msgs.length > 0
+              ? new Date(Math.min(...msgs.map((m: Message) => m.createdAt))).toLocaleString()
+              : new Date(sess.createdAt).toLocaleString()
+
+            const prBody = [
+              '**Pull Request from Session**',
+              '',
+              `**Branch:** \`${branch}\``,
+              `**Upstream:** ${status.upstream || 'none'}`,
+              '',
+              '**Changes:**',
+              changesStr,
+              '',
+              '**Recent Commits:**',
+              commitsStr,
+              '',
+              '**Session Context:**',
+              `- ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant)`,
+              `- Started: ${sessionStart}`,
+              '',
+              '> Generated by Ares /pr command. Configure an API endpoint for AI-powered PR descriptions.',
+            ].join('\n')
+            const finalMsg = await el.db.addMessage(sess.id, 'system', prBody)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          }
+        } catch (err) {
+          const errorMsg = `**Error generating pull request:** ${(err as Error).message}`
+          const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
     }
   }, [activeSession, store])
 
