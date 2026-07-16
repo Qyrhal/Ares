@@ -376,3 +376,21 @@ describe('Keyboard shortcuts — input-focused guard', () => {
     document.body.removeChild(textarea)
   })
 })
+
+describe('Keyboard shortcuts — Ctrl+C abort', () => {
+  it('Ctrl+C aborts when agent is loading', async () => {
+    const abort = vi.fn()
+    window.electron.ai = { ...(window.electron.ai as object || {}), abort: abort } as typeof window.electron.ai
+    useAppStore.setState({ isLoading: true })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { ctrlKey: true, key: 'c' }) })
+    // Should not throw
+  })
+
+  it('Ctrl+C does not abort when agent is not loading', async () => {
+    useAppStore.setState({ isLoading: false })
+    await renderApp()
+    // Should not throw
+    await act(async () => { fireEvent.keyDown(window, { ctrlKey: true, key: 'c' }) })
+  })
+})
