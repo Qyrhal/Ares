@@ -27,4 +27,53 @@ describe('GitPane — Checkpoints sub-tab', () => {
     expect(screen.queryByPlaceholderText(/Commit message/)).not.toBeInTheDocument()
     expect(screen.getByRole('tab', { name: 'Checkpoints' })).toHaveAttribute('aria-selected', 'true')
   })
+
+  it('shows no-repo message when workspacePath is null', async () => {
+    await act(async () => { render(<GitPane workspacePath={null} />) })
+    await waitFor(() => {
+      expect(screen.getByText(/open a folder/i)).toBeInTheDocument()
+    })
+  })
+
+  it('shows no-repo message when workspacePath is empty string', async () => {
+    await act(async () => { render(<GitPane workspacePath="" />) })
+    await waitFor(() => {
+      expect(screen.getByText(/open a folder/i)).toBeInTheDocument()
+    })
+  })
+
+  it('renders branch information when repo is available', async () => {
+    ;(window.electron.git.status as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hasRepo: true, branch: 'feature-branch', upstream: 'origin/feature-branch',
+      ahead: 3, behind: 1, staged: [], unstaged: [], untracked: [],
+    })
+    await act(async () => { render(<GitPane workspacePath="/repo" />) })
+    await waitFor(() => {
+      expect(screen.getByText(/feature-branch/)).toBeInTheDocument()
+    })
+  })
+
+  it('shows ahead/behind counts', async () => {
+    ;(window.electron.git.status as ReturnType<typeof vi.fn>).mockResolvedValue({
+      hasRepo: true, branch: 'main', upstream: 'origin/main',
+      ahead: 5, behind: 2, staged: [], unstaged: [], untracked: [],
+    })
+    await act(async () => { render(<GitPane workspacePath="/repo" />) })
+    await waitFor(() => {
+      // Should show ↑5 ↓2 somewhere
+      const gitPane = document.querySelector('.git-pane') || document.body
+      expect(gitPane.textContent).toMatch(/↑.*5|5.*↑/)
+    })
+  })
+
+  it('switches between Changes and Checkpoints tabs', async () => {
+    await act(async () => { render(<GitPane workspacePath="/repo" />) })
+    await waitFor(() => expect(screen.getByPlaceholderText(/Commit message/)).toBeInTheDocument())
+
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Checkpoints' })) })
+    await waitFor(() => expect(screen.getByText(/No checkpoints yet/)).toBeInTheDocument())
+
+    await act(async () => { fireEvent.click(screen.getByRole('tab', { name: 'Changes' })) })
+    await waitFor(() => expect(screen.getByPlaceholderText(/Commit message/)).toBeInTheDocument())
+  })
 })

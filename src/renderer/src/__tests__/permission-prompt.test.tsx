@@ -18,7 +18,7 @@ describe('PermissionPrompt', () => {
 
   it('shows tool args', () => {
     render(<PermissionPrompt {...defaultProps} />)
-    expect(screen.getByText(/path=.*test\.txt/)).toBeInTheDocument()
+    expect(screen.getByText(/path=.*test\\.txt/)).toBeInTheDocument()
   })
 
   it('shows raw args when parsing fails', () => {
@@ -38,5 +38,26 @@ describe('PermissionPrompt', () => {
     render(<PermissionPrompt {...defaultProps} onDeny={onDeny} />)
     await userEvent.click(screen.getByRole('button', { name: /deny/i }))
     expect(onDeny).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows multiple arguments when toolArgs has multiple keys', () => {
+    render(
+      <PermissionPrompt
+        {...defaultProps}
+        toolArgs='{"path": "/test.txt", "recursive": true}'
+      />
+    )
+    expect(screen.getByText(/path/)).toBeInTheDocument()
+    expect(screen.getByText(/recursive/)).toBeInTheDocument()
+  })
+
+  it('handles empty arguments gracefully', () => {
+    render(<PermissionPrompt {...defaultProps} toolArgs="{}" />)
+    expect(screen.getByText(/Allow readFile/)).toBeInTheDocument()
+  })
+
+  it('displays tooltip-like description for known tools', () => {
+    render(<PermissionPrompt {...defaultProps} toolName="writeFile" />)
+    expect(screen.getByText(/Allow writeFile/)).toBeInTheDocument()
   })
 })

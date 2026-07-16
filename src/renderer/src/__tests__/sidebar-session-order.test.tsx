@@ -61,4 +61,51 @@ describe('Sidebar sessions — ordering', () => {
     const titles = screen.getAllByText(/root/).map((el) => el.textContent)
     expect(titles).toEqual(['Second root', 'First root'])
   })
+
+  it('places pinned sessions before unpinned ones', () => {
+    const sessions: Session[] = [
+      mkSession({ id: 's3', title: 'Alpha', createdAt: 300 }),
+      mkSession({ id: 's1', title: 'Pinned older', createdAt: 100, pinned: true }),
+      mkSession({ id: 's2', title: 'Pinned newer', createdAt: 200, pinned: true }),
+    ]
+
+    render(<Sidebar {...NOOP_PROPS} sessions={sessions} />)
+
+    const titles = screen.getAllByText(/Pinned|Alpha/).map((el) => el.textContent)
+    expect(titles).toEqual(['Pinned newer', 'Pinned older', 'Alpha'])
+  })
+
+  it('renders nothing when sessions list is empty', () => {
+    const { container } = render(<Sidebar {...NOOP_PROPS} sessions={[]} />)
+    // The sidebar renders the aside even with no sessions — check no session-related content appears
+    expect(screen.queryByText(/Session/)).toBeNull()
+  })
+
+  it('orders children under pinned parents correctly', () => {
+    const sessions: Session[] = [
+      mkSession({ id: 'child1', parentId: 'parent1', title: 'Kid', createdAt: 200 }),
+      mkSession({ id: 'parent1', title: 'Pinned parent', createdAt: 100, pinned: true }),
+      mkSession({ id: 'root2', title: 'Unpinned root', createdAt: 300 }),
+    ]
+
+    render(<Sidebar {...NOOP_PROPS} sessions={sessions} />)
+
+    const titles = screen.getAllByText(/Pinned parent|Kid|Unpinned root/).map((el) => el.textContent)
+    // Pinned parent and its child come first, then unpinned
+    expect(titles).toEqual(['Pinned parent', 'Kid', 'Unpinned root'])
+  })
+
+  it('allows multiple pinned sessions at top with correct internal ordering', () => {
+    const sessions: Session[] = [
+      mkSession({ id: 's4', title: 'Z unpinned', createdAt: 400 }),
+      mkSession({ id: 's1', title: 'A pinned', createdAt: 100, pinned: true }),
+      mkSession({ id: 's2', title: 'B pinned', createdAt: 200, pinned: true }),
+      mkSession({ id: 's3', title: 'C unpinned', createdAt: 300 }),
+    ]
+
+    render(<Sidebar {...NOOP_PROPS} sessions={sessions} />)
+
+    const titles = screen.getAllByText(/A pinned|B pinned|C unpinned|Z unpinned/).map((el) => el.textContent)
+    expect(titles).toEqual(['B pinned', 'A pinned', 'Z unpinned', 'C unpinned'])
+  })
 })

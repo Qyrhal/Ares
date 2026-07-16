@@ -46,4 +46,45 @@ describe('Tooltip', () => {
     await new Promise((r) => setTimeout(r, 50))
     expect(screen.queryByText('tooltip text')).toBeNull()
   })
+
+  it('renders without crashing when content is empty string', () => {
+    render(
+      <Tooltip content="">
+        <button>Empty tooltip</button>
+      </Tooltip>
+    )
+    expect(screen.getByText('Empty tooltip')).toBeDefined()
+  })
+
+  it('renders without crashing when content is undefined/null', () => {
+    render(
+      <Tooltip content={undefined as any}>
+        <button>No content</button>
+      </Tooltip>
+    )
+    expect(screen.getByText('No content')).toBeDefined()
+  })
+
+  it('properly shows React element as tooltip content', async () => {
+    render(
+      <Tooltip content={<span data-testid="rich-content">Rich <strong>content</strong></span>}>
+        <button>Rich tooltip</button>
+      </Tooltip>
+    )
+    const btn = screen.getByText('Rich tooltip')
+    expect(screen.queryByTestId('rich-content')).toBeNull()
+    const { fireEvent } = await import('@testing-library/react')
+    fireEvent.mouseEnter(btn)
+    await new Promise((r) => setTimeout(r, 350))
+    expect(screen.getByTestId('rich-content')).toBeDefined()
+  })
+
+  it('renders a disabled tooltip without errors', () => {
+    render(
+      <Tooltip content="help text" disabled={true}>
+        <button>Disabled</button>
+      </Tooltip>
+    )
+    expect(screen.getByText('Disabled')).toBeDefined()
+  })
 })
