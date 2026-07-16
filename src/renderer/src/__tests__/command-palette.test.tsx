@@ -72,27 +72,28 @@ describe('CommandPalette', () => {
     expect(options[2]).toHaveAttribute('aria-selected', 'false')
   })
 
-  it('highlights first item on ArrowDown from initial state', () => {
+  it('highlights second item after one ArrowDown', () => {
     render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
     const input = screen.getByPlaceholderText('Search commands…')
 
-    // ArrowDown at index 0 -> stays at 0 (no more items below)
+    // ArrowDown from index 0 -> index 1
     fireEvent.keyDown(input, { key: 'ArrowDown' })
-    const options = screen.getAllByRole('option')
-    expect(options[0]).toHaveAttribute('aria-selected', 'true')
-  })
-
-  it('highlights second item on ArrowDown from initial state (if there are >=2 items)', () => {
-    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
-    const input = screen.getByPlaceholderText('Search commands…')
-
-    // Move to item 1
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-    // Move to item 2
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-
     const options = screen.getAllByRole('option')
     expect(options[1]).toHaveAttribute('aria-selected', 'true')
+    expect(options[0]).toHaveAttribute('aria-selected', 'false')
+  })
+
+  it('highlights third item after two ArrowDowns', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+
+    // ArrowDown from index 0 -> 1 -> 2
+    for (let i = 0; i < 2; i++) {
+      fireEvent.keyDown(input, { key: 'ArrowDown' })
+    }
+
+    const options = screen.getAllByRole('option')
+    expect(options[2]).toHaveAttribute('aria-selected', 'true')
   })
 
   it('does not go below the last item on ArrowDown', () => {
@@ -135,8 +136,8 @@ describe('CommandPalette', () => {
   })
 
   it('calls the selected command action on Enter', () => {
-    const actions = sampleCommands.map((c) => vi.fn())
-    const commands: CommandEntry[] = sampleCommands.map((c, i) => ({ ...c, action: actions[i] }))
+    const actions = sampleCommands.map((_) => vi.fn())
+    const commands: CommandEntry[] = sampleCommands.map((_, i) => ({ ...sampleCommands[i], action: actions[i] }))
 
     const onClose = vi.fn()
     render(<CommandPalette open={true} onClose={onClose} commands={commands} />)
@@ -168,7 +169,7 @@ describe('CommandPalette', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('resets selection to first item on filter change', async () => {
+  it('resets selection to first item on filter change', () => {
     render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
     const input = screen.getByPlaceholderText('Search commands…')
 
@@ -176,8 +177,7 @@ describe('CommandPalette', () => {
     for (let i = 0; i < 2; i++) {
       fireEvent.keyDown(input, { key: 'ArrowDown' })
     }
-    // Filter
-    const { fireEvent } = await import('@testing-library/react')
+    // Filter — this triggers setSelectedIdx(0)
     fireEvent.change(input, { target: { value: 'toggle' } })
 
     const options = screen.getAllByRole('option')

@@ -59,11 +59,11 @@ describe('GitPane — Checkpoints sub-tab', () => {
       ahead: 5, behind: 2, staged: [], unstaged: [], untracked: [],
     })
     await act(async () => { render(<GitPane workspacePath="/repo" />) })
+    // The status fetch may take a tick; waitFor will retry
     await waitFor(() => {
-      // Should show ↑5 ↓2 somewhere
-      const gitPane = document.querySelector('.git-pane') || document.body
-      expect(gitPane.textContent).toMatch(/↑.*5|5.*↑/)
+      expect(screen.getByText('5')).toBeInTheDocument()
     })
+    expect(screen.getByText('2')).toBeInTheDocument()
   })
 
   it('switches between Changes and Checkpoints tabs', async () => {
