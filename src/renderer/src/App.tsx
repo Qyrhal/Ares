@@ -448,7 +448,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /status - system health check, /summary - session summary, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -814,6 +814,55 @@ export default function App(): React.ReactElement {
           }
         } catch (err) {
           const errorMsg = `**Error generating pull request:** ${(err as Error).message}`
+          const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'fork': {
+        const msgs = useAppStore.getState().messages
+        const title = sess.title.replace(/\s*\(fork \d+\)$/, '')
+        // Find next fork number
+        const forks = useAppStore.getState().sessions.filter((s: Session) =>
+          s.id !== sess.id && s.title.startsWith(title)
+        )
+        const forkN = forks.length + 1
+        const forkTitle = `${title} (fork ${forkN})`
+
+        store.appendMessage({
+          id: uuidv4(), sessionId: sess.id, role: 'user',
+          content: `Forking session as "${forkTitle}"...`,
+          isStreaming: false, createdAt: Date.now(),
+        })
+
+        try {
+          const raw = await el.db.createSession(forkTitle, sess.model, sess.id)
+          const newSession = parseSession(raw)
+          // Inherit workspace from parent
+          if (sess.workspacePath) {
+            await el.db.updateSession(newSession.id, { workspace_path: sess.workspacePath })
+            newSession.workspacePath = sess.workspacePath
+          }
+          // Copy all messages to the new session
+          for (const m of msgs) {
+            await el.db.addMessage(newSession.id, m.role, m.content, {
+              attachments: m.attachments,
+              toolName: m.toolName,
+              toolStatus: m.toolStatus,
+              toolInput: m.toolInput,
+              toolOutput: m.toolOutput,
+              thinking: m.thinking,
+              replyTo: m.replyTo ? { id: m.replyTo.id, content: m.replyTo.content, role: m.replyTo.role } : undefined,
+              reactions: m.reactions ? { up: m.reactions.up } : undefined,
+            })
+          }
+          store.addSession(newSession)
+          store.openSessionTab(newSession)
+          // Load messages for the new session
+          const rawMsgs = await el.db.getMessages(newSession.id)
+          store.setMessages(rawMsgs.map((r: import('@/types').RawMessage) => parseMessage(r)))
+        } catch (err) {
+          const errorMsg = `**Error forking session:** ${(err as Error).message}`
           const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
           if (msg) store.appendMessage(parseMessage(msg))
         }
