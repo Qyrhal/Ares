@@ -81,6 +81,7 @@ interface AppStore {
   updateSession: (id: string, patch: Partial<Session>) => void
   removeSession: (id: string) => void
   togglePinSession: (id: string) => void
+  toggleArchiveSession: (id: string) => void
 
   // ── Session group actions ───────────────────────────────────────────────────
   addSessionGroup: (name: string) => string
@@ -260,6 +261,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
   togglePinSession: (id) => set((s) => ({
     sessions: s.sessions.map((s) =>
       s.id === id ? { ...s, pinned: !s.pinned } : s
+    ),
+  })),
+
+  toggleArchiveSession: (id) => set((s) => ({
+    sessions: s.sessions.map((s) =>
+      s.id === id ? { ...s, archived: !s.archived } : s
     ),
   })),
 

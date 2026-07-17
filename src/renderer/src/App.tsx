@@ -105,7 +105,7 @@ export default function App(): React.ReactElement {
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
-    Promise.all([el.settings.get(), el.db.getSessions(), el.workspace.getPath(), el.workspace.getRecent().catch(() => [])])
+    Promise.all([el.settings.get(), el.db.getSessions(true), el.workspace.getPath(), el.workspace.getRecent().catch(() => [])])
       .then(([rawSettings, rawSessions, wp, recents]) => {
         const settings = parseSettings(rawSettings)
         store.setSettings(settings)
@@ -291,6 +291,13 @@ export default function App(): React.ReactElement {
     if (!s) return
     await el.db.updateSession(id, { pinned: !s.pinned })
     store.togglePinSession(id)
+  }, [])
+
+  const handleArchiveSession = useCallback(async (id: string) => {
+    const s = useAppStore.getState().sessions.find((s) => s.id === id)
+    if (!s) return
+    await el.db.updateSession(id, { archived: !s.archived })
+    store.toggleArchiveSession(id)
   }, [])
 
   const handleRenameSession = useCallback(async (id: string, title: string) => {
@@ -1308,6 +1315,7 @@ export default function App(): React.ReactElement {
               onSelectSession={handleSelectSession}
               onDeleteSession={handleDeleteSession}
               onTogglePinSession={handleTogglePinSession}
+              onArchiveSession={handleArchiveSession}
               fileNodes={store.fileNodes}
               workspacePath={store.workspacePath}
               selectedFilePath={store.activeTabId}
