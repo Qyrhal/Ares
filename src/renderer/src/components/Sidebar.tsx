@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
+import React, { Suspense, useState, useCallback, useRef, useEffect } from 'react'
 import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock, ChevronDown, ChevronRight, Folder, Plus, Pencil, Trash2, Archive } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, SessionGroup, FileNode, ActivityView } from '@/types'
 import { useAppStore } from '@/store/useAppStore'
 import { FileTree, FileTreeProps } from './FileTree'
-import { GitPane } from './GitPane'
+const GitPane = React.lazy(() => import('./GitPane').then(m => ({ default: m.GitPane })))
 import { ErrorBoundary } from './ErrorBoundary'
 import { AgentTimeline } from './AgentTimeline'
 import { toast } from 'sonner'
@@ -74,7 +74,11 @@ export function Sidebar({
         />
       )}
       {mode === 'git' && (
-        <ErrorBoundary key="git-pane"><GitPane workspacePath={workspacePath} /></ErrorBoundary>
+        <ErrorBoundary key="git-pane">
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-muted-foreground text-xs animate-pulse">Loading…</div>}>
+            <GitPane workspacePath={workspacePath} />
+          </Suspense>
+        </ErrorBoundary>
       )}
     </aside>
   )
