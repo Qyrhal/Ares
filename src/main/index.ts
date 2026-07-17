@@ -148,13 +148,31 @@ app.on('window-all-closed', () => {
 import os from 'os'
 function validatePath(p: string): void {
   const resolved = nodePath.resolve(p)
+  // Resolve symlinks to prevent traversal via symlinked paths
+  let real: string
+  try {
+    real = fs.realpathSync(resolved)
+  } catch {
+    // Path doesn't exist yet — resolve its closest existing ancestor
+    let dir = resolved
+    while (!fs.existsSync(dir)) {
+      const parent = nodePath.dirname(dir)
+      if (parent === dir) break
+      dir = parent
+    }
+    try {
+      real = fs.existsSync(dir) ? nodePath.join(fs.realpathSync(dir), nodePath.relative(dir, resolved)) : resolved
+    } catch {
+      real = resolved
+    }
+  }
   const workspace = getWorkspacePath()
   const home = os.homedir()
   const allowed = [home]
   if (workspace) allowed.push(workspace)
-  const isInAllowed = allowed.some((dir) => resolved.startsWith(dir + nodePath.sep) || resolved === dir)
+  const isInAllowed = allowed.some((dir) => real.startsWith(dir + nodePath.sep) || real === dir)
   if (!isInAllowed) {
-    throw new Error(`Access denied: path outside workspace (${resolved})`)
+    throw new Error(`Access denied: path outside workspace (${real})`)
   }
 }
 
