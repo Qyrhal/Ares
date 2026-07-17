@@ -316,6 +316,40 @@ describe('store — closeTab', () => {
     useAppStore.getState().closeTab('unknown')
     expect(useAppStore.getState().tabs).toHaveLength(1)
   })
+
+  it('preserves activeTabId when closing a non-active tab', () => {
+    useAppStore.setState({
+      tabs: [makeSessionTab('s1'), makeSessionTab('s2'), makeSessionTab('s3')],
+      activeTabId: 's2',
+    })
+    useAppStore.getState().closeTab('s1')
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+  })
+
+  it('closes last tab when active is elsewhere', () => {
+    useAppStore.setState({
+      tabs: [makeSessionTab('s1'), makeSessionTab('s2'), makeSessionTab('s3')],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().closeTab('s3')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+  })
+
+  it('closes file tab by path', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Chat' },
+        { type: 'file', path: '/src/test.ts', name: 'test.ts', isDirty: false },
+      ],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().closeTab('/src/test.ts')
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().tabs[0].type).toBe('session')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
 })
 
 describe('store — setTabDirty', () => {
@@ -405,6 +439,45 @@ describe('store — removeTabsByPath', () => {
     const before = useAppStore.getState().tabs.length
     useAppStore.getState().removeTabsByPath('/src/remove.ts', false)
     expect(useAppStore.getState().tabs).toHaveLength(before)
+  })
+
+  it('falls back when activeTabId matches the removed file path', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/src/active.ts', name: 'active.ts', isDirty: false },
+        { type: 'session', id: 's1', title: 'Chat' },
+      ],
+      activeTabId: '/src/active.ts',
+    })
+    useAppStore.getState().removeTabsByPath('/src/active.ts', false)
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+
+  it('falls back when activeTabId is under the removed directory', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/src/components/Button.tsx', name: 'Button.tsx', isDirty: false },
+        { type: 'file', path: '/src/components/Input.tsx', name: 'Input.tsx', isDirty: false },
+      ],
+      activeTabId: '/src/components/Button.tsx',
+    })
+    useAppStore.getState().removeTabsByPath('/src/components', true)
+    expect(useAppStore.getState().tabs).toHaveLength(0)
+    expect(useAppStore.getState().activeTabId).toBeNull()
+  })
+
+  it('preserves activeTabId when removing unrelated path', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/src/remove.ts', name: 'remove.ts', isDirty: false },
+        { type: 'file', path: '/src/keep.ts', name: 'keep.ts', isDirty: false },
+      ],
+      activeTabId: '/src/keep.ts',
+    })
+    useAppStore.getState().removeTabsByPath('/src/remove.ts', false)
+    expect(useAppStore.getState().activeTabId).toBe('/src/keep.ts')
+    expect(useAppStore.getState().tabs).toHaveLength(1)
   })
 })
 
@@ -1036,5 +1109,167 @@ describe('store — removeSideChatMessage', () => {
   it('no-ops when side chat messages are already empty', () => {
     useAppStore.getState().removeSideChatMessage('anything')
     expect(useAppStore.getState().sideChatMessages).toHaveLength(0)
+  })
+})
+
+// ── Integration flows ────────────────────────────────────────────────────────
+
+describe('store — integration: session lifecycle', () => {
+  it('creates session, adds message, updates title', () => {
+    const s = mkSession({ id: 's1', title: 'New Chat' })
+    useAppStore.getState().addSession(s)
+    expect(useAppStore.getState().sessions).toHaveLength(1)
+
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm1', sessionId: 's1', content: 'Hello' }))
+    expect(useAppStore.getState().messages).toHaveLength(1)
+    expect(useAppStore.getState().messages[0].content).toBe('Hello')
+
+    useAppStore.getState().updateSession('s1', { title: 'Updated Title' })
+    expect(useAppStore.getState().sessions[0].title).toBe('Updated Title')
+  })
+
+  it('opens session tab, adds message, closes tab, reopens', () => {
+    useAppStore.getState().addSession(mkSession({ id: 's1' }))
+
+    // Open tab
+    useAppStore.getState().openSessionTab(mkSession({ id: 's1', title: 'Chat' }))
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+
+    // Add message while tab is open
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm1', sessionId: 's1' }))
+    expect(useAppStore.getState().messages).toHaveLength(1)
+
+    // Close tab
+    useAppStore.getState().closeTab('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(0)
+
+    // Reopen — tab restored, messages preserved
+    useAppStore.getState().openSessionTab(mkSession({ id: 's1', title: 'Chat' }))
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+    expect(useAppStore.getState().messages).toHaveLength(1)
+  })
+})
+
+describe('store — integration: message edit/delete/undo', () => {
+  it('creates session, sends messages, edits one, deletes one, undoes', () => {
+    useAppStore.getState().addSession(mkSession({ id: 's1' }))
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm1', sessionId: 's1', content: 'original' }))
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm2', sessionId: 's1', content: 'extra' }))
+    expect(useAppStore.getState().messages).toHaveLength(2)
+
+    // Edit message
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', sessionId: 's1', content: 'edited' }))
+    expect(useAppStore.getState().messages[0].content).toBe('edited')
+    expect(useAppStore.getState().messages).toHaveLength(2)
+
+    // Delete message
+    const deleted = useAppStore.getState().messages[0]
+    useAppStore.getState().removeMessage('m1')
+    expect(useAppStore.getState().messages).toHaveLength(1)
+
+    // Store for undo
+    useAppStore.getState().setLastDeletedMessage(deleted)
+    expect(useAppStore.getState().lastDeletedMessage).not.toBeNull()
+
+    // Undo: re-append
+    if (useAppStore.getState().lastDeletedMessage) {
+      useAppStore.getState().appendMessage(useAppStore.getState().lastDeletedMessage!)
+      useAppStore.getState().clearLastDeletedMessage()
+    }
+    expect(useAppStore.getState().messages).toHaveLength(2)
+    expect(useAppStore.getState().messages[1].content).toBe('edited')
+    expect(useAppStore.getState().lastDeletedMessage).toBeNull()
+  })
+
+  it('sets reaction then toggles it off', () => {
+    useAppStore.getState().appendMessage(mkMessage({ id: 'm1', content: 'test', role: 'assistant' }))
+
+    // Set thumbs up
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', content: 'test', role: 'assistant', reactions: { up: true } }))
+    expect(useAppStore.getState().messages[0].reactions?.up).toBe(true)
+
+    // Toggle off
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', content: 'test', role: 'assistant', reactions: { up: null } }))
+    expect(useAppStore.getState().messages[0].reactions?.up).toBeNull()
+  })
+})
+
+describe('store — integration: todos with session switching', () => {
+  it('manages todos per session independently', () => {
+    useAppStore.getState().addTodo(mkTodo({ id: 't1', sessionId: 's1', text: 'Task 1', completed: false }))
+    useAppStore.getState().addTodo(mkTodo({ id: 't2', sessionId: 's2', text: 'Task 2', completed: false }))
+    useAppStore.getState().addTodo(mkTodo({ id: 't3', sessionId: 's1', text: 'Task 3', completed: true, completedAt: 100 }))
+
+    // All todos stored
+    expect(useAppStore.getState().todos).toHaveLength(3)
+
+    // Complete task
+    useAppStore.getState().updateTodo('t1', { completed: true, completedAt: 200 })
+    expect(useAppStore.getState().todos[0].completed).toBe(true)
+    expect(useAppStore.getState().todos[0].completedAt).toBe(200)
+
+    // Delete task from s2
+    useAppStore.getState().removeTodo('t2')
+    expect(useAppStore.getState().todos).toHaveLength(2)
+
+    // Remaining are from s1
+    expect(useAppStore.getState().todos.every((t) => t.sessionId === 's1')).toBe(true)
+  })
+})
+
+describe('store — integration: tabs close active', () => {
+  it('closing active session tab falls back to previously active session tab', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Tab 1' },
+        { type: 'session', id: 's2', title: 'Tab 2' },
+        { type: 'session', id: 's3', title: 'Tab 3' },
+      ],
+      activeTabId: 's2',
+    })
+
+    // Close active tab
+    useAppStore.getState().closeTab('s2')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    // Fallback is s3 (same index) or s1 (prior)
+    expect(['s1', 's3']).toContain(useAppStore.getState().activeTabId)
+  })
+
+  it('closing active file tab falls back to session tab', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Chat' },
+        { type: 'file', path: '/src/edit.ts', name: 'edit.ts', isDirty: true },
+      ],
+      activeTabId: '/src/edit.ts',
+    })
+
+    useAppStore.getState().closeTab('/src/edit.ts')
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+})
+
+describe('store — integration: renameTabPaths scenarios', () => {
+  it('renames file tab updates activeTabId when it matches', () => {
+    useAppStore.setState({
+      tabs: [{ type: 'file', path: '/src/old.ts', name: 'old.ts', isDirty: false }],
+      activeTabId: '/src/old.ts',
+    })
+    useAppStore.getState().renameTabPaths('/src/old.ts', '/src/new.ts', 'new.ts')
+    expect(useAppStore.getState().activeTabId).toBe('/src/new.ts')
+  })
+
+  it('does not rename paths that do not match', () => {
+    useAppStore.setState({
+      tabs: [{ type: 'file', path: '/src/keep.ts', name: 'keep.ts', isDirty: false }],
+      activeTabId: '/src/keep.ts',
+    })
+    useAppStore.getState().renameTabPaths('/src/other.ts', '/src/renamed.ts', 'renamed.ts')
+    const tab = useAppStore.getState().tabs[0] as Extract<Tab, { type: 'file' }>
+    expect(tab.path).toBe('/src/keep.ts')
+    expect(useAppStore.getState().activeTabId).toBe('/src/keep.ts')
   })
 })
