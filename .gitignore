@@ -30,3 +30,6 @@ playwright-report
 
 # TypeScript incremental build
 *.tsbuildinfo
+
+.hermes-pipeline/
+competitor-research.json
