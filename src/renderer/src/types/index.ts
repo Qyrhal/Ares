@@ -85,7 +85,7 @@ export interface ProviderConfig {
 
 export interface AppSettings {
   /** Legacy single-endpoint fields — migrated into providers[0] on load */
-  apiKey: string
+  apiKey: ***
   apiBaseUrl: string
   providers: ProviderConfig[]
   defaultModel: string
@@ -93,6 +93,9 @@ export interface AppSettings {
   colorMode: 'dark' | 'light'
   systemPrompt: string
   permissionMode: PermissionMode
+  /** Per-session guardrails to prevent runaway agents */
+  maxSubagentSpawns?: number
+  maxWebSearches?: number
 }
 
 export interface FileNode {

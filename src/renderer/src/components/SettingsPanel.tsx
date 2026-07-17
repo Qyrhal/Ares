@@ -441,6 +441,30 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </Field>
         </Section>
 
+        {/* ── Guardrails ───────────────────────────────────────────── */}
+        <Section title="Guardrails" description="Per-session limits to prevent runaway agents. The budget resets when a new Pi session starts (e.g., after restart or session switch). Adjust limits or disable them by setting to 0.">
+          <Field label="Max sub-agent spawns per session">
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={form.maxSubagentSpawns ?? 200}
+              onChange={(e) => setForm((prev) => ({ ...prev, maxSubagentSpawns: Math.max(0, parseInt(e.target.value) || 0) }))}
+              className={cn(INPUT, 'w-32 text-xs')}
+            />
+          </Field>
+          <Field label="Max web searches per session">
+            <input
+              type="number"
+              min={0}
+              max={10000}
+              value={form.maxWebSearches ?? 200}
+              onChange={(e) => setForm((prev) => ({ ...prev, maxWebSearches: Math.max(0, parseInt(e.target.value) || 0) }))}
+              className={cn(INPUT, 'w-32 text-xs')}
+            />
+          </Field>
+        </Section>
+
         {/* ── Data ──────────────────────────────────────────────────── */}
         <Section title="Data" description="Manage locally stored chat data.">
           <div className="flex items-center justify-between rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3">
