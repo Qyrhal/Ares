@@ -144,8 +144,19 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
 
-// Disable CORS for API calls from the renderer (desktop app, no security risk)
-app.commandLine.appendSwitch('disable-web-security')
+// Path validation: restrict file IPC operations to safe directories
+import os from 'os'
+function validatePath(p: string): void {
+  const resolved = nodePath.resolve(p)
+  const workspace = getWorkspacePath()
+  const home = os.homedir()
+  const allowed = [home]
+  if (workspace) allowed.push(workspace)
+  const isInAllowed = allowed.some((dir) => resolved.startsWith(dir + nodePath.sep) || resolved === dir)
+  if (!isInAllowed) {
+    throw new Error(`Access denied: path outside workspace (${resolved})`)
+  }
+}
 
 function registerIpcHandlers(): void {
   // DB – sessions
@@ -204,24 +215,31 @@ function registerIpcHandlers(): void {
   })
 
   // File system
-  ipcMain.handle('fs:readDir', (_, p: string) => readDir(p))
-  ipcMain.handle('fs:readFile', (_, p: string) => fs.readFileSync(p, 'utf-8'))
+  ipcMain.handle('fs:readDir', (_, p: string) => { validatePath(p); return readDir(p) })
+  ipcMain.handle('fs:readFile', (_, p: string) => { validatePath(p); return fs.readFileSync(p, 'utf-8') })
   ipcMain.handle('fs:writeFile', (_, p: string, content: string) => {
+    validatePath(p)
     fs.writeFileSync(p, content, 'utf-8')
   })
   ipcMain.handle('fs:createFile', (_, p: string) => {
+    validatePath(p)
     fs.writeFileSync(p, '', { flag: 'wx' })
   })
   ipcMain.handle('fs:createFolder', (_, p: string) => {
+    validatePath(p)
     fs.mkdirSync(p)
   })
   ipcMain.handle('fs:rename', (_, oldPath: string, newPath: string) => {
+    validatePath(oldPath)
+    validatePath(newPath)
     fs.renameSync(oldPath, newPath)
   })
   ipcMain.handle('fs:delete', (_, p: string) => {
+    validatePath(p)
     fs.rmSync(p, { recursive: true, force: true })
   })
   ipcMain.handle('fs:findFiles', (_, dir: string) => {
+    validatePath(dir)
     const results: string[] = []
     const SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', '__pycache__', '.venv'])
     function walk(d: string) {
@@ -326,13 +344,16 @@ function registerIpcHandlers(): void {
     return content.replace(/^```[\w]*\n?/, '').replace(/\n?```$/, '').trim()
   })
   ipcMain.handle('tools:readFile', async (_, p: string) => {
+    validatePath(p)
     return fs.readFileSync(p, 'utf-8')
   })
   ipcMain.handle('tools:writeFile', async (_, p: string, content: string) => {
+    validatePath(p)
     fs.mkdirSync(nodePath.dirname(p), { recursive: true })
     fs.writeFileSync(p, content, 'utf-8')
   })
   ipcMain.handle('tools:editFile', async (_, p: string, oldString: string, newString: string) => {
+    validatePath(p)
     const content = fs.readFileSync(p, 'utf-8')
     if (!content.includes(oldString)) {
       throw new Error(`Could not find "${oldString.slice(0, 50)}..." in ${p}`)
@@ -341,10 +362,12 @@ function registerIpcHandlers(): void {
     fs.writeFileSync(p, updated, 'utf-8')
   })
   ipcMain.handle('tools:createFile', async (_, p: string, content: string) => {
+    validatePath(p)
     fs.mkdirSync(nodePath.dirname(p), { recursive: true })
     fs.writeFileSync(p, content, 'utf-8')
   })
   ipcMain.handle('tools:listFiles', async (_, dir: string) => {
+    validatePath(dir)
     const entries = fs.readdirSync(dir, { withFileTypes: true })
     return entries
       .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
