@@ -6,6 +6,7 @@ import { cn, formatBytes, isMermaidCodeBlock, looksLikeJson } from '@/lib/utils'
 import { Message } from '@/types'
 import { AgentDiffView } from './AgentDiffView'
 import { TokenBadge } from './TokenBadge'
+import { estimateCost } from '@/lib/pricing'
 import {
   Attachment, AttachmentMedia, AttachmentContent, AttachmentTitle,
   AttachmentDescription, AttachmentGroup
@@ -40,6 +41,7 @@ function loadMermaid(): Promise<typeof import('mermaid')['default']> {
 
 interface MessageItemProps {
   message: Message
+  modelName?: string
   onReply?: (message: Message) => void
   onEdit?: (id: string, content: string) => void
   onDelete?: (message: Message) => void
@@ -402,7 +404,7 @@ function EditMode({
 
 // ── Main MessageItem ──────────────────────────────────────────────────────────
 
-export function MessageItem({ message, onReply, onEdit, onDelete, onReact }: MessageItemProps): React.ReactElement {
+export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onReact }: MessageItemProps): React.ReactElement {
   const [isEditing, setIsEditing] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
 
@@ -618,7 +620,7 @@ export function MessageItem({ message, onReply, onEdit, onDelete, onReact }: Mes
             <TokenBadge
               tokens={message.tokenCount ?? 0}
               duration={message.duration}
-              cost={message.tokenCount ? (message.tokenCount / 1000 * 0.01) : undefined}
+              cost={message.tokenCount ? estimateCost(modelName ?? '', 0, message.tokenCount) : undefined}
             />
           </div>
         )}

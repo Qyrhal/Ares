@@ -1393,6 +1393,7 @@ export default function App(): React.ReactElement {
                     <ChatView
                       messages={store.messages}
                       sessionTitle={activeSession.title}
+                      modelName={activeSession.model}
                       isLoading={store.isLoading}
                       onSuggestion={(text) => handleSend(text, [])}
                       todos={store.todos}
@@ -1480,6 +1481,7 @@ export default function App(): React.ReactElement {
                         <ChatView
                           messages={store.sideChatMessages}
                           sessionTitle={sideSession.title}
+                          modelName={sideSession.model}
                           isLoading={store.sideChatIsLoading}
                           onSuggestion={handleSendSideChat}
                         />
