@@ -62,6 +62,8 @@ export interface DbSettings {
   colorMode?: string
   systemPrompt: string
   permissionMode: string
+  maxSubagentSpawns?: number
+  maxWebSearches?: number
 }
 
 export interface DbPiSkill {
@@ -186,6 +188,8 @@ Call when the entire goal is accomplished. Shows a completion toast. title is a 
 - Always end a completed orchestration with notifyComplete.
 - Write your recap in the assistant message, then call notifyComplete.`,
   permissionMode: 'ask',
+  maxSubagentSpawns: 200,
+  maxWebSearches: 200,
 }
 
 function getStorePath(): string {

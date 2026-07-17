@@ -12,6 +12,8 @@ const BASE_SETTINGS: AppSettings = {
   themeId: 'red',
   systemPrompt: '',
   permissionMode: 'ask',
+  maxSubagentSpawns: 200,
+  maxWebSearches: 200,
 }
 
 beforeEach(() => {

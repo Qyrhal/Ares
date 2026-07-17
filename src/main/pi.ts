@@ -310,6 +310,9 @@ async function getOrCreate(
 
   // Tracks child session IDs so notifyComplete can clean them up
   const childSessionIds: string[] = []
+  // Guardrail counters for this Pi session
+  let webSearchCount = 0
+  let subagentSpawnCount = 0
 
   const askUserTool = {
     name: 'askUser',
@@ -378,6 +381,15 @@ async function getOrCreate(
     async execute(_id: string, params: unknown) {
       const { task, title } = params as { task: string; title: string }
 
+      // Guardrail: enforce per-session subagent spawn limit
+      const settings = getSettings()
+      const maxSpawns = settings.maxSubagentSpawns ?? 200
+      if (subagentSpawnCount >= maxSpawns) {
+        const msg = `Sub-agent spawn limit reached (${maxSpawns} per session). Use /clear to reset, or increase maxSubagentSpawns in settings.`
+        return { content: [{ type: 'text' as const, text: msg }], isError: true }
+      }
+      subagentSpawnCount++
+
       const childDb = createSession(title, modelId, sessionId)
       childSessionIds.push(childDb.id)
       const rootId = findRootSessionId(getSessions(), sessionId)
@@ -439,6 +451,16 @@ async function getOrCreate(
     },
     async execute(_id: string, params: unknown) {
       const { agents } = params as { agents: Array<{ task: string; title: string }> }
+
+      // Guardrail: enforce per-session subagent spawn limit
+      const settings = getSettings()
+      const maxSpawns = settings.maxSubagentSpawns ?? 200
+      if (subagentSpawnCount + agents.length > maxSpawns) {
+        const remaining = maxSpawns - subagentSpawnCount
+        const msg = `Sub-agent spawn limit reached (${maxSpawns} per session, ${remaining} remaining). Requested ${agents.length} but only ${remaining > 0 ? remaining : 0} slots left. Use /clear to reset, or increase maxSubagentSpawns in settings.`
+        return { content: [{ type: 'text' as const, text: msg }], isError: true }
+      }
+      subagentSpawnCount += agents.length
 
       const rootId = findRootSessionId(getSessions(), sessionId)
       const teamNotes = getTeamNotes(rootId)
@@ -636,6 +658,16 @@ async function getOrCreate(
     },
     async execute(_id: string, params: unknown) {
       const { query, maxResults = 5 } = params as { query: string; maxResults?: number }
+
+      // Guardrail: enforce per-session web search limit
+      const settings = getSettings()
+      const maxSearches = settings.maxWebSearches ?? 200
+      if (webSearchCount >= maxSearches) {
+        const msg = `Web search limit reached (${maxSearches} per session). Use /clear to reset, or increase maxWebSearches in settings.`
+        return { content: [{ type: 'text' as const, text: msg }], isError: true }
+      }
+      webSearchCount++
+
       const count = Math.min(Math.max(1, maxResults), 10)
       try {
         const results = await searchDuckDuckGo(query, count)
