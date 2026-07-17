@@ -96,14 +96,48 @@ function createWindow(): void {
     setTimeout(() => runBackgroundScan(win), 1000)
   })
 
-  // Bypass CORS for API calls made from the renderer (OpenAI SDK, etc.)
+  // Bypass CORS only for configured API endpoints (OpenAI SDK, etc.)
   const corsHeaders = {
     'Access-Control-Allow-Origin': ['*'],
     'Access-Control-Allow-Methods': ['GET, POST, PUT, DELETE, PATCH, OPTIONS'],
     'Access-Control-Allow-Headers': ['*'],
     'Access-Control-Max-Age': ['86400'],
   }
+
+  /** Check if a request URL belongs to a configured API endpoint. */
+  function isApiEndpoint(url: string): boolean {
+    try {
+      const settings = getSettings()
+      const allowedBases: string[] = []
+
+      if (settings.apiBaseUrl) allowedBases.push(settings.apiBaseUrl)
+      if (settings.providers) {
+        for (const p of settings.providers) {
+          if (p.baseUrl) allowedBases.push(p.baseUrl)
+        }
+      }
+
+      if (allowedBases.length === 0) return false
+
+      const reqHost = new URL(url).hostname
+      for (const base of allowedBases) {
+        try {
+          if (new URL(base).hostname === reqHost) return true
+        } catch {
+          // skip malformed base
+        }
+      }
+    } catch {
+      // malformed request URL
+    }
+    return false
+  }
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    if (!isApiEndpoint(details.url)) {
+      callback({ responseHeaders: details.responseHeaders })
+      return
+    }
     callback({
       responseHeaders: {
         ...details.responseHeaders,
