@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState, useRef } from 'react'
+import React, { Suspense, useCallback, useEffect, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
@@ -10,12 +10,12 @@ import { CommandPalette, type CommandEntry } from '@/components/CommandPalette'
 import { TabSwitcher } from '@/components/TabSwitcher'
 import { QuickFileOpen } from '@/components/QuickFileOpen'
 import { InputBar } from '@/components/InputBar'
-import { FileEditor } from '@/components/FileEditor'
-import { SettingsPanel } from '@/components/SettingsPanel'
-import { ExtensionsPanel } from '@/components/ExtensionsPanel'
+const FileEditor = React.lazy(() => import('@/components/FileEditor').then(m => ({ default: m.FileEditor })))
+const SettingsPanel = React.lazy(() => import('@/components/SettingsPanel').then(m => ({ default: m.SettingsPanel })))
+const ExtensionsPanel = React.lazy(() => import('@/components/ExtensionsPanel').then(m => ({ default: m.ExtensionsPanel })))
+const TerminalView = React.lazy(() => import('@/components/TerminalView').then(m => ({ default: m.TerminalView })))
+const CommitDetail = React.lazy(() => import('@/components/CommitDetail').then(m => ({ default: m.CommitDetail })))
 import { StatusBar } from '@/components/StatusBar'
-import { TerminalView } from '@/components/TerminalView'
-import { CommitDetail } from '@/components/CommitDetail'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PermissionPrompt } from '@/components/PermissionPrompt'
 import { AgentQuestionCard } from '@/components/AgentQuestionCard'
@@ -32,6 +32,14 @@ import { Toaster } from '@/components/ui/toaster'
 import { toast } from 'sonner'
 
 const el = window.electron
+
+function PanelFallback() {
+  return (
+    <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">
+      <span className="animate-pulse">Loading…</span>
+    </div>
+  )
+}
 
 function tabKey(t: Tab): string {
   return t.type === 'session' ? t.id : t.path
@@ -1341,7 +1349,8 @@ export default function App(): React.ReactElement {
           )}
 
           <div className="flex flex-1 flex-col overflow-hidden min-h-0">
-            {store.activeView === 'settings' ? (
+          <Suspense fallback={<PanelFallback />}>
+           {store.activeView === 'settings' ? (
               <SettingsPanel
                 settings={store.settings}
                 onSave={handleSaveSettings}
@@ -1499,6 +1508,7 @@ export default function App(): React.ReactElement {
             ) : (
               <EmptyMain onNewSession={handleNewSession} onOpenFolder={handleOpenFolder} />
             )}
+          </Suspense>
           </div>
 
           {store.terminalOpen && (
@@ -1506,11 +1516,13 @@ export default function App(): React.ReactElement {
               className="shrink-0 border-t border-border"
               style={{ height: store.terminalHeight }}
             >
+              <Suspense fallback={<PanelFallback />}>
               <TerminalView
                 cwd={store.workspacePath}
                 onClose={store.toggleTerminal}
                 onHeightChange={(h) => store.setTerminalHeight(h)}
               />
+              </Suspense>
             </div>
           )}
         </div>

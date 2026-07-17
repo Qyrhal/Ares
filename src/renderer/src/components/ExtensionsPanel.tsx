@@ -1,8 +1,8 @@
-import React, { useState } from 'react'
+import React, { Suspense, useState } from 'react'
 import { Sparkles, Plug, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { SkillsPanel } from '@/components/SkillsPanel'
-import { PluginsPanel } from '@/components/PluginsPanel'
+const PluginsPanel = React.lazy(() => import('@/components/PluginsPanel').then(m => ({ default: m.PluginsPanel })))
 import { HooksPanel } from '@/components/HooksPanel'
 
 type ExtensionsTab = 'skills' | 'plugins' | 'hooks'
@@ -39,7 +39,7 @@ export function ExtensionsPanel(): React.ReactElement {
       </div>
 
       {tab === 'skills' && <SkillsPanel />}
-      {tab === 'plugins' && <PluginsPanel />}
+      {tab === 'plugins' && <Suspense fallback={<div className="flex flex-1 items-center justify-center text-muted-foreground text-xs animate-pulse">Loading…</div>}><PluginsPanel /></Suspense>}
       {tab === 'hooks' && <HooksPanel />}
     </div>
   )
