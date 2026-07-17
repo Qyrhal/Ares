@@ -3,6 +3,45 @@ import fs from 'fs'
 import path from 'path'
 import { v4 as uuidv4 } from 'uuid'
 
+// ── In-memory cache ──────────────────────────────────────────────────────────
+// Every IPC handler called readStore() + writeStore() on every interaction,
+// meaning 43+ disk reads + JSON parses + disk writes per user action.
+// This cache keeps the Store in memory and flushes to disk periodically.
+
+let cachedStore: Store | null = null
+let isDirty = false
+let flushTimer: ReturnType<typeof setInterval> | null = null
+const FLUSH_INTERVAL_MS = 1000
+
+/** Force-flush dirty cache to disk. */
+function flushStore(): void {
+  if (!isDirty || !cachedStore) return
+  try {
+    fs.writeFileSync(getStorePath(), JSON.stringify(cachedStore, null, 2), 'utf-8')
+    isDirty = false
+  } catch {
+    // best-effort — will retry on next flush
+  }
+}
+
+/** Start periodic flush. Called once at module load. */
+function startFlushTimer(): void {
+  if (flushTimer) return
+  flushTimer = setInterval(flushStore, FLUSH_INTERVAL_MS)
+}
+
+/** Schedule graceful flush on app quit. */
+function registerGracefulShutdown(): void {
+  const flushAndQuit = () => { flushStore(); process.exit(0) }
+  process.on('beforeExit', flushStore)
+  process.on('SIGINT', flushAndQuit)
+  process.on('SIGTERM', flushAndQuit)
+}
+
+// Start background flush on module import
+startFlushTimer()
+registerGracefulShutdown()
+
 export interface DbSession {
   id: string
   title: string
@@ -198,16 +237,20 @@ function getStorePath(): string {
 }
 
 function readStore(): Store {
+  if (cachedStore) return cachedStore
   try {
     const raw = JSON.parse(fs.readFileSync(getStorePath(), 'utf-8'))
-    return { todos: [], teamNotes: [], ...raw }
+    cachedStore = { todos: [], teamNotes: [], ...raw }
   } catch {
-    return { sessions: [], messages: [], todos: [], teamNotes: [], mcpProfiles: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
+    cachedStore = { sessions: [], messages: [], todos: [], teamNotes: [], mcpProfiles: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
   }
+  return cachedStore
 }
 
 function writeStore(data: Store): void {
-  fs.writeFileSync(getStorePath(), JSON.stringify(data, null, 2), 'utf-8')
+  cachedStore = data
+  isDirty = true
+  // Immediate flush for critical paths — periodic timer handles the rest
 }
 
 // ── Sessions ────────────────────────────────────────────────────────────────
