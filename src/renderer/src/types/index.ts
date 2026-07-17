@@ -50,6 +50,7 @@ export interface Session {
   updatedAt: number
   messageCount: number
   pinned?: boolean
+  archived?: boolean
   effort?: EffortLevel
   permissionMode?: PermissionMode
   workspacePath?: string
