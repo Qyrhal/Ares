@@ -1,4 +1,5 @@
 import React from 'react'
+import DOMPurify from 'dompurify'
 import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown } from 'lucide-react'
 import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes, isMermaidCodeBlock, looksLikeJson } from '@/lib/utils'
@@ -97,7 +98,7 @@ function MermaidDiagram({ code }: { code: string }): React.ReactElement {
         }))
       .then(({ svg }) => {
         if (!cancelled && containerRef.current) {
-          containerRef.current.innerHTML = svg
+          containerRef.current.innerHTML = DOMPurify.sanitize(svg, { USE_PROFILES: { svg: true } })
           setError(null)
         }
       })
@@ -180,7 +181,7 @@ function HighlightedCode({ text, language }: { text: string; language?: string }
   }, [text, language])
 
   if (html === null) return <code>{text}</code>
-  return <code className="hljs" dangerouslySetInnerHTML={{ __html: html }} />
+  return <code className="hljs" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(html) }} />
 }
 
 // ── Code block component with copy button ─────────────────────────────────────
