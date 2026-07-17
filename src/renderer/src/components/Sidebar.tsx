@@ -1,11 +1,11 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react'
-import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock, ChevronDown, ChevronRight, Folder, Plus, Pencil, Trash2 } from 'lucide-react'
+import React, { Suspense, useState, useCallback, useRef, useEffect } from 'react'
+import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock, ChevronDown, ChevronRight, Folder, Plus, Pencil, Trash2, Archive } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate } from '@/lib/utils'
 import { Session, SessionGroup, FileNode, ActivityView } from '@/types'
 import { useAppStore } from '@/store/useAppStore'
 import { FileTree, FileTreeProps } from './FileTree'
-import { GitPane } from './GitPane'
+const GitPane = React.lazy(() => import('./GitPane').then(m => ({ default: m.GitPane })))
 import { ErrorBoundary } from './ErrorBoundary'
 import { AgentTimeline } from './AgentTimeline'
 import { toast } from 'sonner'
@@ -16,6 +16,7 @@ interface SidebarProps {
   onRenameSession?: (id: string, title: string) => void
   onDuplicateSession?: (session: Session) => void
   onExportSession?: (session: Session) => void
+  onArchiveSession?: (id: string) => void
   mode: ActivityView
   // sessions
   sessions: Session[]
@@ -41,7 +42,7 @@ export function Sidebar({
   sessions, activeSessionId, onNewSession, onSelectSession, onDeleteSession, onTogglePinSession,
   fileNodes, workspacePath, selectedFilePath, onOpenFile, onOpenFolder,
   onFsCreateFile, onFsCreateFolder, onFsRename, onFsDelete,
-  onRenameSession, onDuplicateSession, onExportSession,
+  onRenameSession, onDuplicateSession, onExportSession, onArchiveSession,
 }: SidebarProps): React.ReactElement {
   return (
     <aside className="surface-card flex h-full w-60 shrink-0 flex-col border-r border-border bg-card">
@@ -56,6 +57,7 @@ export function Sidebar({
           onRename={onRenameSession}
           onDuplicate={onDuplicateSession}
           onExport={onExportSession}
+          onArchive={onArchiveSession}
         />
       )}
       {mode === 'explorer' && (
@@ -72,7 +74,11 @@ export function Sidebar({
         />
       )}
       {mode === 'git' && (
-        <ErrorBoundary key="git-pane"><GitPane workspacePath={workspacePath} /></ErrorBoundary>
+        <ErrorBoundary key="git-pane">
+          <Suspense fallback={<div className="flex flex-1 items-center justify-center text-muted-foreground text-xs animate-pulse">Loading…</div>}>
+            <GitPane workspacePath={workspacePath} />
+          </Suspense>
+        </ErrorBoundary>
       )}
     </aside>
   )
@@ -82,7 +88,7 @@ export function Sidebar({
 
 function SessionsPane({
   sessions, activeSessionId, onNew, onSelect, onDelete, onTogglePin,
-  onRename, onDuplicate, onExport
+  onRename, onDuplicate, onExport, onArchive
 }: {
   sessions: Session[]
   activeSessionId: string | null
@@ -93,6 +99,7 @@ function SessionsPane({
   onRename?: (id: string, title: string) => void
   onDuplicate?: (session: Session) => void
   onExport?: (session: Session) => void
+  onArchive?: (id: string) => void
 }): React.ReactElement {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<'list' | 'timeline'>('list')
@@ -100,6 +107,7 @@ function SessionsPane({
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const renameInputRef = useRef<HTMLInputElement>(null)
+  const [showArchived, setShowArchived] = useState(false)
 
   // ── Session group state ────────────────────────────────────────────────────
   const sessionGroups = useAppStore((s) => s.sessionGroups)
@@ -180,6 +188,9 @@ function SessionsPane({
         break
       case 'delete':
         onDelete(session.id)
+        break
+      case 'archive':
+        onArchive?.(session.id)
         break
     }
   }, [onDuplicate, onExport, onTogglePin, onDelete, handleStartRename])
@@ -341,6 +352,16 @@ function SessionsPane({
             <Pin className={cn('size-3', s.pinned && 'fill-current')} />
           </button>
           <button
+            onClick={(e) => { e.stopPropagation(); onArchive?.(s.id) }}
+            className={cn(
+              'rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-accent hover:text-foreground',
+              s.archived && 'opacity-100'
+            )}
+            aria-label={s.archived ? 'Unarchive session' : 'Archive session'}
+          >
+            <Archive className="size-3" />
+          </button>
+          <button
             onClick={(e) => { e.stopPropagation(); onDelete(s.id) }}
             className="rounded p-1 opacity-0 transition-opacity group-hover:opacity-100 hover:bg-destructive/20 hover:text-destructive"
             aria-label="Delete session"
@@ -352,13 +373,14 @@ function SessionsPane({
     </button>
   )}
 
-  const pinned = orderWithChildren(sessions.filter((s) => s.pinned))
+  const pinned = orderWithChildren(sessions.filter((s) => s.pinned && !s.archived))
   const unpinned = sessions.filter((s) => !s.pinned)
+  const visibleSessions = showArchived ? unpinned : unpinned.filter((s) => !s.archived)
 
   // Group unpinned sessions by their group field
   const groupedSessions = new Map<string, Session[]>()
   const ungrouped: Session[] = []
-  for (const s of unpinned) {
+  for (const s of visibleSessions) {
     if (s.group && sessionGroups.some((g) => g.id === s.group)) {
       const arr = groupedSessions.get(s.group) ?? []
       arr.push(s)
@@ -383,6 +405,18 @@ function SessionsPane({
           Sessions
         </span>
         <div className="ml-auto flex items-center gap-0.5">
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={cn(
+              'rounded p-1 transition-colors',
+              showArchived
+                ? 'text-primary hover:bg-primary/10'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            )}
+            title={showArchived ? 'Hide archived' : 'Show archived'}
+          >
+            <Archive className={cn('size-3.5', showArchived && 'fill-current')} />
+          </button>
           <button
             onClick={handleAddGroup}
             className="rounded p-1 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
@@ -577,6 +611,12 @@ function SessionsPane({
             label={contextMenu.session.pinned ? 'Unpin' : 'Pin'}
             icon="Pin"
             onClick={() => handleContextMenuAction('pin', contextMenu.session)}
+          />
+          <div className="mx-2 my-1 border-t border-border" />
+          <ContextMenuItem
+            label={contextMenu.session.archived ? 'Unarchive' : 'Archive'}
+            icon="Archive"
+            onClick={() => handleContextMenuAction('archive', contextMenu.session)}
           />
           <div className="mx-2 my-1 border-t border-border" />
           <ContextMenuItem

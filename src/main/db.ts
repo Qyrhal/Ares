@@ -11,6 +11,7 @@ export interface DbSession {
   updated_at: number
   message_count?: number
   pinned?: boolean
+  archived?: boolean
   effort?: string
   permissionMode?: string
   workspace_path?: string
@@ -211,9 +212,10 @@ function writeStore(data: Store): void {
 
 // ── Sessions ────────────────────────────────────────────────────────────────
 
-export function getSessions(): DbSession[] {
+export function getSessions(includeArchived = false): DbSession[] {
   const { sessions, messages } = readStore()
   return sessions
+    .filter((s) => includeArchived || !s.archived)
     .map((s) => ({ ...s, message_count: messages.filter((m) => m.session_id === s.id).length }))
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1
@@ -239,7 +241,7 @@ export function createSession(title: string, model = 'gpt-4o-mini', parentId?: s
 
 export function updateSession(
   id: string,
-  updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'workspace_path' | 'effort' | 'permissionMode' | 'agent_status' | 'is_side_chat'>>
+  updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'archived' | 'workspace_path' | 'effort' | 'permissionMode' | 'agent_status' | 'is_side_chat'>>
 ): void {
   const store = readStore()
   store.sessions = store.sessions.map((s) =>

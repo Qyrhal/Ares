@@ -3,7 +3,7 @@ import type { GitStatus, GitBranches } from './types'
 
 export interface RawSession {
   id: string; title: string; model: string
-  created_at: number; updated_at: number; message_count?: number; pinned?: boolean; is_side_chat?: boolean
+  created_at: number; updated_at: number; message_count?: number; pinned?: boolean; archived?: boolean; is_side_chat?: boolean
 }
 
 export interface RawMessage {
@@ -33,7 +33,7 @@ declare global {
   interface Window {
     electron: {
       db: {
-        getSessions(): Promise<RawSession[]>
+        getSessions(includeArchived?: boolean): Promise<RawSession[]>
         createSession(title: string, model?: string, parentId?: string | null, isSideChat?: boolean): Promise<RawSession>
         updateSession(id: string, updates: object): Promise<void>
         deleteSession(id: string): Promise<void>

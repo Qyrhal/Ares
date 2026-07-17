@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
 
 const db = {
-  getSessions: () => ipcRenderer.invoke('db:getSessions'),
+  getSessions: (includeArchived?: boolean) => ipcRenderer.invoke('db:getSessions', includeArchived),
   createSession: (title: string, model?: string, parentId?: string | null, isSideChat?: boolean) => ipcRenderer.invoke('db:createSession', title, model, parentId, isSideChat),
   updateSession: (id: string, updates: object) => ipcRenderer.invoke('db:updateSession', id, updates),
   deleteSession: (id: string) => ipcRenderer.invoke('db:deleteSession', id),

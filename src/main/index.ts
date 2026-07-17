@@ -178,7 +178,7 @@ function validatePath(p: string): void {
 
 function registerIpcHandlers(): void {
   // DB – sessions
-  ipcMain.handle('db:getSessions', () => getSessions())
+  ipcMain.handle('db:getSessions', (_, includeArchived?: boolean) => getSessions(includeArchived))
   ipcMain.handle('db:createSession', (_, title: string, model?: string, parentId?: string | null, isSideChat?: boolean) => createSession(title, model, parentId, isSideChat))
   ipcMain.handle('db:updateSession', (_, id: string, updates: object) =>
     updateSession(id, updates as Parameters<typeof updateSession>[1]))
