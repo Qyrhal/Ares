@@ -45,7 +45,7 @@ const electronMock = {
     searchMessages: vi.fn().mockResolvedValue([]),
   },
   settings: {
-    get: vi.fn().mockResolvedValue({ apiKey: '***', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask', maxSubagentSpawns: 200, maxWebSearches: 200 }),
+    get: vi.fn().mockResolvedValue({ apiKey: '', apiBaseUrl: 'http://localhost:11434/v1', defaultModel: 'llama3', themeId: 'red', systemPrompt: '', permissionMode: 'ask', maxSubagentSpawns: 200, maxWebSearches: 200 }),
     set: vi.fn().mockResolvedValue(undefined),
   },
   workspace: {

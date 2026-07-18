@@ -86,7 +86,7 @@ export interface ProviderConfig {
 
 export interface AppSettings {
   /** Legacy single-endpoint fields — migrated into providers[0] on load */
-  apiKey: ***
+  apiKey: string
   apiBaseUrl: string
   providers: ProviderConfig[]
   defaultModel: string
