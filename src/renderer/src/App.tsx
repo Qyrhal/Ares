@@ -462,8 +462,37 @@ export default function App(): React.ReactElement {
         store.setMessages([])
         break
       }
+      case 'compact': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages to compact.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!hasProvider(store.settings)) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured — cannot compact conversation.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const result = await compactConversation(sess.id, msgs, store.settings, model)
+          if (result.compacted > 0) {
+            store.setMessages(result.messages)
+            const msg = await el.db.addMessage(sess.id, 'system', `**Context compacted:** ${result.compacted} earlier messages were summarized to free up space in the context window.`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No compaction needed — the conversation is short enough to fit in the context window.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Compaction failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
