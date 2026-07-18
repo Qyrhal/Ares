@@ -161,7 +161,6 @@ async function streamChatCompletion(
               accumulated += content
               onStream(accumulated)
             }
-            // Extract usage from the final chunk (OpenAI-compatible APIs include it on the last delta)
             if (json.usage) {
               usage = {
                 promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
@@ -202,6 +201,7 @@ async function streamChatCompletion(
     }
   }
 }
+
 
 async function noEndpointFallback(onStream: StreamCallback, onDone: DoneCallback): Promise<void> {
   const text = `No API endpoint configured. Open **Settings** to add your OpenAI-compatible endpoint URL.
