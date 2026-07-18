@@ -97,6 +97,8 @@ export interface AppSettings {
   /** Per-session guardrails to prevent runaway agents */
   maxSubagentSpawns?: number
   maxWebSearches?: number
+  /** Show a generated plan before executing in agent mode */
+  planPreviewEnabled?: boolean
 }
 
 export interface FileNode {

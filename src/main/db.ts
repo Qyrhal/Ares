@@ -104,6 +104,7 @@ export interface DbSettings {
   permissionMode: string
   maxSubagentSpawns?: number
   maxWebSearches?: number
+  planPreviewEnabled?: boolean
 }
 
 export interface DbPiSkill {
@@ -230,6 +231,7 @@ Call when the entire goal is accomplished. Shows a completion toast. title is a 
   permissionMode: 'ask',
   maxSubagentSpawns: 200,
   maxWebSearches: 200,
+  planPreviewEnabled: true,
 }
 
 function getStorePath(): string {
