@@ -134,6 +134,9 @@ declare global {
         onToolEnd(cb: (reqId: string, output: string, isError: boolean) => void): () => void
         onError(cb: (reqId: string, message: string) => void): () => void
         onCompaction(cb: (sessionId: string, phase: 'start' | 'end') => void): () => void
+        onAgentStatus(cb: (sessionId: string, status: string) => void): () => void
+        onMcpAutoBackground(cb: (toolName: string, params: string) => void): () => void
+        onMcpToolBackgroundResult(cb: (toolName: string, output: string) => void): () => void
         spawnFromUi(parentSessionId: string, task: string, title: string): Promise<unknown>
       }
     }

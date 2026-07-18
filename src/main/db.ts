@@ -105,6 +105,7 @@ export interface DbSettings {
   maxSubagentSpawns?: number
   maxWebSearches?: number
   planPreviewEnabled?: boolean
+  mcpAutoBackgroundMs?: number
 }
 
 export interface DbPiSkill {

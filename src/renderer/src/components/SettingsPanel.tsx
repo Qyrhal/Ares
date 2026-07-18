@@ -468,6 +468,20 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </Field>
         </Section>
 
+        {/* ── MCP ──────────────────────────────────────────────────── */}
+        <Section title="MCP Tools" description="Configure behaviour for Model Context Protocol tools.">
+          <Field label="Auto-background timeout" hint="When an MCP tool call exceeds this threshold (in seconds) it is automatically moved to background so the session stays responsive. Set to 0 to disable (always wait foreground).">
+            <input
+              type="number"
+              min={0}
+              max={600}
+              value={(form.mcpAutoBackgroundMs ?? 120000) / 1000}
+              onChange={(e) => setForm((prev) => ({ ...prev, mcpAutoBackgroundMs: Math.max(0, parseInt(e.target.value) || 0) * 1000 }))}
+              className={cn(INPUT, 'w-32 text-xs')}
+            />
+          </Field>
+        </Section>
+
         {/* ── Guardrails ───────────────────────────────────────────── */}
         <Section title="Guardrails" description="Per-session limits to prevent runaway agents. The budget resets when a new Pi session starts (e.g., after restart or session switch). Adjust limits or disable them by setting to 0.">
           <Field label="Max sub-agent spawns per session">

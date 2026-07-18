@@ -99,6 +99,8 @@ export interface AppSettings {
   maxWebSearches?: number
   /** Show a generated plan before executing in agent mode */
   planPreviewEnabled?: boolean
+  /** MCP tool auto-background threshold in ms. Calls exceeding this move to background. 0 = never background. Default 120000 (2min). */
+  mcpAutoBackgroundMs?: number
 }
 
 export interface FileNode {
