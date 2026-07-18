@@ -79,6 +79,23 @@ describe('parseSession — core fields', () => {
   })
 })
 
+describe('parseSession — archived', () => {
+  it('defaults archived to false when absent', () => {
+    expect(parseSession(BASE_SESSION).archived).toBe(false)
+  })
+
+  it('parses archived: true', () => {
+    const s = parseSession({ ...BASE_SESSION, archived: true })
+    expect(s.archived).toBe(true)
+  })
+
+  it('defaults archived to false when not provided in schema', () => {
+    const { pinned: _, ...noPinned } = BASE_SESSION
+    const s = parseSession(noPinned)
+    expect(s.archived).toBe(false)
+  })
+})
+
 describe('parseSession — workspacePath', () => {
   it('maps workspace_path to workspacePath', () => {
     const s = parseSession({ ...BASE_SESSION, workspace_path: '/home/user/project' })
