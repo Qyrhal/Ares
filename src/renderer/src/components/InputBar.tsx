@@ -32,6 +32,7 @@ const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'helpful',      description: 'Mark the last assistant response as helpful' },
   { kind: 'builtin', name: 'not-helpful',  description: 'Mark the last assistant response as not helpful' },
   { kind: 'builtin', name: 'compact',      description: 'Manually compact the conversation context window' },
+  { kind: 'builtin', name: 'usage',        description: 'Show session token usage and estimated cost' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 

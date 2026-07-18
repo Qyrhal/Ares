@@ -24,9 +24,11 @@ import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme, applyColorMode } from '@/lib/theme'
-import { needsCompaction, compactConversation } from '@/lib/context'
+import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
+import { estimateCost } from '@/lib/pricing'
 import { hasProvider, displayModel } from '@/lib/providers'
 import { SideChatInput } from '@/components/SideChatInput'
+import { PlanPreview } from '@/components/PlanPreview'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
 import { toast } from 'sonner'
@@ -65,6 +67,18 @@ export default function App(): React.ReactElement {
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
 
   const paletteCommands = React.useMemo(() => usePaletteCommands(store), [store])
+
+  // ── Plan preview ──────────────────────────────────────────────────
+  const [pendingPlan, setPendingPlan] = useState<{
+    sessionId: string
+    expandedMessages: Message[]
+    model: string
+    originalText: string
+    workspacePath: string | null
+    permissionMode: PermissionMode
+    effort: string
+  } | null>(null)
+  const [planPreviewContent, setPlanPreviewContent] = useState('')
 
   // ── Agent question prompt ───────────────────────────────────────────────────
   const [pendingQuestion, setPendingQuestion] = useState<{
@@ -492,7 +506,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -625,6 +639,102 @@ export default function App(): React.ReactElement {
           ].filter(Boolean).join('\n')
           const finalMsg = await el.db.addMessage(sess.id, 'system', stats)
           if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+        }
+        break
+      }
+      case 'usage': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const userCount = msgs.filter((m: Message) => m.role === 'user').length
+        const assistantCount = msgs.filter((m: Message) => m.role === 'assistant').length
+        const systemCount = msgs.filter((m: Message) => m.role === 'system').length
+        const toolCount = msgs.filter((m: Message) => m.role === 'tool').length
+
+        const totalTokens = estimateTokens(msgs)
+        const inputTokens = estimateTokens(msgs.filter((m: Message) => m.role === 'user'))
+        const outputTokens = estimateTokens(msgs.filter((m: Message) => m.role === 'assistant'))
+
+        const windowSize = contextWindow(model)
+        const utilization = Math.round((totalTokens / windowSize) * 100)
+
+        const cost = estimateCost(model, inputTokens, outputTokens)
+
+        const durationMs = Date.now() - sess.createdAt
+        const durHours = Math.floor(durationMs / 3600000)
+        const durMinutes = Math.floor((durationMs % 3600000) / 60000)
+        const durationStr = durHours > 0 ? `${durHours}h ${durMinutes}m` : `${durMinutes}m`
+
+        const apiBaseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        if (apiBaseUrl.trim().length > 0) {
+          store.appendMessage({
+            id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+            content: 'Generating session usage summary...', isStreaming: false, createdAt: Date.now(),
+          })
+          try {
+            const prompt = [
+              'You are analyzing token usage and cost for an AI coding assistant session.',
+              '',
+              'Session stats:',
+              `- ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant, ${systemCount} system, ${toolCount} tool)`,
+              `- Model: ${model}`,
+              `- Total tokens: ~${totalTokens}`,
+              `- Input tokens: ~${inputTokens}`,
+              `- Output tokens: ~${outputTokens}`,
+              `- Context window: ${windowSize.toLocaleString()} tokens`,
+              `- Context utilization: ${utilization}%`,
+              `- Estimated cost: $${cost.toFixed(6)}`,
+              `- Session duration: ${durationStr}`,
+              '',
+              'Provide a concise usage summary in a friendly tone. Include the raw stats above formatted nicely.',
+            ].join('\n')
+
+            const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model,
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No usage summary generated.'
+            const finalMsg = await el.db.addMessage(sess.id, 'system', `**Session Usage**\n\n${content}`)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          } catch (err) {
+            const errorMsg = `**Error generating usage summary:** ${(err as Error).message}`
+            const finalMsg = await el.db.addMessage(sess.id, 'system', errorMsg)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          }
+        } else {
+          const stats = [
+            '**Session Usage (offline)**\n',
+            `**Total messages:** ${msgs.length} (${userCount} user, ${assistantCount} assistant, ${systemCount} system, ${toolCount} tool)`,
+            `**Estimated tokens:** ~${totalTokens.toLocaleString()} total (${inputTokens.toLocaleString()} input, ${outputTokens.toLocaleString()} output)`,
+            `**Context window:** ${windowSize.toLocaleString()} tokens`,
+            `**Context utilization:** ${utilization}%`,
+            `**Estimated cost:** $${cost.toFixed(6)}`,
+            `**Session duration:** ${durationStr}`,
+            `**Model:** ${model}`,
+            '\nConfigure an API endpoint to get AI-powered usage analysis.',
+          ].filter(Boolean).join('\n')
+          const msg = await el.db.addMessage(sess.id, 'system', stats)
+          if (msg) store.appendMessage(parseMessage(msg))
         }
         break
       }
@@ -933,6 +1043,96 @@ export default function App(): React.ReactElement {
     useAppStore.getState().setLoading(false)
   }, [])
 
+  // ── Plan Preview: approve ─────────────────────────────────────────────────────
+  const handleApprovePlan = useCallback(async () => {
+    if (!pendingPlan) return
+    const { sessionId, expandedMessages, model, workspacePath, permissionMode, effort } = pendingPlan
+    setPendingPlan(null)
+    setPlanPreviewContent('')
+
+    const sess = useAppStore.getState().sessions.find((s) => s.id === sessionId)
+    if (!sess) return
+
+    // Add a system message indicating plan approved
+    const approvedMsg = await el.db.addMessage(sessionId, 'system', '**Plan approved.** Executing...')
+    if (approvedMsg) store.appendMessage(parseMessage(approvedMsg))
+
+    // Start the Pi SDK agent with the expanded messages
+    store.setLoading(true)
+    const streamingId = uuidv4()
+    const streamStartTime = Date.now()
+    let streamTotalChars = 0
+    let streamingMsg = {
+      id: streamingId, sessionId, role: 'assistant' as const,
+      content: '', thinking: undefined as string | undefined, isStreaming: true, createdAt: Date.now(),
+    }
+
+    await sendMessage(
+      model,
+      expandedMessages,
+      (chunk) => {
+        streamingMsg = { ...streamingMsg, content: chunk }
+        streamTotalChars = chunk.length
+        store.upsertMessage(streamingId, streamingMsg)
+      },
+      async (fullText, thinking, usage) => {
+        const duration = Date.now() - streamStartTime
+        const tokenCount = usage?.completionTokens ?? Math.round(fullText.length / 4)
+        const rawA = await el.db.addMessage(sessionId, 'assistant', fullText, { thinking })
+        const aMsg = rawA
+          ? { ...parseMessage(rawA), tokenCount, duration }
+          : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false, tokenCount, duration }
+        store.removeMessage(streamingId)
+        store.appendMessage(aMsg)
+        const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
+        store.updateSession(sessionId, { messageCount: (current?.messageCount ?? 0) + 1 })
+        store.setLoading(false)
+        refreshTree()
+      },
+      async (toolName, toolInput) => {
+        const rawT = await el.db.addMessage(sessionId, 'tool', '', { toolName, toolStatus: 'running', toolInput })
+        if (rawT) store.appendMessage(parseMessage(rawT))
+      },
+      async (toolOutput) => {
+        const runningTool = useAppStore.getState().messages.slice().reverse().find(
+          (m) => m.role === 'tool' && m.toolStatus === 'running'
+        )
+        store.updateRunningTool({ toolStatus: 'done', toolOutput })
+        if (runningTool) {
+          await el.db.updateMessage(runningTool.id, { tool_status: 'done', tool_output: toolOutput })
+        }
+      },
+      (err) => {
+        store.removeMessage(streamingId)
+        store.appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
+        store.setLoading(false)
+      },
+      permissionMode as PermissionMode,
+      onToolPermission,
+      workspacePath,
+      effort,
+      (thinkingChunk) => {
+        streamingMsg = { ...streamingMsg, thinking: thinkingChunk }
+        store.upsertMessage(streamingId, streamingMsg)
+      },
+      'agent' as 'chat' | 'plan' | 'agent',
+    )
+  }, [pendingPlan, sendMessage, refreshTree, onToolPermission, store])
+
+  // ── Plan Preview: cancel ──────────────────────────────────────────────────────
+  const handleCancelPlan = useCallback(async () => {
+    if (!pendingPlan) return
+    // Delete the plan system message (last message, which is the plan)
+    const msgs = useAppStore.getState().messages
+    const planMsg = msgs[msgs.length - 1]
+    if (planMsg?.role === 'system' && planMsg.content.includes('🧠 Plan')) {
+      await el.db.deleteMessage(planMsg.id)
+      store.removeMessage(planMsg.id)
+    }
+    setPendingPlan(null)
+    setPlanPreviewContent('')
+  }, [pendingPlan])
+
   // ── Send message ─────────────────────────────────────────────────────────────
   const handleSend = useCallback(async (text: string, attachments: FileAttachment[]) => {
     const { isLoading, messages, workspacePath } = useAppStore.getState()
@@ -981,6 +1181,66 @@ export default function App(): React.ReactElement {
     }
 
     const expandedMessages = await expandMentions(history, workspacePath)
+
+    // ── Plan Preview: generate plan before agent execution ──
+    if (agentMode === 'agent' && store.settings.planPreviewEnabled && !pendingPlan) {
+      store.setLoading(true)
+
+      // Generate plan via chat completion
+      const planMessages = expandedMessages.map((m) => ({
+        role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      }))
+      const planSystemPrompt = 'You are about to execute a task. Before executing, produce a focused plan covering:\n\n1. What you will do (3-7 concise bullet points)\n2. Which files will be created, modified, or read\n\nFormat: concise markdown. Do NOT write code — only describe what you will do.'
+
+      try {
+        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [
+              { role: 'system', content: planSystemPrompt },
+              ...planMessages.slice(-10),
+            ],
+            stream: false,
+          }),
+        })
+
+        if (response.ok) {
+          const json = await response.json()
+          const planContent = json.choices?.[0]?.message?.content ?? 'Plan could not be generated.'
+
+          // Save plan as a system message
+          const planContentFormatted = `**🧠 Plan**\n\n${planContent}\n\n*Review the plan above, then click "Execute this plan" to proceed or "Cancel" to stop.*`
+          const planRaw = await el.db.addMessage(sess.id, 'system', planContentFormatted)
+          if (planRaw) store.appendMessage(parseMessage(planRaw))
+
+          // Store pending plan state
+          setPendingPlan({
+            sessionId: sess.id,
+            expandedMessages,
+            model: modelId,
+            originalText: text,
+            workspacePath,
+            permissionMode: sess.permissionMode ?? store.settings.permissionMode,
+            effort: sess.effort ?? 'medium',
+          })
+          setPlanPreviewContent(planContent)
+          store.setLoading(false)
+          return // Don't start agent yet
+        }
+      } catch {
+        // Plan generation failed — fall through to normal agent execution
+      }
+
+      store.setLoading(false)
+    }
 
     store.setLoading(true)
     const streamingId = uuidv4()
@@ -1452,6 +1712,14 @@ export default function App(): React.ReactElement {
                       <AgentQuestionCard
                         questions={pendingQuestion.questions}
                         onSubmit={handleQuestionSubmit}
+                      />
+                    )}
+                    {/* ── Plan Preview ─────────────────────────────── */}
+                    {planPreviewContent && pendingPlan && (
+                      <PlanPreview
+                        content={planPreviewContent}
+                        onApprove={handleApprovePlan}
+                        onCancel={handleCancelPlan}
                       />
                     )}
                     <InputBar

@@ -86,7 +86,7 @@ export interface ProviderConfig {
 
 export interface AppSettings {
   /** Legacy single-endpoint fields — migrated into providers[0] on load */
-  apiKey: ***
+  apiKey: string
   apiBaseUrl: string
   providers: ProviderConfig[]
   defaultModel: string
@@ -97,6 +97,8 @@ export interface AppSettings {
   /** Per-session guardrails to prevent runaway agents */
   maxSubagentSpawns?: number
   maxWebSearches?: number
+  /** Show a generated plan before executing in agent mode */
+  planPreviewEnabled?: boolean
 }
 
 export interface FileNode {
