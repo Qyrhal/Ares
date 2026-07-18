@@ -255,6 +255,37 @@ describe('store — togglePinSession', () => {
   })
 })
 
+describe('store — toggleArchiveSession', () => {
+  it('archives an unarchived session', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1', archived: false })])
+    useAppStore.getState().toggleArchiveSession('s1')
+    expect(useAppStore.getState().sessions[0].archived).toBe(true)
+  })
+
+  it('unarchives an archived session', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1', archived: true })])
+    useAppStore.getState().toggleArchiveSession('s1')
+    expect(useAppStore.getState().sessions[0].archived).toBe(false)
+  })
+
+  it('leaves other sessions unchanged', () => {
+    useAppStore.getState().setSessions([
+      mkSession({ id: 's1', archived: false }),
+      mkSession({ id: 's2', archived: true }),
+    ])
+    useAppStore.getState().toggleArchiveSession('s1')
+    const sessions = useAppStore.getState().sessions
+    expect(sessions[0].archived).toBe(true)
+    expect(sessions[1].archived).toBe(true)
+  })
+
+  it('no-ops on non-existent id', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' })])
+    expect(() => useAppStore.getState().toggleArchiveSession('nonexistent')).not.toThrow()
+    expect(useAppStore.getState().sessions[0].archived).toBeUndefined()
+  })
+})
+
 // ── Tab actions ───────────────────────────────────────────────────────────────
 
 describe('store — openSessionTab', () => {

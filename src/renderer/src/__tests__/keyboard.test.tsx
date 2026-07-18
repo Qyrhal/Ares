@@ -179,6 +179,34 @@ describe('Keyboard shortcuts — tab number shortcuts', () => {
     await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '2' }) })
     expect(useAppStore.getState().activeTabId).toBe('s2')
   })
+
+  it('⌘3 selects third tab', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'First' },
+        { type: 'session' as const, id: 's2', title: 'Second' },
+        { type: 'session' as const, id: 's3', title: 'Third' },
+      ],
+      activeTabId: 's1',
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '3' }) })
+    expect(useAppStore.getState().activeTabId).toBe('s3')
+  })
+
+  it('⌘9 no-ops when fewer than 9 tabs exist', async () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session' as const, id: 's1', title: 'One' },
+        { type: 'session' as const, id: 's2', title: 'Two' },
+      ],
+      activeTabId: 's1',
+    })
+    await renderApp()
+    await act(async () => { fireEvent.keyDown(window, { metaKey: true, key: '9' }) })
+    // Active tab should not change since there are only 2 tabs
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
 })
 
 describe('Keyboard shortcuts — Escape abort', () => {
