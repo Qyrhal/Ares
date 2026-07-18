@@ -149,6 +149,16 @@ const piApi = {
     ipcRenderer.on('pi:agent-status', listener)
     return () => ipcRenderer.off('pi:agent-status', listener)
   },
+  onMcpAutoBackground: (cb: (toolName: string, params: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, toolName: string, params: string): void => cb(toolName, params)
+    ipcRenderer.on('pi:mcp-auto-background', listener)
+    return () => ipcRenderer.off('pi:mcp-auto-background', listener)
+  },
+  onMcpToolBackgroundResult: (cb: (toolName: string, output: string) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, toolName: string, output: string): void => cb(toolName, output)
+    ipcRenderer.on('pi:mcp-tool-background-result', listener)
+    return () => ipcRenderer.off('pi:mcp-tool-background-result', listener)
+  },
   onSessionComplete: (cb: (sessionId: string, title: string, summary: string, childIds: string[]) => void): (() => void) => {
     const listener = (_e: IpcRendererEvent, sessionId: string, title: string, summary: string, childIds: string[]): void =>
       cb(sessionId, title, summary, childIds)

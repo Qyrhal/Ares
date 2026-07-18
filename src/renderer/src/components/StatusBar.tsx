@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { History, FolderOpen, Cpu, Plug, PlugZap } from 'lucide-react'
+import { History, FolderOpen, Cpu, Plug, PlugZap, Loader2 } from 'lucide-react'
 import { Checkpoint } from '@/types'
 import { ModelHoverCard } from './ModelHoverCard'
 import { cn } from '@/lib/utils'
@@ -25,6 +25,7 @@ interface StatusBarProps {
 export function StatusBar({ workspacePath, currentModel, sessionCount, className }: StatusBarProps): React.ReactElement {
   const [cpCount, setCpCount] = useState(0)
   const [mcpStatus, setMcpStatus] = useState<McpStatus[]>([])
+  const [mcpBgTools, setMcpBgTools] = useState<string[]>([])
 
   useEffect(() => {
     if (!workspacePath) { setCpCount(0); return }
@@ -43,6 +44,17 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, className
     poll()
     const id = setInterval(poll, 10_000)
     return () => clearInterval(id)
+  }, [])
+
+  // Listen for MCP auto-background events
+  useEffect(() => {
+    const unsubStart = el.pi.onMcpAutoBackground((toolName) => {
+      setMcpBgTools((prev) => prev.includes(toolName) ? prev : [...prev, toolName])
+    })
+    const unsubEnd = el.pi.onMcpToolBackgroundResult((toolName) => {
+      setMcpBgTools((prev) => prev.filter((t) => t !== toolName))
+    })
+    return () => { unsubStart(); unsubEnd() }
   }, [])
 
   const mcpConnected = mcpStatus.filter((s) => s.connected).length
@@ -79,6 +91,14 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, className
         >
           {mcpConnected === mcpTotal ? <PlugZap className="size-3" /> : <Plug className="size-3" />}
           {mcpConnected}/{mcpTotal}
+        </span>
+      )}
+
+      {/* MCP background indicator */}
+      {mcpBgTools.length > 0 && (
+        <span className="flex items-center gap-1 shrink-0 text-blue-400 animate-pulse" title={`MCP tool(s) running in background: ${mcpBgTools.join(', ')}`}>
+          <Loader2 className="size-3 animate-spin" />
+          bg
         </span>
       )}
 
