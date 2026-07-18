@@ -27,6 +27,7 @@ import { applyTheme, applyColorMode } from '@/lib/theme'
 import { needsCompaction, compactConversation } from '@/lib/context'
 import { hasProvider, displayModel } from '@/lib/providers'
 import { SideChatInput } from '@/components/SideChatInput'
+import { PlanPreview } from '@/components/PlanPreview'
 import { cn } from '@/lib/utils'
 import { Toaster } from '@/components/ui/toaster'
 import { toast } from 'sonner'
@@ -65,6 +66,18 @@ export default function App(): React.ReactElement {
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
 
   const paletteCommands = React.useMemo(() => usePaletteCommands(store), [store])
+
+  // ── Plan preview ──────────────────────────────────────────────────
+  const [pendingPlan, setPendingPlan] = useState<{
+    sessionId: string
+    expandedMessages: Message[]
+    model: string
+    originalText: string
+    workspacePath: string | null
+    permissionMode: PermissionMode
+    effort: string
+  } | null>(null)
+  const [planPreviewContent, setPlanPreviewContent] = useState('')
 
   // ── Agent question prompt ───────────────────────────────────────────────────
   const [pendingQuestion, setPendingQuestion] = useState<{
@@ -933,6 +946,96 @@ export default function App(): React.ReactElement {
     useAppStore.getState().setLoading(false)
   }, [])
 
+  // ── Plan Preview: approve ─────────────────────────────────────────────────────
+  const handleApprovePlan = useCallback(async () => {
+    if (!pendingPlan) return
+    const { sessionId, expandedMessages, model, workspacePath, permissionMode, effort } = pendingPlan
+    setPendingPlan(null)
+    setPlanPreviewContent('')
+
+    const sess = useAppStore.getState().sessions.find((s) => s.id === sessionId)
+    if (!sess) return
+
+    // Add a system message indicating plan approved
+    const approvedMsg = await el.db.addMessage(sessionId, 'system', '**Plan approved.** Executing...')
+    if (approvedMsg) store.appendMessage(parseMessage(approvedMsg))
+
+    // Start the Pi SDK agent with the expanded messages
+    store.setLoading(true)
+    const streamingId = uuidv4()
+    const streamStartTime = Date.now()
+    let streamTotalChars = 0
+    let streamingMsg = {
+      id: streamingId, sessionId, role: 'assistant' as const,
+      content: '', thinking: undefined as string | undefined, isStreaming: true, createdAt: Date.now(),
+    }
+
+    await sendMessage(
+      model,
+      expandedMessages,
+      (chunk) => {
+        streamingMsg = { ...streamingMsg, content: chunk }
+        streamTotalChars = chunk.length
+        store.upsertMessage(streamingId, streamingMsg)
+      },
+      async (fullText, thinking, usage) => {
+        const duration = Date.now() - streamStartTime
+        const tokenCount = usage?.completionTokens ?? Math.round(fullText.length / 4)
+        const rawA = await el.db.addMessage(sessionId, 'assistant', fullText, { thinking })
+        const aMsg = rawA
+          ? { ...parseMessage(rawA), tokenCount, duration }
+          : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false, tokenCount, duration }
+        store.removeMessage(streamingId)
+        store.appendMessage(aMsg)
+        const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
+        store.updateSession(sessionId, { messageCount: (current?.messageCount ?? 0) + 1 })
+        store.setLoading(false)
+        refreshTree()
+      },
+      async (toolName, toolInput) => {
+        const rawT = await el.db.addMessage(sessionId, 'tool', '', { toolName, toolStatus: 'running', toolInput })
+        if (rawT) store.appendMessage(parseMessage(rawT))
+      },
+      async (toolOutput) => {
+        const runningTool = useAppStore.getState().messages.slice().reverse().find(
+          (m) => m.role === 'tool' && m.toolStatus === 'running'
+        )
+        store.updateRunningTool({ toolStatus: 'done', toolOutput })
+        if (runningTool) {
+          await el.db.updateMessage(runningTool.id, { tool_status: 'done', tool_output: toolOutput })
+        }
+      },
+      (err) => {
+        store.removeMessage(streamingId)
+        store.appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
+        store.setLoading(false)
+      },
+      permissionMode as PermissionMode,
+      onToolPermission,
+      workspacePath,
+      effort,
+      (thinkingChunk) => {
+        streamingMsg = { ...streamingMsg, thinking: thinkingChunk }
+        store.upsertMessage(streamingId, streamingMsg)
+      },
+      'agent' as 'chat' | 'plan' | 'agent',
+    )
+  }, [pendingPlan, sendMessage, refreshTree, onToolPermission, store])
+
+  // ── Plan Preview: cancel ──────────────────────────────────────────────────────
+  const handleCancelPlan = useCallback(async () => {
+    if (!pendingPlan) return
+    // Delete the plan system message (last message, which is the plan)
+    const msgs = useAppStore.getState().messages
+    const planMsg = msgs[msgs.length - 1]
+    if (planMsg?.role === 'system' && planMsg.content.includes('🧠 Plan')) {
+      await el.db.deleteMessage(planMsg.id)
+      store.removeMessage(planMsg.id)
+    }
+    setPendingPlan(null)
+    setPlanPreviewContent('')
+  }, [pendingPlan])
+
   // ── Send message ─────────────────────────────────────────────────────────────
   const handleSend = useCallback(async (text: string, attachments: FileAttachment[]) => {
     const { isLoading, messages, workspacePath } = useAppStore.getState()
@@ -981,6 +1084,66 @@ export default function App(): React.ReactElement {
     }
 
     const expandedMessages = await expandMentions(history, workspacePath)
+
+    // ── Plan Preview: generate plan before agent execution ──
+    if (agentMode === 'agent' && store.settings.planPreviewEnabled && !pendingPlan) {
+      store.setLoading(true)
+
+      // Generate plan via chat completion
+      const planMessages = expandedMessages.map((m) => ({
+        role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      }))
+      const planSystemPrompt = 'You are about to execute a task. Before executing, produce a focused plan covering:\n\n1. What you will do (3-7 concise bullet points)\n2. Which files will be created, modified, or read\n\nFormat: concise markdown. Do NOT write code — only describe what you will do.'
+
+      try {
+        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [
+              { role: 'system', content: planSystemPrompt },
+              ...planMessages.slice(-10),
+            ],
+            stream: false,
+          }),
+        })
+
+        if (response.ok) {
+          const json = await response.json()
+          const planContent = json.choices?.[0]?.message?.content ?? 'Plan could not be generated.'
+
+          // Save plan as a system message
+          const planContentFormatted = `**🧠 Plan**\n\n${planContent}\n\n*Review the plan above, then click "Execute this plan" to proceed or "Cancel" to stop.*`
+          const planRaw = await el.db.addMessage(sess.id, 'system', planContentFormatted)
+          if (planRaw) store.appendMessage(parseMessage(planRaw))
+
+          // Store pending plan state
+          setPendingPlan({
+            sessionId: sess.id,
+            expandedMessages,
+            model: modelId,
+            originalText: text,
+            workspacePath,
+            permissionMode: sess.permissionMode ?? store.settings.permissionMode,
+            effort: sess.effort ?? 'medium',
+          })
+          setPlanPreviewContent(planContent)
+          store.setLoading(false)
+          return // Don't start agent yet
+        }
+      } catch {
+        // Plan generation failed — fall through to normal agent execution
+      }
+
+      store.setLoading(false)
+    }
 
     store.setLoading(true)
     const streamingId = uuidv4()
@@ -1452,6 +1615,14 @@ export default function App(): React.ReactElement {
                       <AgentQuestionCard
                         questions={pendingQuestion.questions}
                         onSubmit={handleQuestionSubmit}
+                      />
+                    )}
+                    {/* ── Plan Preview ─────────────────────────────── */}
+                    {planPreviewContent && pendingPlan && (
+                      <PlanPreview
+                        content={planPreviewContent}
+                        onApprove={handleApprovePlan}
+                        onCancel={handleCancelPlan}
                       />
                     )}
                     <InputBar
