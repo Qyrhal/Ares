@@ -1,7 +1,5 @@
 import React from 'react'
 import DOMPurify from 'dompurify'
-import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown } from 'lucide-react'
-import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes, isMermaidCodeBlock, looksLikeJson } from '@/lib/utils'
 import { Message } from '@/types'
 import { AgentDiffView } from './AgentDiffView'
@@ -18,6 +16,7 @@ import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
 import hljs from 'highlight.js'
 import { toast } from 'sonner'
+import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown, ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@/lib/icons'
 
 let mermaidRenderCounter = 0
 

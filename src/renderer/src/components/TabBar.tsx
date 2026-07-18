@@ -1,8 +1,7 @@
 import React from 'react'
-import { FileCode, MessageSquare } from 'lucide-react'
-import { PlusIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, truncate } from '@/lib/utils'
 import { Tab } from '@/types'
+import { FileCode, MessageSquare, PlusIcon, XIcon } from '@/lib/icons'
 
 interface TabBarProps {
   tabs: Tab[]

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react'
-import { FileCode, MessageSquare, FileText, Image, File } from 'lucide-react'
 import type { Tab } from '@/types'
+import { FileCode, MessageSquare, FileText, Image, File } from '@/lib/icons'
 
 interface TabSwitcherProps {
   open: boolean

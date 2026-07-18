@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { CheckIcon, ChevronDownIcon, SearchIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
+import { CheckIcon, ChevronDownIcon, SearchIcon } from '@/lib/icons'
 
 export interface SelectOption {
   value: string

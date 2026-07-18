@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
-import { Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { AgentQuestion } from '@/types'
+import { Send } from '@/lib/icons'
 
 interface AgentQuestionCardProps {
   questions: AgentQuestion[]

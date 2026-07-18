@@ -1,6 +1,6 @@
 import React from 'react'
-import { AlertTriangle, Check, X, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AlertTriangle, Check, X, Zap } from '@/lib/icons'
 
 interface PermissionPromptProps {
   toolName: string

@@ -1,8 +1,7 @@
 import React from 'react'
-import { MessageSquare, SquareTerminal, Plug } from 'lucide-react'
-import { FolderOpenIcon, GitBranchIcon, SettingsIcon } from '@animateicons/react/lucide'
 import { cn } from '@/lib/utils'
 import type { ActivityView } from '@/types'
+import { MessageSquare, SquareTerminal, Sparkles, Plug, History, Zap, Network, FolderOpenIcon, GitBranchIcon, SettingsIcon } from '@/lib/icons'
 
 interface ActivityBarProps {
   activeView: ActivityView

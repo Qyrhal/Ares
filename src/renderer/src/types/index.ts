@@ -288,3 +288,4 @@ export interface TokenUsage {
   tokensPerSecond: number
 }
 
+export type ExtendedActivityView = ActivityView | 'checkpoints'

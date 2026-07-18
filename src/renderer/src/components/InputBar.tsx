@@ -1,6 +1,4 @@
 import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
-import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply, Sun, Moon } from 'lucide-react'
-import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
 import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand, AgentMode } from '@/types'
 import { ProjectPicker } from '@/components/ProjectPicker'
@@ -12,6 +10,7 @@ import { v4 as uuidv4 } from 'uuid'
 import { contextWindow, estimateTokens } from '@/lib/context'
 import { effectiveProviders, makeModelRef, displayModel } from '@/lib/providers'
 import type { ProviderConfig } from '@/types'
+import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply, Sun, Moon, PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@/lib/icons'
 
 type PickerKind = 'builtin' | 'skill' | 'command'
 interface PickerItem {
@@ -95,7 +94,7 @@ function ContextDonut({ used, total }: { used: number; total: number }): React.R
   const [open, setOpen] = React.useState(false)
   const ref = React.useRef<HTMLDivElement>(null)
   const pct = total > 0 ? Math.min(used / total, 1) : 0
-  const r = 7
+  const r = 6
   const circ = 2 * Math.PI * r
   const dash = circ * pct
   const colorClass = pct > 0.8 ? 'text-destructive' : pct > 0.5 ? 'text-amber-400' : 'text-muted-foreground'
@@ -116,14 +115,14 @@ function ContextDonut({ used, total }: { used: number; total: number }): React.R
         onClick={() => setOpen((v) => !v)}
         className={cn('flex items-center justify-center rounded-md p-0.5 transition-colors hover:bg-accent', colorClass)}
       >
-        <svg width="18" height="18" viewBox="0 0 18 18">
-          <circle cx="9" cy="9" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
+        <svg width="16" height="16" viewBox="0 0 16 16">
+          <circle cx="8" cy="8" r={r} fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="2.5" />
           <circle
-            cx="9" cy="9" r={r} fill="none"
+            cx="8" cy="8" r={r} fill="none"
             stroke="currentColor" strokeWidth="2.5"
             strokeDasharray={`${dash} ${circ - dash}`}
             strokeLinecap="round"
-            transform="rotate(-90 9 9)"
+            transform="rotate(-90 8 8)"
           />
         </svg>
       </button>
@@ -440,6 +439,25 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
     setShowModelPicker(false)
   }, [openMentions, openCommands, closeAll, closeMentions, closeCommands])
 
+  // ponytail: large pastes skip the scrollHeight reflow (it's going to hit the
+  // 240px cap anyway) since measuring it forces a full layout of the pasted text.
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const pasted = e.clipboardData.getData('text/plain')
+    if (pasted.length <= 2000) return
+
+    e.preventDefault()
+    const ta = e.currentTarget
+    const start = ta.selectionStart
+    const end = ta.selectionEnd
+    const next = text.slice(0, start) + pasted + text.slice(end)
+    setText(next)
+    ta.style.height = '240px'
+    requestAnimationFrame(() => {
+      const pos = start + pasted.length
+      ta.setSelectionRange(pos, pos)
+    })
+  }, [text])
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     if (showMentions) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1)); return }
@@ -635,6 +653,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             ref={textareaRef}
             value={text}
             onChange={handleChange}
+            onPaste={handlePaste}
             onKeyDown={handleKeyDown}
             disabled={disabled}
             placeholder={placeholder ?? 'Ask anything… (@ to mention files, / for commands)'}

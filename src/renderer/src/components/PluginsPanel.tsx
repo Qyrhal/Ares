@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, Plug, Plus, Trash2 } from 'lucide-react'
 import { AgentConfig, McpProfile, McpServer, PiExtension } from '@/types'
 import { cn } from '@/lib/utils'
 import { v4 as uuidv4 } from 'uuid'
+import { CheckCircle2, ChevronDown, ChevronRight, Plug, Plus, Trash2 } from '@/lib/icons'
 
 const el = window.electron
 

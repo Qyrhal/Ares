@@ -1,6 +1,4 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { AlertCircle, CheckCircle2, Loader2, Moon, Plus, RefreshCw, Sun, Trash2 } from 'lucide-react'
-import { EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@animateicons/react/lucide'
 import { AppSettings, ProviderConfig } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Select, SelectOption } from '@/components/ui/select'
@@ -8,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { THEMES, applyTheme, applyColorMode, DEFAULT_THEME_ID } from '@/lib/theme'
 import { makeModelRef } from '@/lib/providers'
 import { ARES_PROMPT } from '../../../shared/ares-prompt'
+import { AlertCircle, CheckCircle2, Loader2, Moon, Plus, RefreshCw, Sun, Trash2, EyeIcon, EyeOffIcon, WifiIcon, WifiOffIcon } from '@/lib/icons'
 
 const el = window.electron
 
@@ -65,7 +64,7 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
     if (form.providers.length === 0 && form.apiBaseUrl.trim()) {
       setForm((prev) => prev.providers.length > 0 ? prev : {
         ...prev,
-        providers: [{ id: 'default', label: 'Default', baseUrl: prev.apiBaseUrl, apiKey: prev.apiKey }],
+        providers: [{ id: 'default', label: 'Default', baseUrl: prev.apiBaseUrl, apiKey: *** }],
       })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

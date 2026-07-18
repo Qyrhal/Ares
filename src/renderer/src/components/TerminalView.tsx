@@ -2,10 +2,10 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { SearchAddon } from '@xterm/addon-search'
+import { WebglAddon } from '@xterm/addon-webgl'
 import '@xterm/xterm/css/xterm.css'
-import { PlusIcon, XIcon, ChevronDownIcon, SearchIcon } from '@animateicons/react/lucide'
-import { GripHorizontal, ArrowUp, ArrowDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { PlusIcon, XIcon, ChevronDownIcon, GripHorizontal, SearchIcon, ArrowUp, ArrowDown } from '@/lib/icons'
 
 interface TerminalTab {
   id: string
@@ -87,7 +87,6 @@ function TerminalInstance({
 
     term.open(el)
     term.focus()
-
     const handleKeyDown = (e: KeyboardEvent): void => {
       if ((e.key === 'f' || e.key === 'F') && (e.metaKey || e.ctrlKey)) {
         e.preventDefault()
@@ -101,6 +100,9 @@ function TerminalInstance({
       }
     }
     el.addEventListener('keydown', handleKeyDown)
+    const webglAddon = new WebglAddon()
+    webglAddon.onContextLoss(() => webglAddon.dispose()) // fall back to DOM renderer if GPU context is lost
+    term.loadAddon(webglAddon)
 
     const doFit = (): void => { try { fitAddon.fit() } catch { /* noop */ } }
     requestAnimationFrame(doFit)
