@@ -441,6 +441,33 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </Field>
         </Section>
 
+        {/* ── Agent ───────────────────────────────────────────── */}
+        <Section title="Agent" description="Configure agent behaviour and preview behaviour.">
+          <Field label="Plan preview" hint="Before executing in agent mode, generate a plan preview for you to review and approve first.">
+            <button
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, planPreviewEnabled: !prev.planPreviewEnabled }))}
+              className={cn(
+                'relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
+                form.planPreviewEnabled ?? true
+                  ? 'border-primary/50 bg-primary/20'
+                  : 'border-border bg-muted/30'
+              )}
+              role="switch"
+              aria-checked={form.planPreviewEnabled ?? true}
+            >
+              <span
+                className={cn(
+                  'inline-block size-4 rounded-full shadow-sm transition-transform',
+                  form.planPreviewEnabled ?? true
+                    ? 'translate-x-[18px] bg-primary'
+                    : 'translate-x-[2px] bg-muted-foreground'
+                )}
+              />
+            </button>
+          </Field>
+        </Section>
+
         {/* ── Guardrails ───────────────────────────────────────────── */}
         <Section title="Guardrails" description="Per-session limits to prevent runaway agents. The budget resets when a new Pi session starts (e.g., after restart or session switch). Adjust limits or disable them by setting to 0.">
           <Field label="Max sub-agent spawns per session">

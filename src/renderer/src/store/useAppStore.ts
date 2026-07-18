@@ -10,6 +10,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   colorMode: 'dark',
   systemPrompt: '',
   permissionMode: 'ask',
+  planPreviewEnabled: true,
 }
 
 function tabKey(t: Tab): string {
