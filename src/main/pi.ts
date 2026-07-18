@@ -190,7 +190,7 @@ async function buildResourceLoader(cwd: string) {
   return loader
 }
 
-async function buildMcpTools(): Promise<{ tools: any[]; clients: McpClientType[] }> {
+async function buildMcpTools(win?: BrowserWindow): Promise<{ tools: any[]; clients: McpClientType[] }> {
   const config = getAgentConfig()
   const enabled = config.mcpServers.filter((s) => s.enabled)
   if (enabled.length === 0) {
@@ -227,11 +227,59 @@ async function buildMcpTools(): Promise<{ tools: any[]; clients: McpClientType[]
           description: t.description ?? '',
           parameters: t.inputSchema ?? { type: 'object', properties: {} },
           async execute(_id: string, params: unknown, _signal: unknown) {
-            const result = await client.callTool({ name: t.name, arguments: params as Record<string, unknown> })
-            const text = (result.content as any[])
-              .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
-              .join('\n')
-            return { content: [{ type: 'text', text }], details: result }
+            const settings = getSettings()
+            const thresholdMs = settings.mcpAutoBackgroundMs ?? 120_000
+
+            // No threshold or zero means never background
+            if (thresholdMs <= 0) {
+              const result = await client.callTool({ name: t.name, arguments: params as Record<string, unknown> })
+              const text = (result.content as any[])
+                .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
+                .join('\n')
+              return { content: [{ type: 'text', text }], details: result }
+            }
+
+            // Start the tool call — keep a reference to the original promise so we
+            // can continue waiting on it in background if the threshold fires first.
+            const toolPromise = client.callTool({ name: t.name, arguments: params as Record<string, unknown> })
+
+            // Race: first to resolve wins
+            const winner = await Promise.race([
+              toolPromise.then((r) => ({ source: 'tool' as const, result: r })),
+              new Promise<{ source: 'background'; result: null }>((resolve) => {
+                setTimeout(() => resolve({ source: 'background', result: null }), thresholdMs)
+              }),
+            ])
+
+            if (winner.source === 'tool') {
+              // Completed within threshold
+              const text = (winner.result.content as any[])
+                .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
+                .join('\n')
+              return { content: [{ type: 'text', text }], details: winner.result }
+            }
+
+            // Threshold exceeded — move to background, return placeholder
+            const [bw] = BrowserWindow.getAllWindows()
+            if (bw && !bw.isDestroyed()) {
+              bw.webContents.send('pi:mcp-auto-background', t.name, JSON.stringify(params))
+            }
+
+            // Continue waiting on the ORIGINAL promise in background
+            toolPromise
+              .then((actualResult) => {
+                const text = (actualResult.content as any[])
+                  .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
+                  .join('\n')
+                if (bw && !bw.isDestroyed()) {
+                  bw.webContents.send('pi:mcp-tool-background-result', t.name, text)
+                }
+              })
+              .catch((bgErr) => {
+                console.error(`[ares] MCP background tool "${t.name}" failed:`, (bgErr as Error).message)
+              })
+
+            return { content: [{ type: 'text', text: `[MCP tool "${t.name}" is running in background]` }], details: null }
           },
         })
       }
@@ -294,7 +342,7 @@ async function getOrCreate(
 
   const [resourceLoader, { tools: mcpTools, clients: mcpClients }] = await Promise.all([
     buildResourceLoader(effectiveCwd),
-    buildMcpTools(),
+    buildMcpTools(win),
   ])
 
   // Restore Pi session from disk if it exists so conversation history survives restarts

@@ -14,6 +14,7 @@ const BASE_SETTINGS: AppSettings = {
   permissionMode: 'ask',
   maxSubagentSpawns: 200,
   maxWebSearches: 200,
+  mcpAutoBackgroundMs: 120000,
 }
 
 beforeEach(() => {
@@ -148,5 +149,43 @@ describe('SettingsPanel — delete all sessions', () => {
     )
     fireEvent.click(screen.getByRole('button', { name: /Delete all/ }))
     await waitFor(() => expect(onDeleteAllSessions).toHaveBeenCalledTimes(1))
+  })
+})
+
+describe('SettingsPanel — MCP auto-background', () => {
+  it('renders the MCP section with default threshold', () => {
+    render(
+      <SettingsPanel settings={BASE_SETTINGS} onSave={vi.fn()} sessionCount={0} onDeleteAllSessions={vi.fn()} />
+    )
+    expect(screen.getByText('MCP Tools')).toBeInTheDocument()
+    expect(screen.getByText('Auto-background timeout')).toBeInTheDocument()
+    const input = screen.getByDisplayValue('120')
+    expect(input).toBeInTheDocument()
+    expect(input).toHaveAttribute('min', '0')
+    expect(input).toHaveAttribute('max', '600')
+  })
+
+  it('persists custom threshold as milliseconds', async () => {
+    const onSave = vi.fn()
+    render(
+      <SettingsPanel settings={BASE_SETTINGS} onSave={onSave} sessionCount={0} onDeleteAllSessions={vi.fn()} />
+    )
+    const input = screen.getByDisplayValue('120')
+    fireEvent.change(input, { target: { value: '300' } })
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ mcpAutoBackgroundMs: 300000 }))
+    })
+  })
+
+  it('sets threshold to 0 (never background) when value is 0', async () => {
+    const onSave = vi.fn()
+    render(
+      <SettingsPanel settings={BASE_SETTINGS} onSave={onSave} sessionCount={0} onDeleteAllSessions={vi.fn()} />
+    )
+    const input = screen.getByDisplayValue('120')
+    fireEvent.change(input, { target: { value: '0' } })
+    await waitFor(() => {
+      expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ mcpAutoBackgroundMs: 0 }))
+    })
   })
 })

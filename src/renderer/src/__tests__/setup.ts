@@ -99,6 +99,8 @@ const electronMock = {
     onAgentSpawned: vi.fn().mockReturnValue(() => {}),
     onAgentStatus: vi.fn().mockReturnValue(() => {}),
     onCompaction: vi.fn().mockReturnValue(() => {}),
+    onMcpAutoBackground: vi.fn().mockReturnValue(() => {}),
+    onMcpToolBackgroundResult: vi.fn().mockReturnValue(() => {}),
     onSessionComplete: vi.fn().mockReturnValue(() => {}),
     sendUserAnswer: vi.fn(),
   },
