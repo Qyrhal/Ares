@@ -24,7 +24,8 @@ import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme, applyColorMode } from '@/lib/theme'
-import { needsCompaction, compactConversation } from '@/lib/context'
+import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
+import { estimateCost } from '@/lib/pricing'
 import { hasProvider, displayModel } from '@/lib/providers'
 import { SideChatInput } from '@/components/SideChatInput'
 import { PlanPreview } from '@/components/PlanPreview'
@@ -505,7 +506,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -638,6 +639,102 @@ export default function App(): React.ReactElement {
           ].filter(Boolean).join('\n')
           const finalMsg = await el.db.addMessage(sess.id, 'system', stats)
           if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+        }
+        break
+      }
+      case 'usage': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const userCount = msgs.filter((m: Message) => m.role === 'user').length
+        const assistantCount = msgs.filter((m: Message) => m.role === 'assistant').length
+        const systemCount = msgs.filter((m: Message) => m.role === 'system').length
+        const toolCount = msgs.filter((m: Message) => m.role === 'tool').length
+
+        const totalTokens = estimateTokens(msgs)
+        const inputTokens = estimateTokens(msgs.filter((m: Message) => m.role === 'user'))
+        const outputTokens = estimateTokens(msgs.filter((m: Message) => m.role === 'assistant'))
+
+        const windowSize = contextWindow(model)
+        const utilization = Math.round((totalTokens / windowSize) * 100)
+
+        const cost = estimateCost(model, inputTokens, outputTokens)
+
+        const durationMs = Date.now() - sess.createdAt
+        const durHours = Math.floor(durationMs / 3600000)
+        const durMinutes = Math.floor((durationMs % 3600000) / 60000)
+        const durationStr = durHours > 0 ? `${durHours}h ${durMinutes}m` : `${durMinutes}m`
+
+        const apiBaseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        if (apiBaseUrl.trim().length > 0) {
+          store.appendMessage({
+            id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+            content: 'Generating session usage summary...', isStreaming: false, createdAt: Date.now(),
+          })
+          try {
+            const prompt = [
+              'You are analyzing token usage and cost for an AI coding assistant session.',
+              '',
+              'Session stats:',
+              `- ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant, ${systemCount} system, ${toolCount} tool)`,
+              `- Model: ${model}`,
+              `- Total tokens: ~${totalTokens}`,
+              `- Input tokens: ~${inputTokens}`,
+              `- Output tokens: ~${outputTokens}`,
+              `- Context window: ${windowSize.toLocaleString()} tokens`,
+              `- Context utilization: ${utilization}%`,
+              `- Estimated cost: $${cost.toFixed(6)}`,
+              `- Session duration: ${durationStr}`,
+              '',
+              'Provide a concise usage summary in a friendly tone. Include the raw stats above formatted nicely.',
+            ].join('\n')
+
+            const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model,
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No usage summary generated.'
+            const finalMsg = await el.db.addMessage(sess.id, 'system', `**Session Usage**\n\n${content}`)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          } catch (err) {
+            const errorMsg = `**Error generating usage summary:** ${(err as Error).message}`
+            const finalMsg = await el.db.addMessage(sess.id, 'system', errorMsg)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          }
+        } else {
+          const stats = [
+            '**Session Usage (offline)**\n',
+            `**Total messages:** ${msgs.length} (${userCount} user, ${assistantCount} assistant, ${systemCount} system, ${toolCount} tool)`,
+            `**Estimated tokens:** ~${totalTokens.toLocaleString()} total (${inputTokens.toLocaleString()} input, ${outputTokens.toLocaleString()} output)`,
+            `**Context window:** ${windowSize.toLocaleString()} tokens`,
+            `**Context utilization:** ${utilization}%`,
+            `**Estimated cost:** $${cost.toFixed(6)}`,
+            `**Session duration:** ${durationStr}`,
+            `**Model:** ${model}`,
+            '\nConfigure an API endpoint to get AI-powered usage analysis.',
+          ].filter(Boolean).join('\n')
+          const msg = await el.db.addMessage(sess.id, 'system', stats)
+          if (msg) store.appendMessage(parseMessage(msg))
         }
         break
       }
