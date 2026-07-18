@@ -80,14 +80,16 @@ PYEOF
 
 echo ""
 echo "--- lsp ---"
-if command -v tsc &>/dev/null; then
+TSC="/home/midhun/Ares/node_modules/.bin/tsc"
+if [ -x "$TSC" ]; then
   D=$(mktemp -d /tmp/lsp-XXXX)
   echo '{"compilerOptions":{"strict":true,"target":"ES2020"}}' > "$D/tsconfig.json"
   echo 'const x: number = 42; export {}' > "$D/good.ts"
   echo 'const x: number = "str"; export {}' > "$D/bad.ts"
   cd "$D"
-  npx -s tsc --noEmit 2>&1 | grep -q 'bad.ts' && ok 'tsc finds errors' || no 'tsc finds errors'
-  npx -s tsc --noEmit 2>&1 | grep -qv 'good.ts' && ok 'tsc skips valid' || ok 'tsc skips valid (may warn on exports)'
+  LSP_OUTPUT=$("$TSC" --noEmit 2>&1) || true
+  echo "$LSP_OUTPUT" | grep -q 'bad.ts' && ok 'tsc finds errors' || no 'tsc finds errors'
+  if echo "$LSP_OUTPUT" | grep -q 'good.ts'; then no 'tsc skips valid (good.ts in errors)'; else ok 'tsc skips valid'; fi
   rm -rf "$D"
   cd /home/midhun/Ares
 else

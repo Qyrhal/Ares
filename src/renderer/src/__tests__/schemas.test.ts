@@ -352,3 +352,106 @@ describe('parseMessage — thinking field', () => {
     expect(m.thinking).toBe('Let me reason about this...')
   })
 })
+
+describe('parseMessage — replyTo field', () => {
+  it('parses JSON-encoded reply_to into replyTo object', () => {
+    const reply = { id: 'm2', content: 'What do you think?', role: 'user' as const }
+    const m = parseMessage({ ...BASE_MESSAGE, reply_to: JSON.stringify(reply) })
+    expect(m.replyTo).toEqual(reply)
+  })
+
+  it('handles assistant role in replyTo', () => {
+    const reply = { id: 'm3', content: 'Here is the code', role: 'assistant' as const }
+    const m = parseMessage({ ...BASE_MESSAGE, reply_to: JSON.stringify(reply) })
+    expect(m.replyTo!.role).toBe('assistant')
+  })
+
+  it('defaults replyTo to undefined when reply_to is absent', () => {
+    const m = parseMessage(BASE_MESSAGE)
+    expect(m.replyTo).toBeUndefined()
+  })
+
+  it('defaults replyTo to undefined when reply_to is null', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, reply_to: null })
+    expect(m.replyTo).toBeUndefined()
+  })
+
+  it('defaults replyTo to undefined when reply_to is empty string', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, reply_to: '' })
+    expect(m.replyTo).toBeUndefined()
+  })
+
+  it('handles replyTo with long content (200+ chars)', () => {
+    const longContent = 'x'.repeat(300)
+    const reply = { id: 'm4', content: longContent, role: 'user' as const }
+    const m = parseMessage({ ...BASE_MESSAGE, reply_to: JSON.stringify(reply) })
+    expect(m.replyTo!.content.length).toBe(300)
+  })
+})
+
+describe('parseMessage — reactions field', () => {
+  it('parses JSON-encoded reactions with up: true', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, reactions: JSON.stringify({ up: true }) })
+    expect(m.reactions).toEqual({ up: true })
+  })
+
+  it('parses JSON-encoded reactions with up: false', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, reactions: JSON.stringify({ up: false }) })
+    expect(m.reactions).toEqual({ up: false })
+  })
+
+  it('parses JSON-encoded reactions with up: null (cleared)', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, reactions: JSON.stringify({ up: null }) })
+    expect(m.reactions).toEqual({ up: null })
+  })
+
+  it('defaults reactions to undefined when reactions is absent', () => {
+    const m = parseMessage(BASE_MESSAGE)
+    expect(m.reactions).toBeUndefined()
+  })
+
+  it('defaults reactions to undefined when reactions is null', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, reactions: null })
+    expect(m.reactions).toBeUndefined()
+  })
+
+  it('defaults reactions to undefined when reactions is empty string', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, reactions: '' })
+    expect(m.reactions).toBeUndefined()
+  })
+})
+
+describe('parseMessage — feedback field', () => {
+  it('parses feedback value "helpful"', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, feedback: 'helpful' })
+    expect(m.feedback).toBe('helpful')
+  })
+
+  it('parses feedback value "not-helpful"', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, feedback: 'not-helpful' })
+    expect(m.feedback).toBe('not-helpful')
+  })
+
+  it('defaults feedback to undefined when absent', () => {
+    const m = parseMessage(BASE_MESSAGE)
+    expect(m.feedback).toBeUndefined()
+  })
+
+  it('defaults feedback to undefined when null', () => {
+    const m = parseMessage({ ...BASE_MESSAGE, feedback: null })
+    expect(m.feedback).toBeUndefined()
+  })
+
+  it('survives round-trip with replyTo + reactions + feedback all set', () => {
+    const raw = {
+      ...BASE_MESSAGE,
+      reply_to: JSON.stringify({ id: 'm2', content: 'Why?', role: 'user' }),
+      reactions: JSON.stringify({ up: true }),
+      feedback: 'helpful',
+    }
+    const m = parseMessage(raw)
+    expect(m.replyTo).toEqual({ id: 'm2', content: 'Why?', role: 'user' })
+    expect(m.reactions).toEqual({ up: true })
+    expect(m.feedback).toBe('helpful')
+  })
+})
