@@ -505,8 +505,42 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'shortcuts': {
+        const shortcutsText = [
+          '**Keyboard Shortcuts**\n',
+          '**General**',
+          '· `Cmd/Ctrl + N` / `Cmd/Ctrl + T` — New session',
+          '· `Cmd/Ctrl + W` — Close current tab',
+          '· `Cmd/Ctrl + Shift + P` — Command palette',
+          '· `Cmd/Ctrl + Shift + O` — Tab switcher',
+          '· `Cmd/Ctrl + P` — Quick file open',
+          '· `Cmd/Ctrl + ,` — Open settings',
+          '· `Cmd/Ctrl + Z` — Undo (restore deleted message)',
+          '',
+          '**Navigation**',
+          '· `Cmd/Ctrl + [` / `]` — Previous / next tab',
+          '· `Cmd/Ctrl + 1–9` — Jump to tab by number',
+          '· `ArrowUp` / `ArrowDown` in empty input — Recall prompt history',
+          '',
+          '**View**',
+          '· `Ctrl + \\`` / `Ctrl + J` — Toggle terminal',
+          '· `Ctrl + Shift + Z` — Toggle zen mode',
+          '',
+          '**In Chat**',
+          '· `Enter` — Send message',
+          '· `Shift + Enter` — New line',
+          '· `Escape` — Cancel agent / stop streaming',
+          '· `Ctrl + C` — Stop agent (when running)',
+          '',
+          '**Search**',
+          '· `Cmd/Ctrl + Shift + F` — Search all agent transcripts',
+        ].join('\n')
+        const msg = await el.db.addMessage(sess.id, 'system', shortcutsText)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
