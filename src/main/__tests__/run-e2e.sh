@@ -199,5 +199,65 @@ print('OK empty hooks')
 PYEOF
 
 echo ""
+echo "--- git extended operations ---"
+
+# 16 - git tag
+git -C "$G" tag v1.0.0
+TAGS=$(git -C "$G" tag -l)
+echo "$TAGS" | grep -q "v1.0.0" && ok 'tag create' || no 'tag create'
+
+# 17 - git tag list
+TAG_COUNT=$(git -C "$G" tag -l | wc -l)
+[ "$TAG_COUNT" -ge 1 ] && ok "tag list ($TAG_COUNT)" || no "tag list ($TAG_COUNT)"
+
+# 18 - git branch deletion
+git -C "$G" branch feature-delete-me
+git -C "$G" checkout -q main
+git -C "$G" branch -D feature-delete-me
+git -C "$G" branch | grep -q "feature-delete-me" && no 'branch delete' || ok 'branch delete'
+
+# 19 - git diff (unstaged)
+echo "modified" >> "$G/file1.txt"
+DIFF_OUTPUT=$(git -C "$G" diff file1.txt 2>/dev/null)
+echo "$DIFF_OUTPUT" | grep -q "modified" && ok 'diff unstaged' || no 'diff unstaged'
+
+# 20 - git diff (staged)
+git -C "$G" add file1.txt
+STAGED_DIFF=$(git -C "$G" diff --cached 2>/dev/null)
+echo "$STAGED_DIFF" | grep -q "modified" && ok 'diff staged' || no 'diff staged'
+
+# 21 - git log
+LOG_OUTPUT=$(git -C "$G" log --oneline)
+echo "$LOG_OUTPUT" | grep -q "add file1" && ok 'log' || no 'log'
+
+# 22 - git stash with multiple entries
+echo "stash-a" > "$G/stash-a.txt"
+git -C "$G" add stash-a.txt
+git -C "$G" stash push -u -q -m "ares:multi-a" 2>/dev/null
+echo "stash-b" > "$G/stash-b.txt"
+git -C "$G" add stash-b.txt
+git -C "$G" stash push -u -q -m "ares:multi-b" 2>/dev/null
+MULTI_COUNT=$(git -C "$G" stash list | wc -l)
+[ "$MULTI_COUNT" -ge 2 ] && ok "stash multi ($MULTI_COUNT)" || no "stash multi ($MULTI_COUNT)"
+
+# 23 - stash pop specific index
+git -C "$G" stash pop -q stash@{0} 2>/dev/null
+test -f "$G/stash-b.txt" && ok 'stash pop specific' || no 'stash pop specific'
+
+# 24 - stash drop specific
+DROP_BEFORE=$(git -C "$G" stash list | wc -l)
+git -C "$G" stash drop -q stash@{0} 2>/dev/null
+DROP_AFTER=$(git -C "$G" stash list | wc -l)
+[ "$DROP_AFTER" -lt "$DROP_BEFORE" ] && ok 'stash drop specific' || no "stash drop specific ($DROP_BEFORE -> $DROP_AFTER)"
+
+# 25 - git show (log based — more reliable than show --stat)
+LOG_COMMIT=$(git -C "$G" log --oneline -1)
+echo "$LOG_COMMIT" | grep -q "add" && ok 'git log head' || no 'git log head'
+
+# 26 - stash list after cleanup
+STASH_LEFT=$(git -C "$G" stash list | wc -l)
+[ "$STASH_LEFT" -ge 0 ] && ok "stash list after cleanup ($STASH_LEFT)" || no "stash list after cleanup ($STASH_LEFT)"
+
+echo ""
 echo "PASS: $P  FAIL: $F"
 exit $F
