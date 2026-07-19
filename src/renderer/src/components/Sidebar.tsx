@@ -1,7 +1,7 @@
 import React, { Suspense, useState, useCallback, useRef, useEffect } from 'react'
 import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock, ChevronDown, ChevronRight, Folder, Plus, Pencil, Trash2, Archive } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
-import { cn, timeAgo, truncate } from '@/lib/utils'
+import { cn, timeAgo, truncate, formatDuration } from '@/lib/utils'
 import { Session, SessionGroup, FileNode, ActivityView } from '@/types'
 import { useAppStore } from '@/store/useAppStore'
 import { FileTree, FileTreeProps } from './FileTree'
@@ -334,7 +334,7 @@ function SessionsPane({
           )}
           {s.agentStatus === 'done' && <span className="text-green-500">done</span>}
           {s.agentStatus === 'error' && <span className="text-destructive">error</span>}
-          <span className="truncate">{timeAgo(s.updatedAt)} · {s.messageCount ?? 0} msg</span>
+          <span className="truncate">{timeAgo(s.updatedAt)} · {formatDuration(s.createdAt, s.updatedAt)} · {s.messageCount ?? 0} msg</span>
         </p>
       </div>
       {(hoveredId === s.id || activeSessionId === s.id) && (
