@@ -1510,6 +1510,7 @@ export default function App(): React.ReactElement {
 
     store.setSideChatLoading(true)
     const streamingId = uuidv4()
+    const streamStartTime = Date.now()
     let streamingMsg: Message = {
       id: streamingId, sessionId: sideChatSessionId, role: 'assistant',
       content: '', isStreaming: true, createdAt: Date.now(),
