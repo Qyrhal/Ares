@@ -2,6 +2,7 @@ import React, { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { File, FileText, Image, FileCode, Search, Shield, Zap, ChevronDown, Sparkles, Plug, Square, Reply, Sun, Moon } from 'lucide-react'
 import { PaperclipIcon, SendIcon, XIcon, TerminalIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes } from '@/lib/utils'
+import { useAppStore } from '@/store/useAppStore'
 import { FileAttachment, FileNode, Message, PermissionMode, PiSkill, SlashCommand, AgentMode } from '@/types'
 import { ProjectPicker } from '@/components/ProjectPicker'
 import {
@@ -165,6 +166,10 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
+
+  const addPromptToHistory = useAppStore((s) => s.addPromptToHistory)
+  const navigatePromptHistory = useAppStore((s) => s.navigatePromptHistory)
+  const resetPromptHistoryIdx = useAppStore((s) => s.resetPromptHistoryIdx)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -405,6 +410,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value
     setText(val)
+    resetPromptHistoryIdx()
     const ta = e.target
     ta.style.height = 'auto'
     ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`
@@ -440,9 +446,28 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
     closeAll()
     setShowModelPicker(false)
-  }, [openMentions, openCommands, closeAll, closeMentions, closeCommands])
+  }, [openMentions, openCommands, closeAll, closeMentions, closeCommands, resetPromptHistoryIdx])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
+    // ── Prompt history navigation (when input is empty and no pickers open) ──
+    if ((e.key === 'ArrowUp' || e.key === 'ArrowDown') && !showMentions && !showCommands && !showModelPicker) {
+      const ta = textareaRef.current
+      if (ta && ta.selectionStart === 0 && ta.selectionEnd === 0 && !text.trim()) {
+        e.preventDefault()
+        const recalled = navigatePromptHistory(e.key === 'ArrowUp' ? 'up' : 'down')
+        if (recalled !== null) {
+          setText(recalled)
+          requestAnimationFrame(() => {
+            if (textareaRef.current) {
+              textareaRef.current.style.height = 'auto'
+              textareaRef.current.style.height = textareaRef.current.scrollHeight + 'px'
+            }
+          })
+        }
+        return
+      }
+    }
+
     if (showMentions) {
       if (e.key === 'ArrowDown') { e.preventDefault(); setHighlightIdx((prev) => Math.min(prev + 1, filtered.length - 1)); return }
       if (e.key === 'ArrowUp') { e.preventDefault(); setHighlightIdx((prev) => Math.max(prev - 1, 0)); return }
@@ -485,6 +510,8 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       if (textareaRef.current) textareaRef.current.style.height = 'auto'
     }
 
+    addPromptToHistory(text)
+
     if (trimmed.startsWith('/')) {
       const spaceIdx = trimmed.indexOf(' ')
       const cmdName = (spaceIdx === -1 ? trimmed.slice(1) : trimmed.slice(1, spaceIdx)).toLowerCase()
@@ -509,7 +536,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
 
     onSend(finalText, attachments, replyTo ?? undefined)
     reset()
-  }, [text, attachments, skillAttachments, onSend, onCommand, closeAll, allPickerItems, replyTo])
+  }, [text, attachments, skillAttachments, onSend, onCommand, closeAll, allPickerItems, replyTo, addPromptToHistory])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>): void => {
     const files = Array.from(e.target.files ?? [])
