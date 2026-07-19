@@ -506,7 +506,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1020,6 +1020,101 @@ export default function App(): React.ReactElement {
           const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
           if (msg) store.appendMessage(parseMessage(msg))
         }
+        break
+      }
+      case 'changes': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Workspace Changes**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          try {
+            const status = await el.git.status(workspacePath)
+            if (!status.hasRepo) {
+              lines.push('Not a git repository (or no git history).')
+            } else {
+              lines.push(`**Branch:** \`${status.branch || '(detached)'}\``)
+              if (status.upstream) {
+                lines.push(`**Remote:** \`${status.upstream}\``)
+                if (status.ahead > 0 || status.behind > 0) {
+                  lines.push(`**Sync:** ${status.ahead} ahead · ${status.behind} behind`)
+                }
+              }
+              lines.push('')
+              if (status.staged.length > 0) {
+                lines.push(`**Staged** (${status.staged.length} files)`)
+                for (const f of status.staged) {
+                  lines.push(`  \`${f.path}\` — ${f.status}`)
+                }
+                lines.push('')
+              }
+              if (status.unstaged.length > 0) {
+                lines.push(`**Unstaged changes** (${status.unstaged.length} files)`)
+                for (const f of status.unstaged) {
+                  lines.push(`  \`${f.path}\` — ${f.status}`)
+                }
+                lines.push('')
+              }
+              if (status.untracked.length > 0) {
+                lines.push(`**Untracked** (${status.untracked.length} files)`)
+                for (const f of status.untracked) {
+                  lines.push(`  \`${f.path}\``)
+                }
+              }
+              if (status.staged.length === 0 && status.unstaged.length === 0 && status.untracked.length === 0) {
+                lines.push('Working tree clean — no changes.')
+              }
+            }
+          } catch (err) {
+            lines.push(`**Error:** ${(err as Error).message}`)
+          }
+        }
+        const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'export': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to export.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const exportLines: string[] = []
+        exportLines.push(`# ${sess.title || 'Untitled Session'}`)
+        exportLines.push('')
+        exportLines.push(`*Exported ${new Date().toISOString().slice(0, 10)} · ${msgs.length} messages · Model: ${sess.model || store.settings.defaultModel || 'default'}*`)
+        exportLines.push('')
+        exportLines.push('---')
+        exportLines.push('')
+
+        for (const m of msgs) {
+          const role = m.role === 'assistant' ? '**Assistant**' : m.role === 'user' ? '**User**' : m.role === 'system' ? '*System*' : `*${m.role}*`
+          exportLines.push(`### ${role}`)
+          exportLines.push('')
+          exportLines.push(m.content)
+          if (m.toolName) {
+            exportLines.push('')
+            exportLines.push(`*Tool: \`${m.toolName}\`*`)
+          }
+          exportLines.push('')
+          exportLines.push('---')
+          exportLines.push('')
+        }
+
+        const md = exportLines.join('\n')
+        const blob = new Blob([md], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${(sess.title || 'session').replace(/[^a-zA-Z0-9]/g, '-').slice(0, 60)}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+
+        const msg = await el.db.addMessage(sess.id, 'system', `**Exported** ${msgs.length} messages as Markdown (${md.length.toLocaleString()} characters).`)
+        if (msg) store.appendMessage(parseMessage(msg))
         break
       }
     }
