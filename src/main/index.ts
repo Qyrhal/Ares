@@ -310,31 +310,31 @@ function registerIpcHandlers(): void {
   })
 
   // Git
-  ipcMain.handle('git:status',         (_, cwd: string) => getStatus(cwd))
-  ipcMain.handle('git:stageFile',      (_, cwd: string, p: string) => stageFile(cwd, p))
-  ipcMain.handle('git:unstageFile',    (_, cwd: string, p: string) => unstageFile(cwd, p))
-  ipcMain.handle('git:stageAll',       (_, cwd: string) => stageAll(cwd))
-  ipcMain.handle('git:unstageAll',     (_, cwd: string) => unstageAll(cwd))
-  ipcMain.handle('git:discardFile',    (_, cwd: string, p: string) => discardFile(cwd, p))
-  ipcMain.handle('git:commit',         (_, cwd: string, msg: string) => commit(cwd, msg))
-  ipcMain.handle('git:push',           (_, cwd: string) => push(cwd))
-  ipcMain.handle('git:pull',           (_, cwd: string) => pull(cwd))
-  ipcMain.handle('git:branches',       (_, cwd: string) => getBranches(cwd))
-  ipcMain.handle('git:checkout',       (_, cwd: string, branch: string) => checkoutBranch(cwd, branch))
-  ipcMain.handle('git:createBranch',   (_, cwd: string, branch: string) => createBranch(cwd, branch))
-  ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => getFileDiff(cwd, p, staged))
-  ipcMain.handle('git:log',            (_, cwd: string, limit?: number) => getLog(cwd, limit))
-  ipcMain.handle('git:init',           (_, cwd: string) => initRepo(cwd))
+  ipcMain.handle('git:status',         (_, cwd: string) => { validatePath(cwd); return getStatus(cwd) })
+  ipcMain.handle('git:stageFile',      (_, cwd: string, p: string) => { validatePath(cwd); validatePath(p); return stageFile(cwd, p) })
+  ipcMain.handle('git:unstageFile',    (_, cwd: string, p: string) => { validatePath(cwd); validatePath(p); return unstageFile(cwd, p) })
+  ipcMain.handle('git:stageAll',       (_, cwd: string) => { validatePath(cwd); return stageAll(cwd) })
+  ipcMain.handle('git:unstageAll',     (_, cwd: string) => { validatePath(cwd); return unstageAll(cwd) })
+  ipcMain.handle('git:discardFile',    (_, cwd: string, p: string) => { validatePath(cwd); validatePath(p); return discardFile(cwd, p) })
+  ipcMain.handle('git:commit',         (_, cwd: string, msg: string) => { validatePath(cwd); return commit(cwd, msg) })
+  ipcMain.handle('git:push',           (_, cwd: string) => { validatePath(cwd); return push(cwd) })
+  ipcMain.handle('git:pull',           (_, cwd: string) => { validatePath(cwd); return pull(cwd) })
+  ipcMain.handle('git:branches',       (_, cwd: string) => { validatePath(cwd); return getBranches(cwd) })
+  ipcMain.handle('git:checkout',       (_, cwd: string, branch: string) => { validatePath(cwd); return checkoutBranch(cwd, branch) })
+  ipcMain.handle('git:createBranch',   (_, cwd: string, branch: string) => { validatePath(cwd); return createBranch(cwd, branch) })
+  ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => { validatePath(cwd); validatePath(p); return getFileDiff(cwd, p, staged) })
+  ipcMain.handle('git:log',            (_, cwd: string, limit?: number) => { validatePath(cwd); return getLog(cwd, limit) })
+  ipcMain.handle('git:init',           (_, cwd: string) => { validatePath(cwd); return initRepo(cwd) })
 
   // Checkpoints — git stash-backed undo snapshots (inspired by Claude Code)
-  ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => createCheckpoint(cwd, msg))
-  ipcMain.handle('checkpoint:list',    (_, cwd: string) => listCheckpoints(cwd))
-  ipcMain.handle('checkpoint:restore', (_, cwd: string, idx: number) => restoreCheckpoint(cwd, idx))
-  ipcMain.handle('checkpoint:drop',    (_, cwd: string, idx: number) => dropCheckpoint(cwd, idx))
-  ipcMain.handle('checkpoint:diff',    (_, cwd: string, idx: number) => diffCheckpoint(cwd, idx))
+  ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => { validatePath(cwd); return createCheckpoint(cwd, msg) })
+  ipcMain.handle('checkpoint:list',    (_, cwd: string) => { validatePath(cwd); return listCheckpoints(cwd) })
+  ipcMain.handle('checkpoint:restore', (_, cwd: string, idx: number) => { validatePath(cwd); return restoreCheckpoint(cwd, idx) })
+  ipcMain.handle('checkpoint:drop',    (_, cwd: string, idx: number) => { validatePath(cwd); return dropCheckpoint(cwd, idx) })
+  ipcMain.handle('checkpoint:diff',    (_, cwd: string, idx: number) => { validatePath(cwd); return diffCheckpoint(cwd, idx) })
 
   // LSP — language server diagnostics (inspired by OpenCode + Claude Code)
-  ipcMain.handle('lsp:diagnostics', async (_, filePath: string) => getDiagnostics(filePath))
+  ipcMain.handle('lsp:diagnostics', async (_, filePath: string) => { validatePath(filePath); return getDiagnostics(filePath) })
   ipcMain.handle('lsp:hasSupport', () => hasLspSupport())
 
   // Hooks — lifecycle events (inspired by Claude Code)
@@ -428,6 +428,7 @@ function registerIpcHandlers(): void {
 
   // Terminal
   ipcMain.handle('terminal:create', (_, cwd: string) => {
+    try { validatePath(cwd) } catch (err) { return '' }
     const [win] = BrowserWindow.getAllWindows()
     if (!win) return ''
     const id = `term-${nextTerminalId++}`
@@ -462,6 +463,7 @@ function registerIpcHandlers(): void {
 
   // Pi agent
   ipcMain.on('pi:send', (event, reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: string, cwd: string | null) => {
+    if (cwd) { try { validatePath(cwd) } catch { return } }
     const [win] = BrowserWindow.getAllWindows()
     if (!win) return
     handlePiSend(win, reqId, sessionId, message, model, apiBaseUrl, apiKey, cwd).catch((err) => {
