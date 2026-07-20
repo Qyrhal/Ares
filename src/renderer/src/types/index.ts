@@ -58,6 +58,7 @@ export interface Session {
   agentStatus?: AgentStatus
   isSideChat?: boolean
   group?: string
+  notes?: string
 }
 
 export interface SessionGroup {

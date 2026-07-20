@@ -326,6 +326,11 @@ function SessionsPane({
             {truncate(s.title, isSubAgent ? 26 : 32)}
           </p>
         )}
+        {s.notes && (
+          <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground/50 italic" title={s.notes}>
+            📝 {truncate(s.notes, 40)}
+          </p>
+        )}
         <p className="mt-0.5 flex items-center gap-1 text-[10px] leading-tight text-muted-foreground/60 whitespace-nowrap">
           {s.agentStatus === 'running' && (
             <span className="inline-flex items-center gap-0.5 text-primary">
