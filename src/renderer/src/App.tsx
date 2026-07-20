@@ -718,7 +718,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1284,6 +1284,42 @@ export default function App(): React.ReactElement {
         }
         const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'diff': {
+        const { workspacePath } = useAppStore.getState()
+        if (!workspacePath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace folder is open.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const status = await el.git.status(workspacePath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const allFiles = [...status.staged, ...status.unstaged]
+          if (allFiles.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No changes in working tree.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const diffParts: string[] = []
+          for (const f of allFiles.slice(0, 30)) {
+            const isStaged = status.staged.some((s) => s.path === f.path)
+            const diff = await el.git.diff(workspacePath, f.path, isStaged)
+            if (diff) diffParts.push(`### ${f.path} (${isStaged ? 'staged' : 'unstaged'})\n\`\`\`diff\n${diff}\n\`\`\``)
+          }
+          if (allFiles.length > 30) diffParts.push(`\n*...and ${allFiles.length - 30} more files*`)
+          const diffText = diffParts.length > 0 ? diffParts.join('\n\n') : 'No diff content available.'
+          const msg = await el.db.addMessage(sess.id, 'system', `**Git Diff**\n\n${diffText}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
         break
       }
       case 'export': {
