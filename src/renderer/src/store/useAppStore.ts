@@ -55,6 +55,10 @@ interface AppStore {
   // ── Deleted messages (for undo) ─────────────────────────────────────────────
   lastDeletedMessage: Message | null
 
+  // ── Prompt history ────────────────────────────────────────────────────────
+  promptHistory: string[]
+  promptHistoryIdx: number  // -1 = not navigating, 0..N = navigating
+
   // ── Settings ────────────────────────────────────────────────────────────────
   settings: AppSettings
 
@@ -124,6 +128,11 @@ interface AppStore {
   // ── Deleted message (for undo) ──────────────────────────────────────────────
   setLastDeletedMessage: (msg: Message | null) => void
   clearLastDeletedMessage: () => void
+
+  // ── Prompt history actions ────────────────────────────────────────────────
+  addPromptToHistory: (prompt: string) => void
+  navigatePromptHistory: (direction: 'up' | 'down') => string | null
+  resetPromptHistoryIdx: () => void
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -152,6 +161,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   todos: [],
   lastDeletedMessage: null,
+
+  promptHistory: [],
+  promptHistoryIdx: -1,
 
   // ── Side Chat initial state ─────────────────────────────────────────────────
   sideChatSessionId: null,
@@ -363,4 +375,28 @@ export const useAppStore = create<AppStore>((set, get) => ({
   removeSideChatMessage: (id) => set((s) => ({
     sideChatMessages: s.sideChatMessages.filter((m) => m.id !== id),
   })),
+
+  // ── Prompt history actions ────────────────────────────────────────────────
+  addPromptToHistory: (prompt) => set((s) => {
+    // Don't add empty or duplicate of last entry
+    if (!prompt.trim()) return s
+    const last = s.promptHistory[0]
+    if (last === prompt) return { promptHistoryIdx: -1 }
+    return {
+      promptHistory: [prompt, ...s.promptHistory].slice(0, 100),
+      promptHistoryIdx: -1,
+    }
+  }),
+
+  navigatePromptHistory: (direction) => {
+    const { promptHistory, promptHistoryIdx } = get()
+    if (promptHistory.length === 0) return null
+    let next = direction === 'up'
+      ? Math.min(promptHistoryIdx + 1, promptHistory.length - 1)
+      : Math.max(promptHistoryIdx - 1, -1)
+    set({ promptHistoryIdx: next })
+    return next === -1 ? '' : promptHistory[next]
+  },
+
+  resetPromptHistoryIdx: () => set({ promptHistoryIdx: -1 }),
 }))

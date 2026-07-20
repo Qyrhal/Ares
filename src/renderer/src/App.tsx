@@ -505,8 +505,220 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'shortcuts': {
+        const shortcutsText = [
+          '**Keyboard Shortcuts**\n',
+          '**General**',
+          '· `Cmd/Ctrl + N` / `Cmd/Ctrl + T` — New session',
+          '· `Cmd/Ctrl + W` — Close current tab',
+          '· `Cmd/Ctrl + Shift + P` — Command palette',
+          '· `Cmd/Ctrl + Shift + O` — Tab switcher',
+          '· `Cmd/Ctrl + P` — Quick file open',
+          '· `Cmd/Ctrl + ,` — Open settings',
+          '· `Cmd/Ctrl + Z` — Undo (restore deleted message)',
+          '',
+          '**Navigation**',
+          '· `Cmd/Ctrl + [` / `]` — Previous / next tab',
+          '· `Cmd/Ctrl + 1–9` — Jump to tab by number',
+          '· `ArrowUp` / `ArrowDown` in empty input — Recall prompt history',
+          '',
+          '**View**',
+          '· `Ctrl + \\`` / `Ctrl + J` — Toggle terminal',
+          '· `Ctrl + Shift + Z` — Toggle zen mode',
+          '',
+          '**In Chat**',
+          '· `Enter` — Send message',
+          '· `Shift + Enter` — New line',
+          '· `Escape` — Cancel agent / stop streaming',
+          '· `Ctrl + C` — Stop agent (when running)',
+          '',
+          '**Search**',
+          '· `Cmd/Ctrl + Shift + F` — Search all agent transcripts',
+        ].join('\n')
+        const msg = await el.db.addMessage(sess.id, 'system', shortcutsText)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'note': {
+        if (args === '--clear') {
+          await el.db.updateSession(sess.id, { notes: '' })
+          store.updateSession(sess.id, { notes: '' })
+          const msg = await el.db.addMessage(sess.id, 'system', 'Session notes cleared.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!args) {
+          const currentNotes = sess.notes || ''
+          const display = currentNotes
+            ? `**Session Notes:**\n\n${currentNotes}`
+            : 'No notes on this session. Use `/note <text>` to add notes.'
+          const msg = await el.db.addMessage(sess.id, 'system', display)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const existing = sess.notes || ''
+        const separator = existing ? '\n\n' : ''
+        const newNotes = `${existing}${separator}${args}`
+        await el.db.updateSession(sess.id, { notes: newNotes })
+        store.updateSession(sess.id, { notes: newNotes })
+        const msg = await el.db.addMessage(sess.id, 'system', `**Notes updated.**\n\n${newNotes}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'rename': {
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /rename <new title>')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        await el.db.updateSession(sess.id, { title: args })
+        store.updateSession(sess.id, { title: args })
+        const msg = await el.db.addMessage(sess.id, 'system', `Session renamed to: ${args}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'log': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Recent Commits**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          try {
+            const commits = await el.git.log(workspacePath, 15)
+            if (commits.length === 0) {
+              lines.push('No commits found.')
+            } else {
+              for (const c of commits) {
+                const msg = c.message.length > 80 ? c.message.slice(0, 77) + '...' : c.message
+                lines.push(`· \`${c.shortHash}\` — ${msg} (_${c.author}, ${c.date}_)`)
+              }
+            }
+          } catch (err) {
+            lines.push(`Error reading git log: ${(err as Error).message}`)
+          }
+        }
+        const logMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (logMsg) store.appendMessage(parseMessage(logMsg))
+        break
+      }
+      case 'review': {
+        const msgs = await el.db.getMessages(sess.id)
+        if (!msgs || msgs.length === 0) {
+          const noMsg = await el.db.addMessage(sess.id, 'system', 'No messages to review.')
+          if (noMsg) store.appendMessage(parseMessage(noMsg))
+          break
+        }
+        if (!hasProvider(store.settings)) {
+          const noProv = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured.')
+          if (noProv) store.appendMessage(parseMessage(noProv))
+          break
+        }
+        const reviewSystemPrompt = 'You are a code reviewer. Analyze the conversation below and provide: 1) A brief summary of what was discussed/accomplished. 2) Code quality observations (patterns, potential issues). 3) 2-3 specific suggestions for improvement. Be concise and actionable.'
+        const reviewMessages = msgs.slice(-20).map((m: Message) => ({
+          role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+        }))
+        try {
+          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+          const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [
+                { role: 'system', content: reviewSystemPrompt },
+                ...reviewMessages,
+              ],
+              stream: false,
+            }),
+          })
+          if (response.ok) {
+            const json = await response.json()
+            const reviewContent = json.choices?.[0]?.message?.content ?? 'No review generated.'
+            const msg = await el.db.addMessage(sess.id, 'system', `**📝 Session Review**\n\n${reviewContent}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const msg = await el.db.addMessage(sess.id, 'system', `Review failed: ${response.status}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Review failed: network error')
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'cost': {
+        const { sessions } = useAppStore.getState()
+        if (sessions.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No sessions to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        store.appendMessage({
+          id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+          content: 'Calculating workspace costs...', isStreaming: false, createdAt: Date.now(),
+        })
+
+        // Gather per-model stats across all sessions
+        const modelStats: Record<string, { input: number; output: number; sessions: number; cost: number }> = {}
+        let totalSessions = 0
+        let totalMsgs = 0
+
+        for (const s of sessions) {
+          try {
+            const msgs = await el.db.getMessages(s.id)
+            if (!msgs || msgs.length === 0) continue
+            totalSessions++
+            totalMsgs += msgs.length
+
+            const model = s.model || store.settings.defaultModel || 'gpt-4o-mini'
+            if (!modelStats[model]) {
+              modelStats[model] = { input: 0, output: 0, sessions: 0, cost: 0 }
+            }
+
+            const userMsgs = msgs.filter((m: Message) => m.role === 'user')
+            const asstMsgs = msgs.filter((m: Message) => m.role === 'assistant')
+            const inputTokens = estimateTokens(userMsgs)
+            const outputTokens = estimateTokens(asstMsgs)
+            const cost = estimateCost(model, inputTokens, outputTokens)
+
+            modelStats[model].input += inputTokens
+            modelStats[model].output += outputTokens
+            modelStats[model].sessions++
+            modelStats[model].cost += cost
+          } catch {
+            // Skip sessions that fail to load
+          }
+        }
+
+        const totalCost = Object.values(modelStats).reduce((sum, s) => sum + s.cost, 0)
+        const totalInput = Object.values(modelStats).reduce((sum, s) => sum + s.input, 0)
+        const totalOutput = Object.values(modelStats).reduce((sum, s) => sum + s.output, 0)
+
+        const lines: string[] = ['**Workspace Cost Summary**\n']
+        lines.push(`**Sessions:** ${totalSessions} with messages`)
+        lines.push(`**Total messages:** ${totalMsgs}`)
+        lines.push(`**Total tokens:** ~${(totalInput + totalOutput).toLocaleString()} (${totalInput.toLocaleString()} in / ${totalOutput.toLocaleString()} out)`)
+        lines.push(`**Total estimated cost:** $${totalCost.toFixed(4)}`)
+        lines.push('\n**By Model:**')
+
+        for (const [model, stats] of Object.entries(modelStats)) {
+          lines.push(`· \`${model}\` — ${stats.sessions} sessions, ~${(stats.input + stats.output).toLocaleString()} tokens, $${stats.cost.toFixed(4)}`)
+        }
+
+        lines.push('\n*Costs are estimates based on ~4 chars/token heuristic.*')
+        const costMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (costMsg) store.appendMessage(parseMessage(costMsg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1924,6 +2136,7 @@ export default function App(): React.ReactElement {
         workspacePath={store.workspacePath}
         currentModel={displayModel(activeSession?.model ?? store.settings.defaultModel)}
         sessionCount={store.sessions.length}
+        messages={store.messages}
       />
       <Toaster />
 

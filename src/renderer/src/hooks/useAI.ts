@@ -45,8 +45,7 @@ export function useAI(settings: AppSettings) {
 
     // Plan mode: chat completion with planning system prompt (no tool execution)
     if (agentMode === 'plan') {
-      const planMessages = [{ role: 'system' as const, content: PLAN_SYSTEM_PROMPT }, ...messages]
-      await streamChatCompletion(resolved, planMessages, onStream, onDone, onError)
+      await streamChatCompletion(resolved, messages, onStream, onDone, onError, PLAN_SYSTEM_PROMPT)
       return
     }
 
@@ -83,24 +82,40 @@ export function useAI(settings: AppSettings) {
   return { sendMessage, isConfigured }
 }
 
-/** Convert Message[] to OpenAI-compatible format for SSE endpoints. */
-function toChatMessages(messages: Message[]): { role: 'user' | 'assistant' | 'system'; content: string }[] {
-  return messages.map((m) => ({
-    role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }))
-}
+const PLAN_SYSTEM_PROMPT = `You are in "plan mode" — you describe what you would do without executing anything.
 
-/** Shared SSE streaming implementation used by chat and plan modes. */
-async function streamSSE(
+Analyze the user's request and produce a plan covering:
+1. **Approach** — what strategy you would take
+2. **Files affected** — which files would need to be created, modified, or deleted
+3. **Steps** — the sequence of changes you would make
+4. **Risks** — potential pitfalls, edge cases, or breaking changes
+5. **Estimated effort** — small / medium / large
+
+Do NOT write code or make any changes. Only describe the plan.`
+
+/**
+ * Shared streaming chat completion via direct fetch.
+ * Used by both chat mode (no system prompt) and plan mode (with system prompt).
+ */
+async function streamChatCompletion(
   resolved: ResolvedProvider,
-  chatMessages: { role: 'user' | 'assistant' | 'system'; content: string }[],
+  messages: Message[],
   onStream: StreamCallback,
   onDone: DoneCallback,
   onError?: ErrorCallback,
+  systemPrompt?: string,
 ): Promise<void> {
   const baseUrl = resolved.baseUrl.replace(/\/$/, '')
   const url = `${baseUrl}/chat/completions`
+
+  const chatMessages = messages.map((m) => ({
+    role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+    content: m.content,
+  }))
+
+  if (systemPrompt) {
+    chatMessages.unshift({ role: 'system', content: systemPrompt })
+  }
 
   try {
     const response = await fetch(url, {
@@ -186,31 +201,6 @@ async function streamSSE(
     }
   }
 }
-
-/**
- * Shared SSE streaming entry point for both chat and plan modes.
- * Converts Message[] to OpenAI format and delegates to streamSSE.
- */
-async function streamChatCompletion(
-  resolved: ResolvedProvider,
-  messages: Message[],
-  onStream: StreamCallback,
-  onDone: DoneCallback,
-  onError?: ErrorCallback,
-): Promise<void> {
-  await streamSSE(resolved, toChatMessages(messages), onStream, onDone, onError)
-}
-
-const PLAN_SYSTEM_PROMPT = `You are in "plan mode" — you describe what you would do without executing anything.
-
-Analyze the user's request and produce a plan covering:
-1. **Approach** — what strategy you would take
-2. **Files affected** — which files would need to be created, modified, or deleted
-3. **Steps** — the sequence of changes you would make
-4. **Risks** — potential pitfalls, edge cases, or breaking changes
-5. **Estimated effort** — small / medium / large
-
-Do NOT write code or make any changes. Only describe the plan.`
 
 async function noEndpointFallback(onStream: StreamCallback, onDone: DoneCallback): Promise<void> {
   const text = `No API endpoint configured. Open **Settings** to add your OpenAI-compatible endpoint URL.
