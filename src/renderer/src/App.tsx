@@ -1957,6 +1957,7 @@ export default function App(): React.ReactElement {
         workspacePath={store.workspacePath}
         currentModel={displayModel(activeSession?.model ?? store.settings.defaultModel)}
         sessionCount={store.sessions.length}
+        messages={store.messages}
       />
       <Toaster />
 
