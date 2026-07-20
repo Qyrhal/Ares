@@ -96,6 +96,7 @@ export default function App(): React.ReactElement {
   // ── Permission prompt ───────────────────────────────────────────────────────
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
   const permResolver = useRef<((allow: boolean) => void) | null>(null)
+  const regenerateRef = useRef<(msg: Message) => void>(() => {})
 
   const handlePermApprove = useCallback(() => {
     permResolver.current?.(true)
@@ -382,6 +383,13 @@ export default function App(): React.ReactElement {
       if (e.shiftKey && e.key === 'P') { e.preventDefault(); setCommandPaletteOpen(true); return }
       if (e.shiftKey && e.key === 'O') { e.preventDefault(); setTabSwitcherOpen(true); return }
       if (e.shiftKey && e.key === 'F') { e.preventDefault(); setSearchOverlayOpen(true); return }
+      if (e.shiftKey && e.key === 'R') {
+        e.preventDefault()
+        const msgs = useAppStore.getState().messages
+        const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
+        if (lastAssistant) regenerateRef.current(lastAssistant)
+        return
+      }
       if (!e.shiftKey && e.key === 'p') { e.preventDefault(); setQuickFileOpenOpen(true); return }
 
       if (e.key === ',') { e.preventDefault(); useAppStore.getState().setActiveView('settings'); return }
@@ -531,6 +539,7 @@ export default function App(): React.ReactElement {
           '· `Shift + Enter` — New line',
           '· `Escape` — Cancel agent / stop streaming',
           '· `Ctrl + C` — Stop agent (when running)',
+          '· `Ctrl + Shift + R` — Regenerate last assistant response',
           '',
           '**Search**',
           '· `Cmd/Ctrl + Shift + F` — Search all agent transcripts',
