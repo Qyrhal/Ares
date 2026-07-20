@@ -539,8 +539,34 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'note': {
+        if (args === '--clear') {
+          await el.db.updateSession(sess.id, { notes: '' })
+          store.updateSession(sess.id, { notes: '' })
+          const msg = await el.db.addMessage(sess.id, 'system', 'Session notes cleared.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!args) {
+          const currentNotes = sess.notes || ''
+          const display = currentNotes
+            ? `**Session Notes:**\n\n${currentNotes}`
+            : 'No notes on this session. Use `/note <text>` to add notes.'
+          const msg = await el.db.addMessage(sess.id, 'system', display)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const existing = sess.notes || ''
+        const separator = existing ? '\n\n' : ''
+        const newNotes = `${existing}${separator}${args}`
+        await el.db.updateSession(sess.id, { notes: newNotes })
+        store.updateSession(sess.id, { notes: newNotes })
+        const msg = await el.db.addMessage(sess.id, 'system', `**Notes updated.**\n\n${newNotes}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
