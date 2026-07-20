@@ -26,6 +26,17 @@ export function truncate(str: string, n: number): string {
   return str.length > n ? str.slice(0, n) + '…' : str
 }
 
+export function formatDuration(startMs: number, endMs: number): string {
+  const diff = Math.max(0, endMs - startMs)
+  const totalMin = Math.floor(diff / 60000)
+  const h = Math.floor(totalMin / 60)
+  const m = totalMin % 60
+  if (h > 0) return `${h}h ${m}m`
+  if (m > 0) return `${m}m`
+  const s = Math.floor(diff / 1000)
+  return s > 0 ? `${s}s` : '<1m'
+}
+
 export function isMermaidCodeBlock(className: string | undefined): boolean {
   return /(?:^|\s)language-mermaid(?:\s|$)/.test(className ?? '')
 }
