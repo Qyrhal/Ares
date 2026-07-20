@@ -39,13 +39,13 @@ export function useAI(settings: AppSettings) {
 
     // Chat mode: no tools, plain streaming chat completion
     if (agentMode === 'chat') {
-      await handleChatCompletion(resolved, messages, onStream, onDone, onError)
+      await streamCompletion(resolved, messages, onStream, onDone, onError)
       return
     }
 
     // Plan mode: chat completion with planning system prompt (no tool execution)
     if (agentMode === 'plan') {
-      await handlePlanCompletion(resolved, messages, onStream, onDone, onError)
+      await streamCompletion(resolved, messages, onStream, onDone, onError, PLAN_SYSTEM_PROMPT)
       return
     }
 
@@ -83,15 +83,17 @@ export function useAI(settings: AppSettings) {
 }
 
 /**
- * Chat mode: streaming chat completion via direct fetch.
- * No tools, no agent session — just Q&A.
+ * Shared SSE streaming helper for chat/plan completions.
+ * Sends messages to an OpenAI-compatible endpoint and streams the response.
+ * When `systemPrompt` is provided it is prepended to the conversation.
  */
-async function handleChatCompletion(
+async function streamCompletion(
   resolved: ResolvedProvider,
   messages: Message[],
   onStream: StreamCallback,
   onDone: DoneCallback,
   onError?: ErrorCallback,
+  systemPrompt?: string,
 ): Promise<void> {
   const baseUrl = resolved.baseUrl.replace(/\/$/, '')
   const url = `${baseUrl}/chat/completions`
@@ -100,6 +102,10 @@ async function handleChatCompletion(
     role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
     content: m.content,
   }))
+
+  if (systemPrompt) {
+    chatMessages.unshift({ role: 'system', content: systemPrompt })
+  }
 
   try {
     const response = await fetch(url, {
@@ -197,109 +203,6 @@ Analyze the user's request and produce a plan covering:
 5. **Estimated effort** — small / medium / large
 
 Do NOT write code or make any changes. Only describe the plan.`
-
-async function handlePlanCompletion(
-  resolved: ResolvedProvider,
-  messages: Message[],
-  onStream: StreamCallback,
-  onDone: DoneCallback,
-  onError?: ErrorCallback,
-): Promise<void> {
-  const baseUrl = resolved.baseUrl.replace(/\/$/, '')
-  const url = `${baseUrl}/chat/completions`
-
-  const chatMessages = messages.map((m) => ({
-    role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
-    content: m.content,
-  }))
-
-  // Prepend the planning system prompt
-  chatMessages.unshift({ role: 'system', content: PLAN_SYSTEM_PROMPT })
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(resolved.apiKey ? { Authorization: `Bearer ${resolved.apiKey}` } : {}),
-      },
-      body: JSON.stringify({
-        model: resolved.modelId,
-        messages: chatMessages,
-        stream: true,
-      }),
-    })
-
-    if (!response.ok) {
-      const errText = await response.text().catch(() => `HTTP ${response.status}`)
-      throw new Error(errText)
-    }
-
-    const reader = response.body!.getReader()
-    const decoder = new TextDecoder()
-    let accumulated = ''
-    let buffer = ''
-    let usage: { promptTokens?: number; completionTokens?: number } | undefined
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          const data = line.slice(6).trim()
-          if (data === '[DONE]') continue
-          try {
-            const json = JSON.parse(data)
-            const content = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.text ?? ''
-            if (content) {
-              accumulated += content
-              onStream(accumulated)
-            }
-            if (json.usage) {
-              usage = {
-                promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
-                completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
-              }
-            }
-          } catch {
-            // Skip malformed SSE lines
-          }
-        }
-      }
-    }
-
-    // Process remaining buffer
-    if (buffer.startsWith('data: ')) {
-      const data = buffer.slice(6).trim()
-      if (data !== '[DONE]') {
-        try {
-          const json = JSON.parse(data)
-          const content = json.choices?.[0]?.delta?.content ?? json.choices?.[0]?.text ?? ''
-          if (content) accumulated += content
-          if (json.usage) {
-            usage = {
-              promptTokens: json.usage.prompt_tokens ?? json.usage.promptTokens,
-              completionTokens: json.usage.completion_tokens ?? json.usage.completionTokens,
-            }
-          }
-        } catch { /* skip */ }
-      }
-    }
-
-    onDone(accumulated, undefined, usage)
-  } catch (err) {
-    if (onError) {
-      onError(err instanceof Error ? err : new Error(String(err)))
-    } else {
-      onDone(`**Error:** ${(err as Error).message}`)
-    }
-  }
-}
 
 async function noEndpointFallback(onStream: StreamCallback, onDone: DoneCallback): Promise<void> {
   const text = `No API endpoint configured. Open **Settings** to add your OpenAI-compatible endpoint URL.

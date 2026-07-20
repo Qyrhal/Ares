@@ -226,7 +226,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('db:addMessage', (_, sessionId: string, role: string, content: string, opts: object) =>
     addMessage(sessionId, role, content, opts as Parameters<typeof addMessage>[3]))
   ipcMain.handle('db:deleteMessage', (_, id: string) => deleteMessage(id))
-  ipcMain.handle('db:updateMessage', (_, id: string, updates: object) => updateMessage(id, updates as any))
+  ipcMain.handle('db:updateMessage', (_, id: string, updates: Parameters<typeof updateMessage>[1]) => updateMessage(id, updates))
 
   // DB – todos
   ipcMain.handle('db:getTodos', (_, sessionId: string) => getTodos(sessionId))

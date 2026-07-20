@@ -86,6 +86,25 @@ type SessionEntry = {
 
 const sessions = new Map<string, SessionEntry>()
 
+/** Extract human-readable text from MCP content blocks. */
+function mcpContentToText(content: unknown[]): string {
+  return content
+    .map((c) => (c && typeof c === 'object' && (c as { type: string }).type === 'text'
+      ? (c as { text: string }).text
+      : JSON.stringify(c)))
+    .join('\n')
+}
+
+/** Extract human-readable text from an MCP callTool result. */
+function mcpResultToText(result: { content: unknown[] }): string {
+  return mcpContentToText(result.content)
+}
+
+/** Extract human-readable text from an MCP callTool result or null. */
+function mcpResultOrNullToText(result: { content: unknown[] } | null): string {
+  return result ? mcpResultToText(result) : ''
+}
+
 // ── askUser pending resolvers ─────────────────────────────────────────────────
 
 const pendingQuestions = new Map<string, (answers: Record<string, string>) => void>()
@@ -233,9 +252,7 @@ async function buildMcpTools(win?: BrowserWindow): Promise<{ tools: any[]; clien
             // No threshold or zero means never background
             if (thresholdMs <= 0) {
               const result = await client.callTool({ name: t.name, arguments: params as Record<string, unknown> })
-              const text = (result.content as any[])
-                .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
-                .join('\n')
+              const text = mcpResultToText(result)
               return { content: [{ type: 'text', text }], details: result }
             }
 
@@ -253,9 +270,7 @@ async function buildMcpTools(win?: BrowserWindow): Promise<{ tools: any[]; clien
 
             if (winner.source === 'tool') {
               // Completed within threshold
-              const text = (winner.result.content as any[])
-                .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
-                .join('\n')
+              const text = mcpResultToText(winner.result)
               return { content: [{ type: 'text', text }], details: winner.result }
             }
 
@@ -268,9 +283,7 @@ async function buildMcpTools(win?: BrowserWindow): Promise<{ tools: any[]; clien
             // Continue waiting on the ORIGINAL promise in background
             toolPromise
               .then((actualResult) => {
-                const text = (actualResult.content as any[])
-                  .map((c: any) => (c.type === 'text' ? c.text : JSON.stringify(c)))
-                  .join('\n')
+                const text = mcpResultToText(actualResult)
                 if (bw && !bw.isDestroyed()) {
                   bw.webContents.send('pi:mcp-tool-background-result', t.name, text)
                 }
