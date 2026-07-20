@@ -1616,6 +1616,29 @@ export default function App(): React.ReactElement {
     store.upsertMessage(id, { ...useAppStore.getState().messages.find((m) => m.id === id)!, content })
   }, [])
 
+  // ── Regenerate assistant response ───────────────────────────────────────────
+  const handleRegenerate = useCallback(async (assistantMsg: Message) => {
+    const { messages, isLoading } = useAppStore.getState()
+    const sess = activeSession
+    if (!sess || isLoading) return
+
+    // Find the user message immediately before this assistant message
+    const assistantIdx = messages.findIndex((m) => m.id === assistantMsg.id)
+    if (assistantIdx <= 0) return
+    const userMsg = messages.slice(0, assistantIdx).reverse().find((m) => m.role === 'user')
+    if (!userMsg) return
+
+    // Remove all messages from the assistant message onward
+    const toDelete = messages.slice(assistantIdx)
+    for (const m of toDelete) {
+      await el.db.deleteMessage(m.id)
+    }
+    store.setMessages(messages.slice(0, assistantIdx))
+
+    // Re-send the user message
+    handleSend(userMsg.content, userMsg.attachments ?? [])
+  }, [activeSession, handleSend])
+
   // ── Delete message with undo ────────────────────────────────────────────────
   const lastDeletedRef = useRef<Message | null>(null)
 
@@ -2005,6 +2028,7 @@ export default function App(): React.ReactElement {
                       onReply={handleReply}
                       onEdit={handleEditMessage}
                       onDelete={handleDeleteMessage}
+                      onRegenerate={handleRegenerate}
                       onReact={handleReact}
                     />
                     {pendingPerm && (
