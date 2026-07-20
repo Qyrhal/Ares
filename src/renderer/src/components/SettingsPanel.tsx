@@ -78,7 +78,7 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
     setSaveState('saving')
     const timer = setTimeout(() => {
       savedJson.current = json
-      onSave(form).then(() => setSaveState('saved'))
+      Promise.resolve(onSave(form)).then(() => setSaveState('saved'))
     }, AUTOSAVE_DELAY)
     return () => clearTimeout(timer)
     // eslint-disable-next-line react-hooks/exhaustive-deps

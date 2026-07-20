@@ -334,7 +334,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('checkpoint:diff',    (_, cwd: string, idx: number) => { validatePath(cwd); return diffCheckpoint(cwd, idx) })
 
   // LSP — language server diagnostics (inspired by OpenCode + Claude Code)
-  ipcMain.handle('lsp:diagnostics', async (_, filePath: string) => getDiagnostics(filePath))
+  ipcMain.handle('lsp:diagnostics', async (_, filePath: string) => { validatePath(filePath); return getDiagnostics(filePath) })
   ipcMain.handle('lsp:hasSupport', () => hasLspSupport())
 
   // Hooks — lifecycle events (inspired by Claude Code)
@@ -428,6 +428,7 @@ function registerIpcHandlers(): void {
 
   // Terminal
   ipcMain.handle('terminal:create', (_, cwd: string) => {
+    try { validatePath(cwd) } catch (err) { return '' }
     const [win] = BrowserWindow.getAllWindows()
     if (!win) return ''
     const id = `term-${nextTerminalId++}`
@@ -462,6 +463,7 @@ function registerIpcHandlers(): void {
 
   // Pi agent
   ipcMain.on('pi:send', (event, reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: string, cwd: string | null) => {
+    if (cwd) { try { validatePath(cwd) } catch { return } }
     const [win] = BrowserWindow.getAllWindows()
     if (!win) return
     handlePiSend(win, reqId, sessionId, message, model, apiBaseUrl, apiKey, cwd).catch((err) => {
