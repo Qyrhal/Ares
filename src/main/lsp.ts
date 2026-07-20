@@ -73,12 +73,13 @@ function findLspServer(filePath: string): string | null {
 
 function findExecutable(name: string): string | null {
   try {
-    const result = execFileSync('which', [name], { encoding: 'utf-8' }).trim()
+    // Use execFileSync to avoid shell injection via name
+    const result = execFileSync('which', [name], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
     return result || null
   } catch {
-    // Fallback for Windows
+    // Fallback: try Windows 'where' command
     try {
-      const result = execFileSync('where', [name], { encoding: 'utf-8' }).trim()
+      const result = execFileSync('where', [name], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
       return result || null
     } catch {
       return null
@@ -103,15 +104,10 @@ export async function getDiagnostics(filePath: string): Promise<Diagnostic[]> {
       if (tscPath) {
         const projectDir = findProjectDir(filePath)
         if (projectDir && fs.existsSync(path.join(projectDir, 'tsconfig.json'))) {
-          let out = ''
-          try {
-            out = execFileSync('npx', ['-s', 'tsc', '--noEmit', '--pretty', 'false'], {
-              cwd: projectDir, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 30_000,
-            })
-          } catch (e: any) {
-            // tsc exits non-zero when errors exist — output is on stdout
-            out = e.stdout ?? ''
-          }
+          const out = execFileSync('npx', ['-s', 'tsc', '--noEmit', '--pretty', 'false'], {
+            cwd: projectDir, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 30_000,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
           const lines = out.split('\n').filter(Boolean)
           for (const line of lines) {
             const m = line.match(/^(.+)\((\d+),(\d+)\):\s+(error|warning)\s+(.+)$/)
@@ -142,6 +138,7 @@ export async function getDiagnostics(filePath: string): Promise<Diagnostic[]> {
         const relPath = path.relative(findProjectDir(filePath) || '', filePath)
         const out = execFileSync('npx', ['-s', 'eslint', '--format', 'json', '--stdin', '--stdin-filename', relPath], {
           cwd: findProjectDir(filePath) || '.', input: content, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 15_000,
+          stdio: ['pipe', 'pipe', 'pipe'],
         })
         const parsed = JSON.parse(out)
         if (Array.isArray(parsed)) {
@@ -189,7 +186,7 @@ export function notifyDiagnostics(diagnostics: Diagnostic[]): void {
 }
 
 export function cleanupLsp(): void {
-  for (const [, server] of activeServers) {
+  for (const [name, server] of activeServers) {
     if (server.process) {
       try { server.process.kill() } catch { /* ignore */ }
     }

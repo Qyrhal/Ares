@@ -1,6 +1,6 @@
 import React from 'react'
 import DOMPurify from 'dompurify'
-import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown } from 'lucide-react'
+import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown, RotateCw } from 'lucide-react'
 import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes, isMermaidCodeBlock, looksLikeJson } from '@/lib/utils'
 import { Message } from '@/types'
@@ -45,6 +45,7 @@ interface MessageItemProps {
   onReply?: (message: Message) => void
   onEdit?: (id: string, content: string) => void
   onDelete?: (message: Message) => void
+  onRegenerate?: (message: Message) => void
   onReact?: (id: string, reactions: { up: boolean | null }) => void
 }
 
@@ -404,7 +405,7 @@ function EditMode({
 
 // ── Main MessageItem ──────────────────────────────────────────────────────────
 
-export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onReact }: MessageItemProps): React.ReactElement {
+export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onRegenerate, onReact }: MessageItemProps): React.ReactElement {
   const [isEditing, setIsEditing] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
 
@@ -521,6 +522,19 @@ export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onR
                 aria-label="Delete message"
               >
                 <Trash2 className="size-3" />
+              </button>
+            </Tooltip>
+          )}
+
+          {/* Regenerate button (assistant messages only) */}
+          {isAssistant && onRegenerate && (
+            <Tooltip content="Regenerate response">
+              <button
+                onClick={() => onRegenerate(message)}
+                className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                aria-label="Regenerate response"
+              >
+                <RotateCw className="size-3" />
               </button>
             </Tooltip>
           )}

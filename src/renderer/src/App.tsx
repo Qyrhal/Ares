@@ -96,6 +96,7 @@ export default function App(): React.ReactElement {
   // ── Permission prompt ───────────────────────────────────────────────────────
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
   const permResolver = useRef<((allow: boolean) => void) | null>(null)
+  const regenerateRef = useRef<(msg: Message) => void>(() => {})
 
   const handlePermApprove = useCallback(() => {
     permResolver.current?.(true)
@@ -382,6 +383,13 @@ export default function App(): React.ReactElement {
       if (e.shiftKey && e.key === 'P') { e.preventDefault(); setCommandPaletteOpen(true); return }
       if (e.shiftKey && e.key === 'O') { e.preventDefault(); setTabSwitcherOpen(true); return }
       if (e.shiftKey && e.key === 'F') { e.preventDefault(); setSearchOverlayOpen(true); return }
+      if (e.shiftKey && e.key === 'R') {
+        e.preventDefault()
+        const msgs = useAppStore.getState().messages
+        const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
+        if (lastAssistant) regenerateRef.current(lastAssistant)
+        return
+      }
       if (!e.shiftKey && e.key === 'p') { e.preventDefault(); setQuickFileOpenOpen(true); return }
 
       if (e.key === ',') { e.preventDefault(); useAppStore.getState().setActiveView('settings'); return }
@@ -531,6 +539,7 @@ export default function App(): React.ReactElement {
           '· `Shift + Enter` — New line',
           '· `Escape` — Cancel agent / stop streaming',
           '· `Ctrl + C` — Stop agent (when running)',
+          '· `Ctrl + Shift + R` — Regenerate last assistant response',
           '',
           '**Search**',
           '· `Cmd/Ctrl + Shift + F` — Search all agent transcripts',
@@ -718,7 +727,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1286,6 +1295,42 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'diff': {
+        const { workspacePath } = useAppStore.getState()
+        if (!workspacePath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace folder is open.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const status = await el.git.status(workspacePath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const allFiles = [...status.staged, ...status.unstaged]
+          if (allFiles.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No changes in working tree.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const diffParts: string[] = []
+          for (const f of allFiles.slice(0, 30)) {
+            const isStaged = status.staged.some((s) => s.path === f.path)
+            const diff = await el.git.diff(workspacePath, f.path, isStaged)
+            if (diff) diffParts.push(`### ${f.path} (${isStaged ? 'staged' : 'unstaged'})\n\`\`\`diff\n${diff}\n\`\`\``)
+          }
+          if (allFiles.length > 30) diffParts.push(`\n*...and ${allFiles.length - 30} more files*`)
+          const diffText = diffParts.length > 0 ? diffParts.join('\n\n') : 'No diff content available.'
+          const msg = await el.db.addMessage(sess.id, 'system', `**Git Diff**\n\n${diffText}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'export': {
         const msgs = useAppStore.getState().messages
         if (msgs.length === 0) {
@@ -1616,6 +1661,29 @@ export default function App(): React.ReactElement {
     store.upsertMessage(id, { ...useAppStore.getState().messages.find((m) => m.id === id)!, content })
   }, [])
 
+  // ── Regenerate assistant response ───────────────────────────────────────────
+  const handleRegenerate = useCallback(async (assistantMsg: Message) => {
+    const { messages, isLoading } = useAppStore.getState()
+    const sess = activeSession
+    if (!sess || isLoading) return
+
+    // Find the user message immediately before this assistant message
+    const assistantIdx = messages.findIndex((m) => m.id === assistantMsg.id)
+    if (assistantIdx <= 0) return
+    const userMsg = messages.slice(0, assistantIdx).reverse().find((m) => m.role === 'user')
+    if (!userMsg) return
+
+    // Remove all messages from the assistant message onward
+    const toDelete = messages.slice(assistantIdx)
+    for (const m of toDelete) {
+      await el.db.deleteMessage(m.id)
+    }
+    store.setMessages(messages.slice(0, assistantIdx))
+
+    // Re-send the user message
+    handleSend(userMsg.content, userMsg.attachments ?? [])
+  }, [activeSession, handleSend])
+
   // ── Delete message with undo ────────────────────────────────────────────────
   const lastDeletedRef = useRef<Message | null>(null)
 
@@ -1817,7 +1885,6 @@ export default function App(): React.ReactElement {
 
     store.setSideChatLoading(true)
     const streamingId = uuidv4()
-    const streamStartTime = Date.now()
     let streamingMsg: Message = {
       id: streamingId, sessionId: sideChatSessionId, role: 'assistant',
       content: '', isStreaming: true, createdAt: Date.now(),
@@ -2006,6 +2073,7 @@ export default function App(): React.ReactElement {
                       onReply={handleReply}
                       onEdit={handleEditMessage}
                       onDelete={handleDeleteMessage}
+                      onRegenerate={handleRegenerate}
                       onReact={handleReact}
                     />
                     {pendingPerm && (
