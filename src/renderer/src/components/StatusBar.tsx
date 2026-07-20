@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react'
 import { History, FolderOpen, Cpu, Plug, PlugZap, Loader2 } from 'lucide-react'
 import { Checkpoint } from '@/types'
+import type { Message } from '@/types'
+import { ContextUsageBadge } from './ContextUsageBadge'
 import { ModelHoverCard } from './ModelHoverCard'
 import { cn } from '@/lib/utils'
 
@@ -19,10 +21,11 @@ interface StatusBarProps {
   workspacePath: string | null
   currentModel: string
   sessionCount: number
+  messages?: Message[]
   className?: string
 }
 
-export function StatusBar({ workspacePath, currentModel, sessionCount, className }: StatusBarProps): React.ReactElement {
+export function StatusBar({ workspacePath, currentModel, sessionCount, messages, className }: StatusBarProps): React.ReactElement {
   const [cpCount, setCpCount] = useState(0)
   const [mcpStatus, setMcpStatus] = useState<McpStatus[]>([])
   const [mcpBgTools, setMcpBgTools] = useState<string[]>([])
@@ -81,6 +84,10 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, className
             {currentModel.length > 20 ? currentModel.slice(0, 20) + '…' : currentModel}
           </span>
         </ModelHoverCard>
+      )}
+
+      {messages && messages.length > 0 && (
+        <ContextUsageBadge messages={messages} model={currentModel} />
       )}
 
       {/* MCP status */}
