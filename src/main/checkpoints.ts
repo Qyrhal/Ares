@@ -1,4 +1,4 @@
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 
@@ -24,7 +24,7 @@ export interface Checkpoint {
 function git(cwd: string, args: string[], ignoreExit = false): string {
   const gitDir = findGitDir(cwd)
   try {
-    return execSync(`git ${args.join(' ')}`, {
+    return execFileSync('git', args, {
       cwd: gitDir || cwd,
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024,
