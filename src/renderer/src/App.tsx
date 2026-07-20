@@ -565,8 +565,73 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'cost': {
+        const { sessions } = useAppStore.getState()
+        if (sessions.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No sessions to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        store.appendMessage({
+          id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+          content: 'Calculating workspace costs...', isStreaming: false, createdAt: Date.now(),
+        })
+
+        // Gather per-model stats across all sessions
+        const modelStats: Record<string, { input: number; output: number; sessions: number; cost: number }> = {}
+        let totalSessions = 0
+        let totalMsgs = 0
+
+        for (const s of sessions) {
+          try {
+            const msgs = await el.db.getMessages(s.id)
+            if (!msgs || msgs.length === 0) continue
+            totalSessions++
+            totalMsgs += msgs.length
+
+            const model = s.model || store.settings.defaultModel || 'gpt-4o-mini'
+            if (!modelStats[model]) {
+              modelStats[model] = { input: 0, output: 0, sessions: 0, cost: 0 }
+            }
+
+            const userMsgs = msgs.filter((m: Message) => m.role === 'user')
+            const asstMsgs = msgs.filter((m: Message) => m.role === 'assistant')
+            const inputTokens = estimateTokens(userMsgs)
+            const outputTokens = estimateTokens(asstMsgs)
+            const cost = estimateCost(model, inputTokens, outputTokens)
+
+            modelStats[model].input += inputTokens
+            modelStats[model].output += outputTokens
+            modelStats[model].sessions++
+            modelStats[model].cost += cost
+          } catch {
+            // Skip sessions that fail to load
+          }
+        }
+
+        const totalCost = Object.values(modelStats).reduce((sum, s) => sum + s.cost, 0)
+        const totalInput = Object.values(modelStats).reduce((sum, s) => sum + s.input, 0)
+        const totalOutput = Object.values(modelStats).reduce((sum, s) => sum + s.output, 0)
+
+        const lines: string[] = ['**Workspace Cost Summary**\n']
+        lines.push(`**Sessions:** ${totalSessions} with messages`)
+        lines.push(`**Total messages:** ${totalMsgs}`)
+        lines.push(`**Total tokens:** ~${(totalInput + totalOutput).toLocaleString()} (${totalInput.toLocaleString()} in / ${totalOutput.toLocaleString()} out)`)
+        lines.push(`**Total estimated cost:** $${totalCost.toFixed(4)}`)
+        lines.push('\n**By Model:**')
+
+        for (const [model, stats] of Object.entries(modelStats)) {
+          lines.push(`· \`${model}\` — ${stats.sessions} sessions, ~${(stats.input + stats.output).toLocaleString()} tokens, $${stats.cost.toFixed(4)}`)
+        }
+
+        lines.push('\n*Costs are estimates based on ~4 chars/token heuristic.*')
+        const costMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (costMsg) store.appendMessage(parseMessage(costMsg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
