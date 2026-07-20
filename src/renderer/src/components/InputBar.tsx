@@ -37,6 +37,7 @@ const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'changes',      description: 'Show workspace git status (branch, staged, unstaged files)' },
   { kind: 'builtin', name: 'export',       description: 'Export current session as a Markdown file' },
   { kind: 'builtin', name: 'shortcuts',   description: 'Show all keyboard shortcuts' },
+  { kind: 'builtin', name: 'review',       description: 'AI-powered review of session code and patterns' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
