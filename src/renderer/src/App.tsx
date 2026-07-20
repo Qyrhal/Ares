@@ -734,7 +734,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /debug - show diagnostic and debug info, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -839,6 +839,24 @@ export default function App(): React.ReactElement {
         lines.push('\nRun `/status` for system health check.')
         const dbgMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (dbgMsg) store.appendMessage(parseMessage(dbgMsg))
+        break
+      }
+      case 'history': {
+        const { promptHistory } = useAppStore.getState()
+        if (promptHistory.length === 0) {
+          const noHist = await el.db.addMessage(sess.id, 'system', 'No prompt history yet. Start typing to build history.')
+          if (noHist) store.appendMessage(parseMessage(noHist))
+          break
+        }
+        const limit = args ? Math.min(parseInt(args, 10) || 10, 50) : 10
+        const recent = promptHistory.slice(0, limit)
+        const lines: string[] = [`**Prompt History** (showing ${recent.length} of ${promptHistory.length})\n`]
+        for (let i = 0; i < recent.length; i++) {
+          const preview = recent[i].length > 80 ? recent[i].slice(0, 77) + '...' : recent[i]
+          lines.push(`${i + 1}. ${preview}`)
+        }
+        const histMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (histMsg) store.appendMessage(parseMessage(histMsg))
         break
       }
       case 'summary': {

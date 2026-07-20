@@ -41,6 +41,7 @@ const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'rename',       description: 'Rename the current session' },
   { kind: 'builtin', name: 'pin',           description: 'Pin or unpin the current session' },
   { kind: 'builtin', name: 'debug',         description: 'Show diagnostic and debug information' },
+  { kind: 'builtin', name: 'history',       description: 'Show recent prompt history' },
   { kind: 'builtin', name: 'log',          description: 'Show recent git commits' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
