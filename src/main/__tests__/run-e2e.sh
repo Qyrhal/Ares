@@ -259,5 +259,125 @@ STASH_LEFT=$(git -C "$G" stash list | wc -l)
 [ "$STASH_LEFT" -ge 0 ] && ok "stash list after cleanup ($STASH_LEFT)" || no "stash list after cleanup ($STASH_LEFT)"
 
 echo ""
+echo "--- git extended operations 2 ---"
+
+# 27 - git blame on committed file
+git -C "$G" add file1.txt
+git -C "$G" commit -q -m "commit for blame" 2>/dev/null
+BLAME_OUTPUT=$(git -C "$G" blame file1.txt 2>/dev/null)
+[ -n "$BLAME_OUTPUT" ] && ok 'git blame' || no 'git blame'
+
+# 28 - git reflog
+git -C "$G" checkout -q main
+REFLOG_OUTPUT=$(git -C "$G" reflog 2>/dev/null)
+echo "$REFLOG_OUTPUT" | grep -q "HEAD" && ok 'git reflog' || no 'git reflog'
+
+# 29 - git diff between branches
+git -C "$G" branch feature-diff
+echo "branch-change" > "$G/branch-file.txt"
+git -C "$G" add branch-file.txt
+git -C "$G" commit -q -m "branch change"
+DIFF_MAIN=$(git -C "$G" diff main..feature-diff --stat 2>/dev/null)
+echo "$DIFF_MAIN" | grep -q "branch-file.txt" && ok 'diff between branches' || no 'diff between branches'
+git -C "$G" branch -D feature-diff 2>/dev/null
+
+# 30 - git stash with untracked file
+git -C "$G" checkout -q main
+echo "untracked-content" > "$G/untracked.txt"
+git -C "$G" stash push -u -q -m "ares:untracked" 2>/dev/null
+test -f "$G/untracked.txt" && no 'stash removes untracked' || ok 'stash removes untracked'
+git -C "$G" stash pop -q 2>/dev/null
+grep -q "untracked-content" "$G/untracked.txt" && ok 'stash pop restores untracked' || no 'stash pop restores untracked'
+
+echo ""
+echo "--- session format extended ---"
+python3 << 'PYEOF'
+import json
+
+# Test reply_to field
+d = json.loads('{"formatVersion":1,"session":{"title":"Reply","messages":[{"role":"user","content":"question","createdAt":0},{"role":"assistant","content":"answer","reply_to":"{\\"id\\":\\"m1\\",\\"content\\":\\"question\\",\\"role\\":\\"user\\"}","createdAt":1}]}}')
+assert d['session']['messages'][1]['reply_to'] is not None
+reply = json.loads(d['session']['messages'][1]['reply_to'])
+assert reply['id'] == 'm1'
+assert reply['content'] == 'question'
+print('OK reply_to field')
+
+# Test reactions field
+d2 = json.loads('{"formatVersion":1,"session":{"title":"React","messages":[{"role":"assistant","content":"helpful","reactions":"{\\"up\\":true}","createdAt":0}]}}')
+reactions = json.loads(d2['session']['messages'][0]['reactions'])
+assert reactions['up'] == True
+print('OK reactions field')
+
+# Test feedback field
+d3 = json.loads('{"formatVersion":1,"session":{"title":"Feedback","messages":[{"role":"assistant","content":"response","feedback":"positive","createdAt":0}]}}')
+assert d3['session']['messages'][0]['feedback'] == 'positive'
+print('OK feedback field')
+
+# Test nested JSON in attachments
+d4 = json.loads('{"formatVersion":1,"session":{"title":"Nested","messages":[{"role":"user","content":"see files","attachments":"[{\\"path\\":\\"/tmp/a.txt\\",\\"name\\":\\"a.txt\\"},{\\"path\\":\\"/tmp/b.txt\\",\\"name\\":\\"b.txt\\"}]","createdAt":0}]}}')
+atts = json.loads(d4['session']['messages'][0]['attachments'])
+assert len(atts) == 2
+assert atts[0]['name'] == 'a.txt'
+print('OK nested attachments')
+
+# Test empty reply_to is null
+d5 = json.loads('{"formatVersion":1,"session":{"title":"NoReply","messages":[{"role":"assistant","content":"answer","reply_to":null,"createdAt":0}]}}')
+assert d5['session']['messages'][0]['reply_to'] is None
+print('OK null reply_to')
+PYEOF
+
+echo ""
+echo "--- git empty repo operations ---"
+E="$TD/emptyrepo"
+mkdir -p "$E"
+git init -q -b main "$E"
+git -C "$E" config user.email t
+git -C "$E" config user.name T
+
+# 31 - empty repo has no commits
+LOG_EMPTY=$(git -C "$E" log --oneline 2>&1) || true
+echo "$LOG_EMPTY" | grep -q "does not have any commits" && ok 'empty repo no commits' || no 'empty repo no commits'
+
+# 32 - empty repo stash list is empty
+EMPTY_STASH=$(git -C "$E" stash list 2>&1)
+[ -z "$EMPTY_STASH" ] && ok 'empty repo stash empty' || no 'empty repo stash empty'
+
+# 33 - empty repo branch list shows only main after first commit
+echo "init" > "$E/init.txt"
+git -C "$E" add init.txt
+git -C "$E" commit -q -m "first commit"
+BRANCH_COUNT=$(git -C "$E" branch | wc -l)
+[ "$BRANCH_COUNT" -eq 1 ] && ok 'empty repo single branch' || no "empty repo single branch ($BRANCH_COUNT)"
+
+echo ""
+echo "--- git concurrent operations ---"
+C="$TD/concurrent"
+mkdir -p "$C"
+git init -q -b main "$C"
+git -C "$C" config user.email t
+git -C "$C" config user.name T
+echo "init" > "$C/base.txt"
+git -C "$C" add base.txt
+git -C "$C" commit -q -m "init"
+
+# 34 - rapid stash push/pop cycle
+for i in 1 2 3; do
+  echo "cycle-$i" > "$C/cycle.txt"
+  git -C "$C" add cycle.txt
+  git -C "$C" stash push -u -q -m "ares:cycle-$i" 2>/dev/null
+  git -C "$C" stash pop -q 2>/dev/null
+done
+test -f "$C/cycle.txt" && ok 'rapid stash cycle' || no 'rapid stash cycle'
+
+# 35 - multiple rapid commits
+for i in 1 2 3 4 5; do
+  echo "commit-$i" > "$C/rapid.txt"
+  git -C "$C" add rapid.txt
+  git -C "$C" commit -q -m "rapid $i"
+done
+COMMIT_COUNT=$(git -C "$C" log --oneline | wc -l)
+[ "$COMMIT_COUNT" -ge 6 ] && ok "rapid commits ($COMMIT_COUNT)" || no "rapid commits ($COMMIT_COUNT)"
+
+echo ""
 echo "PASS: $P  FAIL: $F"
 exit $F
