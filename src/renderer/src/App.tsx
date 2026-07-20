@@ -734,7 +734,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /debug - show diagnostic and debug info, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -792,6 +792,53 @@ export default function App(): React.ReactElement {
         lines.push('\nRun `/help` for all available commands.')
         const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'debug': {
+        const lines: string[] = ['**🔍 Debug Info**\n']
+        const { sessions, workspacePath, activeTabId, tabs, messages } = useAppStore.getState()
+        const settings = store.settings
+
+        // Platform info
+        lines.push(`**Platform:** ${navigator.platform}`)
+        lines.push(`**User agent:** ${navigator.userAgent.slice(0, 80)}...`)
+
+        // App version
+        lines.push(`**App version:** ${'__VERSION__'}`)
+
+        // Memory (if available)
+        const mem = (performance as any).memory
+        if (mem) {
+          const usedMB = Math.round(mem.usedJSHeapSize / 1048576)
+          const totalMB = Math.round(mem.totalJSHeapSize / 1048576)
+          lines.push(`**Memory:** ${usedMB}MB / ${totalMB}MB JS heap`)
+        }
+
+        // Session stats
+        const pinned = sessions.filter((s: Session) => s.pinned).length
+        const archived = sessions.filter((s: Session) => s.archived).length
+        lines.push(`**Sessions:** ${sessions.length} total, ${pinned} pinned, ${archived} archived`)
+
+        // Current session details
+        lines.push(`**Active tab:** ${activeTabId || 'none'}`)
+        lines.push(`**Open tabs:** ${tabs.length}`)
+
+        // Messages in current session
+        lines.push(`**Messages in session:** ${messages.length}`)
+
+        // Workspace
+        lines.push(`**Workspace:** ${workspacePath || 'none'}`)
+
+        // API config
+        const hasApi = !!settings.apiBaseUrl
+        const hasKey = !!settings.apiKey
+        lines.push(`**API endpoint:** ${hasApi ? 'configured' : 'not set'}`)
+        lines.push(`**API key:** ${hasKey ? 'set' : 'not set'}`)
+        lines.push(`**Default model:** ${settings.defaultModel || 'not set'}`)
+
+        lines.push('\nRun `/status` for system health check.')
+        const dbgMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (dbgMsg) store.appendMessage(parseMessage(dbgMsg))
         break
       }
       case 'summary': {
