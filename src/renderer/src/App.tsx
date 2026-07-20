@@ -577,6 +577,31 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'log': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Recent Commits**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          try {
+            const commits = await el.git.log(workspacePath, 15)
+            if (commits.length === 0) {
+              lines.push('No commits found.')
+            } else {
+              for (const c of commits) {
+                const msg = c.message.length > 80 ? c.message.slice(0, 77) + '...' : c.message
+                lines.push(`· \`${c.shortHash}\` — ${msg} (_${c.author}, ${c.date}_)`)
+              }
+            }
+          } catch (err) {
+            lines.push(`Error reading git log: ${(err as Error).message}`)
+          }
+        }
+        const logMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (logMsg) store.appendMessage(parseMessage(logMsg))
+        break
+      }
       case 'review': {
         const msgs = await el.db.getMessages(sess.id)
         if (!msgs || msgs.length === 0) {
@@ -693,7 +718,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
