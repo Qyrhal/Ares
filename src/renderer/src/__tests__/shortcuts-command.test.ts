@@ -27,6 +27,7 @@ function buildShortcutsText(): string {
     '· `Shift + Enter` — New line',
     '· `Escape` — Cancel agent / stop streaming',
     '· `Ctrl + C` — Stop agent (when running)',
+    '· `Ctrl + Shift + R` — Regenerate last assistant response',
     '',
     '**Search**',
     '· `Cmd/Ctrl + Shift + F` — Search all agent transcripts',
