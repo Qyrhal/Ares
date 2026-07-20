@@ -208,6 +208,17 @@ function validatePath(p: string): void {
   if (!isInAllowed) {
     throw new Error(`Access denied: path outside workspace (${real})`)
   }
+
+  // Deny access to sensitive directories within home
+  const deniedDirs = ['.ssh', '.gnupg', '.aws', '.config/chromium', '.config/google-chrome', '.config/BraveSoftware']
+  const homeSep = home + nodePath.sep
+  if (real.startsWith(homeSep)) {
+    const rel = real.slice(homeSep.length)
+    const topDir = rel.split(nodePath.sep)[0]
+    if (deniedDirs.includes(topDir)) {
+      throw new Error(`Access denied: sensitive directory (${topDir})`)
+    }
+  }
 }
 
 function registerIpcHandlers(): void {
@@ -500,6 +511,9 @@ function registerIpcHandlers(): void {
     return { ...childDb, parent_id: parentSessionId }
   })
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
+    if (!/^https?:\/\//i.test(url)) {
+      throw new Error(`Blocked: only http/https URLs allowed (got ${url.slice(0, 80)})`)
+    }
     const { shell } = await import('electron')
     shell.openExternal(url)
   })
