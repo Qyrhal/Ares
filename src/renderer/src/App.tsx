@@ -1462,7 +1462,7 @@ export default function App(): React.ReactElement {
             } else {
               for (const branch of result.local) {
                 const marker = branch === result.current ? '* ' : '  '
-                lines.push(`${marker}\\`${branch}\\``)
+                lines.push(`${marker}\`${branch}\``)
               }
             }
             const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
@@ -1482,7 +1482,7 @@ export default function App(): React.ReactElement {
           }
           try {
             await el.git.createBranch(wsPath, branchName)
-            const msg = await el.db.addMessage(sess.id, 'system', `Created and switched to branch \\`${branchName}\\``)
+            const msg = await el.db.addMessage(sess.id, 'system', `Created and switched to branch \`${branchName}\``)
             if (msg) store.appendMessage(parseMessage(msg))
           } catch (err) {
             const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
@@ -1493,7 +1493,7 @@ export default function App(): React.ReactElement {
         const branchName = args.trim()
         try {
           await el.git.checkout(wsPath, branchName)
-          const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \\`${branchName}\\``)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \`${branchName}\``)
           if (msg) store.appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
