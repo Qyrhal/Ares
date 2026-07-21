@@ -14,6 +14,20 @@ import { contextWindow, estimateTokens } from '@/lib/context'
 import { effectiveProviders, makeModelRef, displayModel } from '@/lib/providers'
 import type { ProviderConfig } from '@/types'
 
+// Emoji shortcode map — common shortcodes to Unicode characters
+const EMOJI_MAP: Record<string, string> = {
+  heart: '❤️', 'heart-eyes': '😍', thumbsup: '👍', thumbsdown: '👎',
+  fire: '🔥', star: '⭐', clap: '👏', rocket: '🚀', check: '✅',
+  warning: '⚠️', error: '❌', bulb: '💡', sparkle: '✨', wave: '👋',
+  party: '🎉', thinking: '🤔', eyes: '👀', sweat: '😅', cry: '😢',
+  laugh: '😂', wink: '😉', cool: '😎', pray: '🙏', muscle: '💪',
+  lightning: '⚡', money: '💰', tada: '🎉', bug: '🐛', laptop: '💻',
+  memo: '📝', pushpin: '📌', package: '📦', gear: '⚙️', lock: '🔒',
+  unlock: '🔓', key: '🔑', link: '🔗', globe: '🌍', clock: '🕐',
+  calendar: '📅', chart: '📊', magnifying: '🔍', trash: '🗑️',
+  coffee: '☕', pizza: '🍕', rainbow: '🌈', sun: '☀️', moon: '🌙',
+}
+
 type PickerKind = 'builtin' | 'skill' | 'command'
 interface PickerItem {
   kind: PickerKind
@@ -216,6 +230,13 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
   const [showEffortPicker, setShowEffortPicker] = useState(false)
   const effortRef = useRef<HTMLDivElement>(null)
 
+  // emoji autocomplete state
+  const [showEmoji, setShowEmoji] = useState(false)
+  const [emojiQuery, setEmojiQuery] = useState('')
+  const [emojiIndex, setEmojiIndex] = useState(-1)
+  const [emojiCursor, setEmojiCursor] = useState(0)
+  const [emojiHighlight, setEmojiHighlight] = useState(0)
+
   const usedTokens = useMemo(() => estimateTokens(messages), [messages])
   const ctxWindow = useMemo(() => contextWindow(currentModel), [currentModel])
 
@@ -289,7 +310,31 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
   const closeAll = useCallback(() => {
     closeMentions()
     closeCommands()
+    setShowEmoji(false)
+    setEmojiQuery('')
+    setEmojiIndex(-1)
+    setEmojiCursor(0)
   }, [closeMentions, closeCommands])
+
+  // Emoji autocomplete
+  const filteredEmoji = useMemo(() => {
+    if (!emojiQuery) return []
+    const q = emojiQuery.toLowerCase()
+    return Object.entries(EMOJI_MAP)
+      .filter(([key]) => key.includes(q))
+      .slice(0, 20)
+      .map(([key, char]) => ({ key, char }))
+  }, [emojiQuery])
+
+  const insertEmoji = useCallback((char: string) => {
+    if (emojiIndex < 0 || emojiCursor < 0) return
+    const before = text.slice(0, emojiIndex)
+    const after = text.slice(emojiCursor)
+    const newText = before + char + after
+    setText(newText)
+    closeAll()
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [text, emojiIndex, emojiCursor, closeAll])
 
   const insertMention = useCallback((relPath: string) => {
     if (mentionCursor < 0 || mentionIndex < 0) return
@@ -460,6 +505,23 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       }
     }
 
+    // Check for : emoji shortcode
+    const colonIdx = textBefore.lastIndexOf(':')
+    if (colonIdx !== -1) {
+      const afterColon = textBefore.slice(colonIdx + 1)
+      if (!afterColon.includes(' ') && !afterColon.includes('\n') && afterColon.length <= 30) {
+        setEmojiIndex(colonIdx)
+        setEmojiCursor(cursor)
+        setShowModelPicker(false)
+        closeMentions()
+        closeCommands()
+        setShowEmoji(true)
+        setEmojiQuery(afterColon)
+        setEmojiHighlight(0)
+        return
+      }
+    }
+
     closeAll()
     setShowModelPicker(false)
   }, [openMentions, openCommands, closeAll, closeMentions, closeCommands, resetPromptHistoryIdx])
@@ -498,6 +560,14 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
       if (e.key === 'Enter' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight]); return }
       if (e.key === 'Tab' && filteredCommands[cmdHighlight]) { e.preventDefault(); executeCommand(filteredCommands[cmdHighlight]); return }
       if (e.key === 'Escape') { e.preventDefault(); closeCommands(); return }
+    }
+
+    if (showEmoji && filteredEmoji.length > 0) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); setEmojiHighlight((prev) => Math.min(prev + 1, filteredEmoji.length - 1)); return }
+      if (e.key === 'ArrowUp') { e.preventDefault(); setEmojiHighlight((prev) => Math.max(prev - 1, 0)); return }
+      if (e.key === 'Enter' && filteredEmoji[emojiHighlight]) { e.preventDefault(); insertEmoji(filteredEmoji[emojiHighlight].char); return }
+      if (e.key === 'Tab' && filteredEmoji[emojiHighlight]) { e.preventDefault(); insertEmoji(filteredEmoji[emojiHighlight].char); return }
+      if (e.key === 'Escape') { e.preventDefault(); closeAll(); return }
     }
 
     if (showModelPicker) {
@@ -574,7 +644,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
     setAttachments((prev) => [...prev, ...newAttachments])
   }
 
-  const anyDropdownOpen = showMentions || showCommands || showModelPicker
+  const anyDropdownOpen = showMentions || showCommands || showModelPicker || showEmoji
   useEffect(() => {
     if (!anyDropdownOpen) return
     const handleClick = (e: MouseEvent) => {
@@ -757,6 +827,24 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
                 return nodes
               })()}
               <div className="h-1" />
+            </div>
+          )}
+
+          {/* Emoji shortcode dropdown */}
+          {showEmoji && filteredEmoji.length > 0 && (
+            <div ref={dropdownRef} className="absolute bottom-full left-0 mb-1 max-h-48 w-64 overflow-y-auto rounded-lg border border-border bg-popover p-1 shadow-lg z-50">
+              {filteredEmoji.map((e, i) => (
+                <button
+                  key={e.key}
+                  type="button"
+                  className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === emojiHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
+                  onMouseDown={(ev) => { ev.preventDefault(); insertEmoji(e.char) }}
+                  onMouseEnter={() => setEmojiHighlight(i)}
+                >
+                  <span className="text-base">{e.char}</span>
+                  <span className="text-muted-foreground">:{e.key}:</span>
+                </button>
+              ))}
             </div>
           )}
 
