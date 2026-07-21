@@ -734,7 +734,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1497,6 +1497,41 @@ export default function App(): React.ReactElement {
           if (msg) store.appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'commit': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /commit <message>')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          if (status.staged.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No staged changes to commit. Use /stage to stage files first.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const fileCount = status.staged.length
+          await el.git.commit(wsPath, args)
+          const branchName = status.branch || 'HEAD'
+          const msg = await el.db.addMessage(sess.id, 'system', `**Committed** ${fileCount} file${fileCount === 1 ? '' : 's'} on \`${branchName}\`: "${args}"`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Commit failed:** ${(err as Error).message}`)
           if (msg) store.appendMessage(parseMessage(msg))
         }
         break

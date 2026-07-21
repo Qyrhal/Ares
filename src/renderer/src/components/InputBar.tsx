@@ -42,6 +42,7 @@ const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'pin',           description: 'Pin or unpin the current session' },
   { kind: 'builtin', name: 'branches',      description: 'List, create, or switch git branches' },
   { kind: 'builtin', name: 'stage',         description: 'Stage or unstage files for commit' },
+  { kind: 'builtin', name: 'commit',        description: 'Commit staged changes with a message' },
   { kind: 'builtin', name: 'debug',         description: 'Show diagnostic and debug information' },
   { kind: 'builtin', name: 'history',       description: 'Show recent prompt history' },
   { kind: 'builtin', name: 'log',          description: 'Show recent git commits' },
@@ -382,6 +383,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
           onCommand?.('help', '')
           return
+        case 'commit':
         case 'helpful':
         case 'not-helpful':
         case 'pr':
