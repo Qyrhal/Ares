@@ -25,7 +25,7 @@ interface StatusBarProps {
   className?: string
 }
 
-export function StatusBar({ workspacePath, currentModel, sessionCount, messages, className }: StatusBarProps): React.ReactElement {
+export const StatusBar = React.memo(function StatusBar({ workspacePath, currentModel, sessionCount, messages, className }: StatusBarProps): React.ReactElement {
   const [cpCount, setCpCount] = useState(0)
   const [mcpStatus, setMcpStatus] = useState<McpStatus[]>([])
   const [mcpBgTools, setMcpBgTools] = useState<string[]>([])
@@ -123,4 +123,4 @@ export function StatusBar({ workspacePath, currentModel, sessionCount, messages,
       </span>
     </div>
   )
-}
+})

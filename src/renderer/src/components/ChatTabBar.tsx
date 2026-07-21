@@ -17,7 +17,7 @@ interface ChatTabBarProps {
   onNewSideChat: () => void
 }
 
-export function ChatTabBar({
+export const ChatTabBar = React.memo(function ChatTabBar({
   tabs,
   activeTabId,
   sideChatSessionId,
@@ -82,4 +82,4 @@ export function ChatTabBar({
       </button>
     </div>
   )
-}
+})

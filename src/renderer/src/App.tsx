@@ -118,13 +118,22 @@ export default function App(): React.ReactElement {
   }, [])
 
   // ── Derived selectors ────────────────────────────────────────────────────────
-  const activeSessionTab = store.tabs.find(
-    (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
+  const activeSessionTab = React.useMemo(
+    () => store.tabs.find(
+      (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
+    ),
+    [store.tabs, store.activeTabId]
   )
-  const activeTab = store.tabs.find((t) =>
-    t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
+  const activeTab = React.useMemo(
+    () => store.tabs.find((t) =>
+      t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
+    ),
+    [store.tabs, store.activeTabId]
   )
-  const activeSession = store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null
+  const activeSession = React.useMemo(
+    () => store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null,
+    [store.sessions, activeSessionTab?.id]
+  )
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
