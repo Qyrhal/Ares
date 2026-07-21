@@ -734,7 +734,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1444,6 +1444,61 @@ export default function App(): React.ReactElement {
 
         const msg = await el.db.addMessage(sess.id, 'system', `**Exported** ${msgs.length} messages as Markdown (${md.length.toLocaleString()} characters).`)
         if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'branches': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        if (!args) {
+          try {
+            const result = await el.git.branches(wsPath)
+            const lines: string[] = ['**Git Branches**\n']
+            if (result.local.length === 0) {
+              lines.push('No branches found. Is this a git repository?')
+            } else {
+              for (const branch of result.local) {
+                const marker = branch === result.current ? '* ' : '  '
+                lines.push(`${marker}\\`${branch}\\``)
+              }
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+        if (args.startsWith('--new ')) {
+          const branchName = args.slice(6).trim()
+          if (!branchName) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /branches --new <branch-name>')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          try {
+            await el.git.createBranch(wsPath, branchName)
+            const msg = await el.db.addMessage(sess.id, 'system', `Created and switched to branch \\`${branchName}\\``)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+        const branchName = args.trim()
+        try {
+          await el.git.checkout(wsPath, branchName)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \\`${branchName}\\``)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
         break
       }
     }
