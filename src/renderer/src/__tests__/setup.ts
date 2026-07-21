@@ -83,6 +83,7 @@ const electronMock = {
   },
   ext: {
     fetchModels: vi.fn().mockResolvedValue({ data: [{ id: 'gpt-4o' }] }),
+    fetchUrl: vi.fn().mockResolvedValue({ ok: true, content: 'Hello', contentType: 'text/html', length: 5 }),
   },
   pi: {
     send: vi.fn(),
@@ -142,6 +143,9 @@ const electronMock = {
   },
   mcp: {
     status: vi.fn().mockResolvedValue([]),
+  },
+  lint: {
+    run: vi.fn().mockResolvedValue({ ok: true, errors: 0, output: 'No errors found.' }),
   },
 }
 

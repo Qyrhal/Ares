@@ -4,6 +4,8 @@ import { join } from 'path'
 import fs from 'fs'
 import { promises as fsPromises } from 'fs'
 import nodePath from 'path'
+import { exec as execCb } from 'child_process'
+import { promisify } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
   getSessions, createSession, updateSession, deleteSession,
@@ -223,6 +225,53 @@ function validatePath(p: string): void {
   }
 }
 
+// URL validation: restrict fetch-proxy IPC handlers to safe URLs
+import { isIP } from 'net'
+function validateFetchUrl(raw: string): URL {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    throw new Error(`Blocked: malformed URL (got ${raw.slice(0, 80)})`)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`Blocked: only http/https URLs allowed (got ${parsed.protocol}//...)`)
+  }
+  const hostname = parsed.hostname
+  if (isIP(hostname)) {
+    const ip = isIP(hostname)
+    if (ip === 4) {
+      const parts = hostname.split('.').map(Number)
+      // 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+      if (parts[0] === 127 || parts[0] === 10 ||
+          (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+          (parts[0] === 192 && parts[1] === 168)) {
+        throw new Error(`Blocked: private/internal IP address (${hostname})`)
+      }
+      // 169.254.0.0/16 (link-local / cloud metadata)
+      if (parts[0] === 169 && parts[1] === 254) {
+        throw new Error(`Blocked: link-local address (${hostname})`)
+      }
+      // 0.0.0.0
+      if (parts[0] === 0) {
+        throw new Error(`Blocked: zero address (${hostname})`)
+      }
+    } else if (ip === 6) {
+      // ::1 (loopback) and fe80::/10 (link-local)
+      if (hostname === '::1' || hostname.startsWith('fe80:')) {
+        throw new Error(`Blocked: internal IPv6 address (${hostname})`)
+      }
+    }
+  } else {
+    // Block localhost and common internal hostnames
+    const internalHosts = ['localhost', 'metadata.google.internal', 'instance-data', '169.254.169.254']
+    if (internalHosts.includes(hostname.toLowerCase())) {
+      throw new Error(`Blocked: internal hostname (${hostname})`)
+    }
+  }
+  return parsed
+}
+
 function registerIpcHandlers(): void {
   // DB – sessions
   ipcMain.handle('db:getSessions', (_, includeArchived?: boolean) => getSessions(includeArchived))
@@ -365,9 +414,46 @@ function registerIpcHandlers(): void {
   // MCP status
   ipcMain.handle('mcp:status', () => getMcpStatus())
 
+  // Web fetch — proxy URL fetch through main process to avoid CORS
+  ipcMain.handle('fetch:url', async (_, url: string) => {
+    try {
+      validateFetchUrl(url)
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status} ${res.statusText}` }
+      const contentType = res.headers.get('content-type') || ''
+      const text = await res.text()
+      const maxLen = 8000
+      const truncated = text.length > maxLen
+      return { ok: true, content: truncated ? text.slice(0, maxLen) + '\n\n[truncated]' : text, contentType, length: text.length }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  // Lint — run TypeScript type checking on the workspace
+  ipcMain.handle('lint:run', async (_, cwd: string) => {
+    const execAsync = promisify(execCb)
+    try {
+      const { stdout, stderr } = await execAsync('npx tsc --noEmit 2>&1', { cwd, timeout: 30_000 })
+      const output = (stdout + stderr).trim()
+      if (!output) return { ok: true, errors: 0, output: 'No errors found.' }
+      const errorLines = output.split('\n').filter(l => l.includes('error TS') || l.includes(': error'))
+      return { ok: errorLines.length === 0, errors: errorLines.length, output }
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; message: string }
+      const output = ((err.stdout || '') + (err.stderr || '')).trim()
+      if (output) {
+        const errorLines = output.split('\n').filter(l => l.includes('error TS') || l.includes(': error'))
+        return { ok: false, errors: errorLines.length, output }
+      }
+      return { ok: false, errors: 0, output: err.message }
+    }
+  })
+
   // API — proxy fetch through main process to avoid CORS
-  ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string) => {
-    const url = baseUrl.replace(/\/$/, '') + '/models'
+  ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string | undefined) => {
+    const parsed = validateFetchUrl(baseUrl.replace(/\/$/, '') + '/models')
+    const url = parsed.toString()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) })
@@ -376,8 +462,9 @@ function registerIpcHandlers(): void {
   })
 
   // Inline AI edit — calls chat completions to transform code
-  ipcMain.handle('inlineEdit:apply', async (_, code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string) => {
-    const url = (apiBaseUrl.replace(/\/$/, '')) + '/chat/completions'
+  ipcMain.handle('inlineEdit:apply', async (_, code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string | undefined) => {
+    const parsed = validateFetchUrl((apiBaseUrl.replace(/\/$/, '')) + '/chat/completions')
+    const url = parsed.toString()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }

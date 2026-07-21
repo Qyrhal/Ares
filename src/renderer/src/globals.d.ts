@@ -42,6 +42,10 @@ declare global {
         deleteMessage(id: string): Promise<void>
         updateMessage(id: string, updates: object): Promise<void>
         searchMessages(query: string, filters?: { startDate?: number; endDate?: number }): Promise<SearchResult[]>
+        getTodos(sessionId: string): Promise<{ id: string; sessionId: string; text: string; completed: boolean; createdAt: number }[]>
+        addTodo(sessionId: string, text: string): Promise<{ id: string; sessionId: string; text: string; completed: boolean; createdAt: number }>
+        updateTodo(id: string, updates: object): Promise<void>
+        deleteTodo(id: string): Promise<void>
       }
       settings: {
         get(): Promise<AppSettings>
@@ -70,7 +74,7 @@ declare global {
         kill(id: string): void
         onOutput(cb: (id: string, data: string) => void): () => void
       }
-      ext: { fetchModels(baseUrl: string, apiKey: string): Promise<{ data: { id: string }[] }> }
+      ext: { fetchModels(baseUrl: string, apiKey: *** Promise<{ data: { id: string }[] }>, fetchUrl(url: string): Promise<{ ok: boolean; content?: string; error?: string; contentType?: string; length?: number }> }
       tools: {
         readFile(path: string): Promise<string>
         writeFile(path: string, content: string): Promise<void>
@@ -113,6 +117,7 @@ declare global {
       }
       mcp: { status(): Promise<McpStatus[]> }
       shell: { openExternal(url: string): Promise<void> }
+      lint: { run(cwd: string): Promise<{ ok: boolean; errors: number; output: string }> }
       agentConfig: {
         get(): Promise<import('./types').AgentConfig>
         set(config: object): Promise<void>
