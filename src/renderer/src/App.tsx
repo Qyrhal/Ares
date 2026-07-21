@@ -733,6 +733,28 @@ export default function App(): React.ReactElement {
         if (costMsg) store.appendMessage(parseMessage(costMsg))
         break
       }
+      case 'context': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const used = estimateTokens(msgs)
+        const window = contextWindow(model)
+        const pct = Math.min(100, Math.round((used / window) * 100))
+        const barLen = 20
+        const filled = Math.round((pct / 100) * barLen)
+        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled)
+        const color = pct < 50 ? 'green' : pct < 75 ? 'yellow' : pct < 90 ? 'orange' : 'red'
+        const lines = [
+          `**Context Window**\n`,
+          `**Model:** ${displayModel(model)}`,
+          `**Used:** ~${used.toLocaleString()} tokens`,
+          `**Window:** ${window.toLocaleString()} tokens`,
+          `**Utilization:** ${pct}%  \`${bar}\``,
+          `\n*${color === 'green' ? ' Plenty of room.' : color === 'yellow' ? ' Getting warm.' : color === 'orange' ? ' Getting full — consider /compact.' : ' Near capacity — run /compact soon.'}*`,
+        ]
+        const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
       case 'theme': {
         const settings = useAppStore.getState().settings
         const arg = args?.trim().toLowerCase()
@@ -767,7 +789,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
