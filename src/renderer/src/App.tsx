@@ -734,7 +734,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1495,6 +1495,85 @@ export default function App(): React.ReactElement {
           await el.git.checkout(wsPath, branchName)
           const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \\`${branchName}\\``)
           if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'stage': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          if (!args) {
+            // Show staging status
+            const lines: string[] = ['**Staging Status**\n']
+            if (status.staged.length > 0) {
+              lines.push(`**Staged** (${status.staged.length} files)`)
+              for (const f of status.staged) {
+                lines.push(`  \`${f.path}\` — ${f.status}`)
+              }
+              lines.push('')
+            }
+            if (status.unstaged.length > 0) {
+              lines.push(`**Unstaged changes** (${status.unstaged.length} files)`)
+              for (const f of status.unstaged) {
+                lines.push(`  \`${f.path}\` — ${f.status}`)
+              }
+              lines.push('')
+            }
+            if (status.untracked.length > 0) {
+              lines.push(`**Untracked** (${status.untracked.length} files)`)
+              for (const f of status.untracked) {
+                lines.push(`  \`${f.path}\``)
+              }
+              lines.push('')
+            }
+            if (status.staged.length === 0 && status.unstaged.length === 0 && status.untracked.length === 0) {
+              lines.push('Working tree clean — nothing to stage.')
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else if (args === '--all') {
+            // Stage all files
+            await el.git.stageAll(wsPath)
+            const msg = await el.db.addMessage(sess.id, 'system', 'Staged all files.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else if (args.startsWith('--unstage ')) {
+            const target = args.slice(10).trim()
+            if (!target) {
+              const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /stage --unstage <file> or /stage --unstage --all')
+              if (msg) store.appendMessage(parseMessage(msg))
+              break
+            }
+            if (target === '--all') {
+              // Unstage all files
+              await el.git.unstageAll(wsPath)
+              const msg = await el.db.addMessage(sess.id, 'system', 'Unstaged all files.')
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              // Unstage a specific file
+              await el.git.unstageFile(wsPath, target)
+              const msg = await el.db.addMessage(sess.id, 'system', `Unstaged \`${target}\``)
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          } else {
+            // Stage a specific file
+            const filePath = args.trim()
+            await el.git.stageFile(wsPath, filePath)
+            const msg = await el.db.addMessage(sess.id, 'system', `Staged \`${filePath}\``)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
           if (msg) store.appendMessage(parseMessage(msg))

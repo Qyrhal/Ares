@@ -40,6 +40,8 @@ const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'review',       description: 'AI-powered review of session code and patterns' },
   { kind: 'builtin', name: 'rename',       description: 'Rename the current session' },
   { kind: 'builtin', name: 'pin',           description: 'Pin or unpin the current session' },
+  { kind: 'builtin', name: 'branches',      description: 'List, create, or switch git branches' },
+  { kind: 'builtin', name: 'stage',         description: 'Stage or unstage files for commit' },
   { kind: 'builtin', name: 'debug',         description: 'Show diagnostic and debug information' },
   { kind: 'builtin', name: 'history',       description: 'Show recent prompt history' },
   { kind: 'builtin', name: 'log',          description: 'Show recent git commits' },
