@@ -734,7 +734,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1640,6 +1640,26 @@ export default function App(): React.ReactElement {
           const msg = await el.db.addMessage(sess.id, 'system', `**Commit failed:** ${(err as Error).message}`)
           if (msg) store.appendMessage(parseMessage(msg))
         }
+        break
+      }
+      case 'undo': {
+        const msgs = useAppStore.getState().messages
+        // Find the last user message
+        const lastUserIdx = msgs.findLastIndex((m) => m.role === 'user')
+        if (lastUserIdx === -1) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Nothing to undo — no user messages found.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        // Collect messages to remove: the last user message and everything after it
+        const toRemove = msgs.slice(lastUserIdx)
+        for (const m of toRemove) {
+          await el.db.deleteMessage(m.id)
+        }
+        const remaining = msgs.slice(0, lastUserIdx)
+        store.setMessages(remaining)
+        const undoMsg = await el.db.addMessage(sess.id, 'system', `**Undone.** Removed ${toRemove.length} message${toRemove.length === 1 ? '' : 's'} (last exchange).`)
+        if (undoMsg) store.appendMessage(parseMessage(undoMsg))
         break
       }
       case 'stage': {
