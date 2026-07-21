@@ -42,6 +42,10 @@ declare global {
         deleteMessage(id: string): Promise<void>
         updateMessage(id: string, updates: object): Promise<void>
         searchMessages(query: string, filters?: { startDate?: number; endDate?: number }): Promise<SearchResult[]>
+        getTodos(sessionId: string): Promise<{ id: string; sessionId: string; text: string; completed: boolean; createdAt: number }[]>
+        addTodo(sessionId: string, text: string): Promise<{ id: string; sessionId: string; text: string; completed: boolean; createdAt: number }>
+        updateTodo(id: string, updates: object): Promise<void>
+        deleteTodo(id: string): Promise<void>
       }
       settings: {
         get(): Promise<AppSettings>

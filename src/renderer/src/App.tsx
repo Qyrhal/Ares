@@ -1798,6 +1798,71 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'task': {
+        const sub = args.trim().toLowerCase()
+        if (!sub || sub === 'list') {
+          const todos = useAppStore.getState().todos
+          if (todos.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No tasks. Use `/task add <text>` to create one.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const lines = ['**Tasks**\n']
+            for (const t of todos) {
+              const check = t.completed ? '✅' : '⬜'
+              lines.push(`${check} ${t.text}`)
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+        if (sub.startsWith('add ')) {
+          const text = args.trim().slice(4).trim()
+          if (!text) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/task add <text>`')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const todo = await el.db.addTodo(sess.id, text)
+          if (todo) store.addTodo(todo)
+          const msg = await el.db.addMessage(sess.id, 'system', `**Task added:** ${text}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (sub.startsWith('done ')) {
+          const index = parseInt(args.trim().slice(5).trim(), 10)
+          const todos = useAppStore.getState().todos
+          if (isNaN(index) || index < 1 || index > todos.length) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Usage: \`/task done <number>\` (1–${todos.length})`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const todo = todos[index - 1]
+          await el.db.updateTodo(todo.id, { completed: true })
+          store.updateTodo(todo.id, { completed: true })
+          const msg = await el.db.addMessage(sess.id, 'system', `**Task completed:** ${todo.text}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (sub.startsWith('remove ')) {
+          const index = parseInt(args.trim().slice(7).trim(), 10)
+          const todos = useAppStore.getState().todos
+          if (isNaN(index) || index < 1 || index > todos.length) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Usage: \`/task remove <number>\` (1–${todos.length})`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const todo = todos[index - 1]
+          await el.db.deleteTodo(todo.id)
+          store.removeTodo(todo.id)
+          const msg = await el.db.addMessage(sess.id, 'system', `**Task removed:** ${todo.text}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const msg = await el.db.addMessage(sess.id, 'system', '**Usage:**\n- `/task` or `/task list` — show all tasks\n- `/task add <text>` — add a new task\n- `/task done <n>` — mark task n as complete\n- `/task remove <n>` — remove task n')
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
     }
   }, [activeSession, store])
 
