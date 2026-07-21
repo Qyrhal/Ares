@@ -1772,6 +1772,32 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'lint': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const lintMsg = await el.db.addMessage(sess.id, 'system', '**Running type check...**')
+        if (lintMsg) store.appendMessage(parseMessage(lintMsg))
+        try {
+          const result = await el.lint.run(wsPath)
+          if (result.ok) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Lint clean** — ${result.output}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const summary = result.errors > 0 ? `${result.errors} error${result.errors === 1 ? '' : 's'} found` : 'Check completed with issues'
+            const output = result.output.length > 3000 ? result.output.slice(0, 3000) + '\n\n[truncated]' : result.output
+            const msg = await el.db.addMessage(sess.id, 'system', `**Lint: ${summary}**\n\n${output}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Lint error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
     }
   }, [activeSession, store])
 

@@ -3,6 +3,8 @@ import type NodePty from 'node-pty'
 import { join } from 'path'
 import fs from 'fs'
 import nodePath from 'path'
+import { exec as execCb } from 'child_process'
+import { promisify } from 'util'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
   getSessions, createSession, updateSession, deleteSession,
@@ -375,6 +377,26 @@ function registerIpcHandlers(): void {
       return { ok: true, content: truncated ? text.slice(0, maxLen) + '\n\n[truncated]' : text, contentType, length: text.length }
     } catch (e) {
       return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  // Lint — run TypeScript type checking on the workspace
+  ipcMain.handle('lint:run', async (_, cwd: string) => {
+    const execAsync = promisify(execCb)
+    try {
+      const { stdout, stderr } = await execAsync('npx tsc --noEmit 2>&1', { cwd, timeout: 30_000 })
+      const output = (stdout + stderr).trim()
+      if (!output) return { ok: true, errors: 0, output: 'No errors found.' }
+      const errorLines = output.split('\n').filter(l => l.includes('error TS') || l.includes(': error'))
+      return { ok: errorLines.length === 0, errors: errorLines.length, output }
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; message: string }
+      const output = ((err.stdout || '') + (err.stderr || '')).trim()
+      if (output) {
+        const errorLines = output.split('\n').filter(l => l.includes('error TS') || l.includes(': error'))
+        return { ok: false, errors: errorLines.length, output }
+      }
+      return { ok: false, errors: 0, output: err.message }
     }
   })
 
