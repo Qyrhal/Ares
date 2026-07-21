@@ -1,4 +1,4 @@
-import { ChildProcess, spawn } from 'child_process'
+import { ChildProcess, execFileSync } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
@@ -73,10 +73,17 @@ function findLspServer(filePath: string): string | null {
 
 function findExecutable(name: string): string | null {
   try {
-    const result = require('child_process').execSync(`which ${name} 2>/dev/null || where ${name} 2>/dev/null`, { encoding: 'utf-8' }).trim()
+    // Use execFileSync to avoid shell injection via name
+    const result = execFileSync('which', [name], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
     return result || null
   } catch {
-    return null
+    // Fallback: try Windows 'where' command
+    try {
+      const result = execFileSync('where', [name], { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+      return result || null
+    } catch {
+      return null
+    }
   }
 }
 
@@ -97,10 +104,10 @@ export async function getDiagnostics(filePath: string): Promise<Diagnostic[]> {
       if (tscPath) {
         const projectDir = findProjectDir(filePath)
         if (projectDir && fs.existsSync(path.join(projectDir, 'tsconfig.json'))) {
-          const out = require('child_process').execSync(
-            `npx -s tsc --noEmit --pretty false 2>&1 || true`,
-            { cwd: projectDir, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 30_000 }
-          )
+          const out = execFileSync('npx', ['-s', 'tsc', '--noEmit', '--pretty', 'false'], {
+            cwd: projectDir, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 30_000,
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
           const lines = out.split('\n').filter(Boolean)
           for (const line of lines) {
             const m = line.match(/^(.+)\((\d+),(\d+)\):\s+(error|warning)\s+(.+)$/)
@@ -129,10 +136,10 @@ export async function getDiagnostics(filePath: string): Promise<Diagnostic[]> {
       if (eslintPath && fs.existsSync(path.join(findProjectDir(filePath) || '', '.eslintrc'))) {
         const content = fs.readFileSync(filePath, 'utf-8')
         const relPath = path.relative(findProjectDir(filePath) || '', filePath)
-        const out = require('child_process').execSync(
-          `npx -s eslint --format json --stdin --stdin-filename "${relPath}"`,
-          { cwd: findProjectDir(filePath) || '.', input: content, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 15_000 }
-        )
+        const out = execFileSync('npx', ['-s', 'eslint', '--format', 'json', '--stdin', '--stdin-filename', relPath], {
+          cwd: findProjectDir(filePath) || '.', input: content, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 15_000,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
         const parsed = JSON.parse(out)
         if (Array.isArray(parsed)) {
           for (const fileResult of parsed) {
