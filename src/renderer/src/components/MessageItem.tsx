@@ -16,7 +16,6 @@ import { Tooltip } from '@/components/ui/tooltip'
 import ReactMarkdown from 'react-markdown'
 import rehypeHighlight from 'rehype-highlight'
 import remarkGfm from 'remark-gfm'
-import hljs from 'highlight.js'
 import { toast } from 'sonner'
 
 let mermaidRenderCounter = 0
@@ -37,6 +36,17 @@ function loadMermaid(): Promise<typeof import('mermaid')['default']> {
     })
   }
   return mermaidPromise
+}
+
+// highlight.js is a heavy syntax-highlighting library (~300KB) — load it lazily
+// so sessions that never render code blocks don't pay for it at startup.
+type HljsModule = typeof import('highlight.js')['default']
+let hljsPromise: Promise<HljsModule> | null = null
+function loadHljs(): Promise<HljsModule> {
+  if (!hljsPromise) {
+    hljsPromise = import('highlight.js').then((mod) => mod.default)
+  }
+  return hljsPromise
 }
 
 interface MessageItemProps {
@@ -174,13 +184,23 @@ function MermaidDiagram({ code }: { code: string }): React.ReactElement {
 // ── Generic highlighted code (for tool call input/output) ──────────────────────
 
 function HighlightedCode({ text, language }: { text: string; language?: string }): React.ReactElement {
-  const html = React.useMemo(() => {
-    try {
-      if (language && hljs.getLanguage(language)) return hljs.highlight(text, { language }).value
-      return hljs.highlightAuto(text).value
-    } catch {
-      return null
-    }
+  const [html, setHtml] = React.useState<string | null>(null)
+
+  React.useEffect(() => {
+    let cancelled = false
+    loadHljs().then((hljs) => {
+      if (cancelled) return
+      try {
+        const result =
+          language && hljs.getLanguage(language)
+            ? hljs.highlight(text, { language }).value
+            : hljs.highlightAuto(text).value
+        setHtml(result)
+      } catch {
+        setHtml(null)
+      }
+    })
+    return () => { cancelled = true }
   }, [text, language])
 
   if (html === null) return <code>{text}</code>

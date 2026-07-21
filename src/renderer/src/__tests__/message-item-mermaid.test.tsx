@@ -202,7 +202,7 @@ describe('MessageItem — tool call elapsed counter', () => {
   })
 })
 describe('MessageItem — tool call syntax highlighting', () => {
-  it('shows tool input/output with highlight.js markup once expanded', () => {
+  it('shows tool input/output with highlight.js markup once expanded', async () => {
     const message = mkMessage({
       role: 'tool',
       toolName: 'bash',
@@ -214,8 +214,10 @@ describe('MessageItem — tool call syntax highlighting', () => {
 
     fireEvent.click(screen.getByText('bash'))
 
-    const codeEls = document.querySelectorAll('code.hljs')
-    expect(codeEls.length).toBe(2)
+    await waitFor(() => {
+      const codeEls = document.querySelectorAll('code.hljs')
+      expect(codeEls.length).toBe(2)
+    })
     expect(document.body.textContent).toContain('"command"')
     expect(document.body.textContent).toContain('file1.ts')
   })
