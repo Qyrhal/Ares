@@ -23,7 +23,7 @@ import { SessionSearchOverlay } from '@/components/SessionSearchOverlay'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
-import { applyTheme, applyColorMode } from '@/lib/theme'
+import { applyTheme, applyColorMode, THEMES, type ColorMode } from '@/lib/theme'
 import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
 import { estimateCost } from '@/lib/pricing'
 import { hasProvider, displayModel } from '@/lib/providers'
@@ -733,8 +733,41 @@ export default function App(): React.ReactElement {
         if (costMsg) store.appendMessage(parseMessage(costMsg))
         break
       }
+      case 'theme': {
+        const settings = useAppStore.getState().settings
+        const arg = args?.trim().toLowerCase()
+        if (!arg) {
+          const themeList = THEMES.map((t) => t.id === settings.themeId ? `**${t.label}** (current)` : t.label).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `**Current theme:** ${settings.colorMode} mode, accent: ${settings.themeId}\n\n**Accents:** ${themeList}\n**Modes:** dark, light\n\nUsage: /theme dark|light, /theme <accent>`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (arg === 'dark' || arg === 'light') {
+          const next = { ...settings, colorMode: arg as ColorMode }
+          await el.settings.set(next)
+          store.setSettings(next)
+          applyColorMode(arg as ColorMode)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to **${arg}** mode.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const match = THEMES.find((t) => t.id === arg || t.label.toLowerCase() === arg)
+        if (!match) {
+          const ids = THEMES.map((t) => t.id).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `Unknown theme: \`${arg}\`. Available: ${ids}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const next = { ...settings, themeId: match.id }
+        await el.settings.set(next)
+        store.setSettings(next)
+        applyTheme(match.id)
+        const msg = await el.db.addMessage(sess.id, 'system', `Accent changed to **${match.label}**.`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
