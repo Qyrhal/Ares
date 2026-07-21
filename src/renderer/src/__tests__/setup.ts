@@ -144,6 +144,9 @@ const electronMock = {
   mcp: {
     status: vi.fn().mockResolvedValue([]),
   },
+  lint: {
+    run: vi.fn().mockResolvedValue({ ok: true, errors: 0, output: 'No errors found.' }),
+  },
 }
 
 Object.defineProperty(window, 'electron', { value: electronMock, writable: true })

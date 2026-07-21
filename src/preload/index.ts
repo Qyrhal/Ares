@@ -226,11 +226,15 @@ const shellApi = {
 }
 
 const inlineEditApi = {
-  apply: (code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string) =>
+  apply: (code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: *** =>
     ipcRenderer.invoke('inlineEdit:apply', code, instruction, model, apiBaseUrl, apiKey),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi }
+const lintApi = {
+  run: (cwd: string) => ipcRenderer.invoke('lint:run', cwd),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

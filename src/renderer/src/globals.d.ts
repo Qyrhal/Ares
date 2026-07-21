@@ -113,6 +113,7 @@ declare global {
       }
       mcp: { status(): Promise<McpStatus[]> }
       shell: { openExternal(url: string): Promise<void> }
+      lint: { run(cwd: string): Promise<{ ok: boolean; errors: number; output: string }> }
       agentConfig: {
         get(): Promise<import('./types').AgentConfig>
         set(config: object): Promise<void>
