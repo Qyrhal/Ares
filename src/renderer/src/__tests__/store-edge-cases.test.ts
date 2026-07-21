@@ -979,3 +979,144 @@ describe('store — setGitLoading / setActiveCommit edge cases', () => {
     expect(useAppStore.getState().activeCommit).toBeNull()
   })
 })
+
+// ── removeSession does NOT remove tabs ────────────────────────────────────
+
+describe('store — removeSession does NOT remove tabs', () => {
+  it('removing a session leaves its tab intact', () => {
+    useAppStore.setState({
+      sessions: [mkSession({ id: 's1' })],
+      tabs: [{ type: 'session', id: 's1', title: 'Tab 1' }],
+    })
+    useAppStore.getState().removeSession('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().tabs[0]).toEqual({ type: 'session', id: 's1', title: 'Tab 1' })
+  })
+
+  it('removing a session leaves non-matching tabs intact', () => {
+    useAppStore.setState({
+      sessions: [mkSession({ id: 's1' }), mkSession({ id: 's2' })],
+      tabs: [
+        { type: 'session', id: 's1', title: 'Tab 1' },
+        { type: 'session', id: 's2', title: 'Tab 2' },
+      ],
+    })
+    useAppStore.getState().removeSession('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    const sessionIds = useAppStore.getState().tabs
+      .filter((t): t is Extract<typeof t, { type: 'session' }> => t.type === 'session')
+      .map((t) => t.id)
+    expect(sessionIds).toEqual(['s1', 's2'])
+  })
+
+  it('removing last session leaves tabs intact', () => {
+    useAppStore.setState({
+      sessions: [mkSession({ id: 's1' })],
+      tabs: [{ type: 'session', id: 's1', title: 'Tab 1' }],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().removeSession('s1')
+    expect(useAppStore.getState().sessions).toHaveLength(0)
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().tabs[0]).toEqual(expect.objectContaining({ id: 's1' }))
+  })
+})
+
+// ── closeTab adjacent activation edge cases ────────────────────────────────
+
+describe('store — closeTab adjacent activation edge cases', () => {
+  it('closing middle of 3 tabs activates the next one', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Tab 1' },
+        { type: 'session', id: 's2', title: 'Tab 2' },
+        { type: 'session', id: 's3', title: 'Tab 3' },
+      ],
+      activeTabId: 's2',
+    })
+    useAppStore.getState().closeTab('s2')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect(useAppStore.getState().activeTabId).toBe('s3')
+  })
+
+  it('closing first tab activates the second', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Tab 1' },
+        { type: 'session', id: 's2', title: 'Tab 2' },
+      ],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().closeTab('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+  })
+
+  it('closing last tab activates the previous', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Tab 1' },
+        { type: 'session', id: 's2', title: 'Tab 2' },
+      ],
+      activeTabId: 's2',
+    })
+    useAppStore.getState().closeTab('s2')
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+
+  it('closing only tab leaves activeTabId null', () => {
+    useAppStore.setState({
+      tabs: [{ type: 'session', id: 's1', title: 'Tab 1' }],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().closeTab('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(0)
+    expect(useAppStore.getState().activeTabId).toBeNull()
+  })
+
+  it('closing inactive tab preserves activeTabId', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Tab 1' },
+        { type: 'session', id: 's2', title: 'Tab 2' },
+        { type: 'session', id: 's3', title: 'Tab 3' },
+      ],
+      activeTabId: 's2',
+    })
+    useAppStore.getState().closeTab('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+  })
+})
+
+// ── openSessionTab edge cases ──────────────────────────────────────────────
+
+describe('store — openSessionTab edge cases', () => {
+  it('switches activeView to chat even from git view', () => {
+    useAppStore.setState({ activeView: 'git' })
+    useAppStore.getState().openSessionTab(mkSession({ id: 's1' }))
+    expect(useAppStore.getState().activeView).toBe('chat')
+  })
+
+  it('does not switch activeView for file tabs', () => {
+    useAppStore.setState({ activeView: 'git' })
+    useAppStore.getState().openFileTab({ name: 'a.ts', path: '/a.ts', isDirectory: false } as any)
+    expect(useAppStore.getState().activeView).toBe('git')
+  })
+
+  it('can open multiple different session tabs', () => {
+    useAppStore.getState().openSessionTab(mkSession({ id: 's1', title: 'Session 1' }))
+    useAppStore.getState().openSessionTab(mkSession({ id: 's2', title: 'Session 2' }))
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect(useAppStore.getState().tabs[0]).toEqual(expect.objectContaining({ id: 's1' }))
+    expect(useAppStore.getState().tabs[1]).toEqual(expect.objectContaining({ id: 's2' }))
+  })
+
+  it('reuses existing tab when opening same session', () => {
+    useAppStore.getState().openSessionTab(mkSession({ id: 's1', title: 'Session 1' }))
+    useAppStore.getState().openSessionTab(mkSession({ id: 's1', title: 'Session 1 Updated' }))
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().tabs[0]).toEqual(expect.objectContaining({ id: 's1' }))
+  })
+})
