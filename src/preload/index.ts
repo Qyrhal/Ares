@@ -82,7 +82,7 @@ const nativeTerminal = {
 }
 
 const extApi = {
-  fetchModels: (baseUrl: string, apiKey: *** => ipcRenderer.invoke('api:fetchModels', baseUrl, apiKey),
+  fetchModels: (baseUrl: string, apiKey: string) => ipcRenderer.invoke('api:fetchModels', baseUrl, apiKey),
   fetchUrl: (url: string) => ipcRenderer.invoke('fetch:url', url),
 }
 
@@ -226,7 +226,7 @@ const shellApi = {
 }
 
 const inlineEditApi = {
-  apply: (code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: *** =>
+  apply: (code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string) =>
     ipcRenderer.invoke('inlineEdit:apply', code, instruction, model, apiBaseUrl, apiKey),
 }
 
