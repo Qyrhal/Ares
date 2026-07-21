@@ -28,6 +28,25 @@ const BASE_TODO = {
   created_at: 1200,
 }
 
+function rawMsg(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'm1',
+    session_id: 's1',
+    role: 'user',
+    content: 'Hello',
+    attachments: null,
+    tool_name: null,
+    tool_status: null,
+    tool_input: null,
+    tool_output: null,
+    thinking: null,
+    reply_to: null,
+    reactions: null,
+    created_at: 1500,
+    ...overrides,
+  }
+}
+
 // ── parseSession ─────────────────────────────────────────────────────────────
 
 describe('parseSession — core fields', () => {
@@ -453,5 +472,90 @@ describe('parseMessage — feedback field', () => {
     expect(m.replyTo).toEqual({ id: 'm2', content: 'Why?', role: 'user' })
     expect(m.reactions).toEqual({ up: true })
     expect(m.feedback).toBe('helpful')
+  })
+})
+
+describe('parseSession — robustness', () => {
+  it('ignores extra unknown fields', () => {
+    const raw = { id: 's1', title: 'T', model: 'gpt-4', created_at: 1, updated_at: 1, message_count: 0, foobar: 'noise', nested: { random: true } }
+    const s = parseSession(raw)
+    expect(s.id).toBe('s1')
+    // should not throw
+  })
+  it('handles null optional fields gracefully', () => {
+    const raw = { id: 's1', title: 'T', model: 'gpt-4', created_at: 1, updated_at: 1, message_count: 0, workspace_path: null, parent_id: null }
+    const s = parseSession(raw)
+    expect(s.workspacePath).toBeUndefined()
+    expect(s.parentId).toBeNull()
+  })
+  it('parses all optional fields when present', () => {
+    const raw = { id: 's1', title: 'T', model: 'gpt-4', created_at: 1, updated_at: 1, message_count: 0, pinned: true, archived: true, effort: 'high', permissionMode: 'yolo', workspace_path: '/proj', parent_id: 'p1', agent_status: 'running', notes: 'my notes', is_side_chat: true }
+    const s = parseSession(raw)
+    expect(s.pinned).toBe(true)
+    expect(s.archived).toBe(true)
+    expect(s.effort).toBe('high')
+    expect(s.permissionMode).toBe('yolo')
+    expect(s.workspacePath).toBe('/proj')
+    expect(s.parentId).toBe('p1')
+    expect(s.agentStatus).toBe('running')
+    expect(s.notes).toBe('my notes')
+    expect(s.isSideChat).toBe(true)
+  })
+  it('defaults isSideChat to false when absent', () => {
+    expect(parseSession(BASE_SESSION).isSideChat).toBe(false)
+  })
+  it('defaults effort to undefined when absent', () => {
+    const s = parseSession(BASE_SESSION)
+    expect(s.effort).toBeUndefined()
+  })
+})
+
+describe('parseMessage — robustness', () => {
+  it('ignores extra unknown fields', () => {
+    const raw = rawMsg({ extraField: 'ignore', nested: { x: 1 } })
+    const msg = parseMessage(raw)
+    expect(msg.id).toBe('m1')
+  })
+  it('handles all null optional fields', () => {
+    const raw = rawMsg({ attachments: null, tool_name: null, tool_status: null, tool_input: null, tool_output: null, thinking: null, reply_to: null, reactions: null, feedback: null })
+    const msg = parseMessage(raw)
+    expect(msg.attachments).toBeUndefined()
+    expect(msg.toolName).toBeUndefined()
+    expect(msg.replyTo).toBeUndefined()
+  })
+  it('parses all tool fields when present', () => {
+    const raw = rawMsg({ tool_name: 'readFile', tool_status: 'done', tool_input: '{"path":"/test"}', tool_output: 'file content here' })
+    const msg = parseMessage(raw)
+    expect(msg.toolName).toBe('readFile')
+    expect(msg.toolStatus).toBe('done')
+    expect(msg.toolInput).toBe('{"path":"/test"}')
+    expect(msg.toolOutput).toBe('file content here')
+  })
+  it('parses thinking field as string', () => {
+    const raw = rawMsg({ thinking: 'Let me analyze this...' })
+    const msg = parseMessage(raw)
+    expect(msg.thinking).toBe('Let me analyze this...')
+  })
+  it('parses feedback field', () => {
+    const raw = rawMsg({ feedback: 'thumbs_up' })
+    const msg = parseMessage(raw)
+    expect(msg.feedback).toBe('thumbs_up')
+  })
+})
+
+describe('parseTodo — robustness', () => {
+  it('ignores extra unknown fields', () => {
+    const raw = { id: 't1', session_id: 's1', text: 'Task', completed: 0, created_at: 100, randomField: 'noise' }
+    const todo = parseTodo(raw)
+    expect(todo.id).toBe('t1')
+    expect(todo.text).toBe('Task')
+  })
+  it('rejects completed as string "0" (expects number)', () => {
+    const raw = { id: 't1', session_id: 's1', text: 'Task', completed: '0', created_at: 100 }
+    expect(() => parseTodo(raw)).toThrow()
+  })
+  it('rejects completed as string "1" (expects number)', () => {
+    const raw = { id: 't1', session_id: 's1', text: 'Task', completed: '1', created_at: 100 }
+    expect(() => parseTodo(raw)).toThrow()
   })
 })
