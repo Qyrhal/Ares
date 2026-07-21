@@ -743,7 +743,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -848,6 +848,112 @@ export default function App(): React.ReactElement {
         lines.push('\nRun `/status` for system health check.')
         const dbgMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (dbgMsg) store.appendMessage(parseMessage(dbgMsg))
+        break
+      }
+      case 'doctor': {
+        const lines: string[] = ['**🩺 Ares Doctor — Environment Diagnostics**\n']
+        const { sessions, workspacePath } = useAppStore.getState()
+        const settings = store.settings
+        const checks: { label: string; ok: boolean; detail: string }[] = []
+
+        // 1. Platform
+        const platform = navigator.platform
+        lines.push(`**Platform:** ${platform}`)
+
+        // 2. App version
+        const appVersion = '__VERSION__'
+        lines.push(`**App version:** ${appVersion}`)
+
+        // 3. Electron / Node detection
+        const isElectron = !!(window as any).electron || !!(window as any).require
+        checks.push({ label: 'Electron runtime', ok: isElectron, detail: isElectron ? 'running in Electron' : 'not detected (web mode)' })
+
+        // 4. API configuration
+        const hasApi = !!settings.apiBaseUrl
+        const hasKey = !!settings.apiKey
+        checks.push({ label: 'API endpoint', ok: hasApi, detail: hasApi ? `\`${settings.apiBaseUrl}\`` : 'not configured — run /model to set up' })
+        checks.push({ label: 'API key', ok: hasKey, detail: hasKey ? 'set' : 'not set (may work for free models)' })
+        checks.push({ label: 'Default model', ok: !!settings.defaultModel, detail: settings.defaultModel || 'not set' })
+
+        // 5. API health check
+        if (hasApi) {
+          try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 5000)
+            const resp = await fetch(`${settings.apiBaseUrl.replace(/\/$/, '')}/models`, {
+              signal: controller.signal,
+              headers: hasKey ? { Authorization: `Bearer ${settings.apiKey}` } : {},
+            })
+            clearTimeout(timeout)
+            checks.push({ label: 'API connectivity', ok: resp.ok, detail: resp.ok ? 'reachable' : `HTTP ${resp.status}` })
+          } catch {
+            checks.push({ label: 'API connectivity', ok: false, detail: 'unreachable — check URL and network' })
+          }
+        }
+
+        // 6. Workspace
+        checks.push({ label: 'Workspace folder', ok: !!workspacePath, detail: workspacePath ? `\`${workspacePath}\`` : 'none — use /folder to open' })
+
+        // 7. Git
+        if (workspacePath) {
+          try {
+            const status = await el.git.status(workspacePath)
+            checks.push({ label: 'Git repository', ok: status.hasRepo, detail: status.hasRepo ? `branch \`${status.branch || '(detached)'}\`` : 'not a git repo' })
+          } catch (err) {
+            checks.push({ label: 'Git repository', ok: false, detail: `error: ${(err as Error).message}` })
+          }
+        } else {
+          checks.push({ label: 'Git repository', ok: false, detail: 'no workspace open' })
+        }
+
+        // 8. Sessions
+        const totalSessions = sessions.length
+        const running = sessions.filter((s: Session) => s.agentStatus === 'running').length
+        checks.push({ label: 'Sessions', ok: totalSessions > 0, detail: `${totalSessions} total, ${running} running` })
+
+        // 9. Memory (if available)
+        const mem = (performance as any).memory
+        if (mem) {
+          const usedMB = Math.round(mem.usedJSHeapSize / 1048576)
+          const totalMB = Math.round(mem.totalJSHeapSize / 1048576)
+          const pct = Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100)
+          checks.push({ label: 'Memory (JS heap)', ok: pct < 80, detail: `${usedMB}MB / ${totalMB}MB (${pct}%)` })
+        }
+
+        // 10. Agent config summary (MCP, skills, extensions)
+        try {
+          const agentConfig = await el.agentConfig.get()
+          const mcpCount = agentConfig.mcpServers?.length ?? 0
+          const skillCount = agentConfig.skills?.length ?? 0
+          const extCount = agentConfig.extensions?.length ?? 0
+          const cmdCount = agentConfig.commands?.length ?? 0
+          checks.push({ label: 'MCP servers', ok: true, detail: `${mcpCount} configured` })
+          checks.push({ label: 'Skills', ok: true, detail: `${skillCount} loaded` })
+          checks.push({ label: 'Extensions', ok: true, detail: `${extCount} loaded` })
+          checks.push({ label: 'Plugin commands', ok: true, detail: `${cmdCount} registered` })
+        } catch {
+          checks.push({ label: 'Agent config', ok: false, detail: 'unable to load' })
+        }
+
+        // Render checks
+        lines.push('')
+        for (const c of checks) {
+          const icon = c.ok ? '✅' : '⚠️'
+          lines.push(`${icon} **${c.label}:** ${c.detail}`)
+        }
+
+        // Summary
+        const failCount = checks.filter((c) => !c.ok).length
+        lines.push('')
+        if (failCount === 0) {
+          lines.push('**All checks passed.** Your environment looks healthy.')
+        } else {
+          lines.push(`**${failCount} issue(s) found.** Review the warnings above.`)
+        }
+        lines.push('\nRun `/status` for a quick health check, or `/debug` for developer diagnostics.')
+
+        const doctorMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (doctorMsg) store.appendMessage(parseMessage(doctorMsg))
         break
       }
       case 'history': {
@@ -1543,6 +1649,26 @@ export default function App(): React.ReactElement {
           const msg = await el.db.addMessage(sess.id, 'system', `**Commit failed:** ${(err as Error).message}`)
           if (msg) store.appendMessage(parseMessage(msg))
         }
+        break
+      }
+      case 'undo': {
+        const msgs = useAppStore.getState().messages
+        // Find the last user message
+        const lastUserIdx = msgs.findLastIndex((m) => m.role === 'user')
+        if (lastUserIdx === -1) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Nothing to undo — no user messages found.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        // Collect messages to remove: the last user message and everything after it
+        const toRemove = msgs.slice(lastUserIdx)
+        for (const m of toRemove) {
+          await el.db.deleteMessage(m.id)
+        }
+        const remaining = msgs.slice(0, lastUserIdx)
+        store.setMessages(remaining)
+        const undoMsg = await el.db.addMessage(sess.id, 'system', `**Undone.** Removed ${toRemove.length} message${toRemove.length === 1 ? '' : 's'} (last exchange).`)
+        if (undoMsg) store.appendMessage(parseMessage(undoMsg))
         break
       }
       case 'stage': {

@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog, session } from 'electron'
 import type NodePty from 'node-pty'
 import { join } from 'path'
 import fs from 'fs'
+import { promises as fsPromises } from 'fs'
 import nodePath from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import {
@@ -49,21 +50,22 @@ const EXCLUDED = new Set([
   '__pycache__', '.cache', '.venv', 'venv', 'build', 'coverage'
 ])
 
-function readDir(dirPath: string, depth = 0): FileNode[] {
+async function readDir(dirPath: string, depth = 0): Promise<FileNode[]> {
   if (depth > 5) return []
   try {
-    return fs.readdirSync(dirPath)
-      .filter((name) => !EXCLUDED.has(name) && !name.startsWith('.'))
-      .map((name): FileNode | null => {
-        const fullPath = nodePath.join(dirPath, name)
-        try {
-          const stat = fs.statSync(fullPath)
-          if (stat.isDirectory()) {
-            return { name, path: fullPath, type: 'directory', children: readDir(fullPath, depth + 1) }
-          }
-          return { name, path: fullPath, type: 'file' }
-        } catch { return null }
-      })
+    const names = await fsPromises.readdir(dirPath)
+    const filtered = names.filter((name) => !EXCLUDED.has(name) && !name.startsWith('.'))
+    const nodes: (FileNode | null)[] = await Promise.all(filtered.map(async (name): Promise<FileNode | null> => {
+      const fullPath = nodePath.join(dirPath, name)
+      try {
+        const stat = await fsPromises.stat(fullPath)
+        if (stat.isDirectory()) {
+          return { name, path: fullPath, type: 'directory', children: await readDir(fullPath, depth + 1) }
+        }
+        return { name, path: fullPath, type: 'file' }
+      } catch { return null }
+    }))
+    return nodes
       .filter((n): n is FileNode => n !== null)
       .sort((a, b) => {
         if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
@@ -278,45 +280,45 @@ function registerIpcHandlers(): void {
   })
 
   // File system
-  ipcMain.handle('fs:readDir', (_, p: string) => { validatePath(p); return readDir(p) })
-  ipcMain.handle('fs:readFile', (_, p: string) => { validatePath(p); return fs.readFileSync(p, 'utf-8') })
-  ipcMain.handle('fs:writeFile', (_, p: string, content: string) => {
+  ipcMain.handle('fs:readDir', async (_, p: string) => { validatePath(p); return readDir(p) })
+  ipcMain.handle('fs:readFile', async (_, p: string) => { validatePath(p); return fsPromises.readFile(p, 'utf-8') })
+  ipcMain.handle('fs:writeFile', async (_, p: string, content: string) => {
     validatePath(p)
-    fs.writeFileSync(p, content, 'utf-8')
+    await fsPromises.writeFile(p, content, 'utf-8')
   })
-  ipcMain.handle('fs:createFile', (_, p: string) => {
+  ipcMain.handle('fs:createFile', async (_, p: string) => {
     validatePath(p)
-    fs.writeFileSync(p, '', { flag: 'wx' })
+    await fsPromises.writeFile(p, '', { flag: 'wx' })
   })
-  ipcMain.handle('fs:createFolder', (_, p: string) => {
+  ipcMain.handle('fs:createFolder', async (_, p: string) => {
     validatePath(p)
-    fs.mkdirSync(p)
+    await fsPromises.mkdir(p)
   })
-  ipcMain.handle('fs:rename', (_, oldPath: string, newPath: string) => {
+  ipcMain.handle('fs:rename', async (_, oldPath: string, newPath: string) => {
     validatePath(oldPath)
     validatePath(newPath)
-    fs.renameSync(oldPath, newPath)
+    await fsPromises.rename(oldPath, newPath)
   })
-  ipcMain.handle('fs:delete', (_, p: string) => {
+  ipcMain.handle('fs:delete', async (_, p: string) => {
     validatePath(p)
-    fs.rmSync(p, { recursive: true, force: true })
+    await fsPromises.rm(p, { recursive: true, force: true })
   })
-  ipcMain.handle('fs:findFiles', (_, dir: string) => {
+  ipcMain.handle('fs:findFiles', async (_, dir: string) => {
     validatePath(dir)
     const results: string[] = []
     const SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', '__pycache__', '.venv'])
-    function walk(d: string) {
+    async function walk(d: string) {
       let entries: fs.Dirent[]
-      try { entries = fs.readdirSync(d, { withFileTypes: true }) } catch { return }
+      try { entries = await fsPromises.readdir(d, { withFileTypes: true }) } catch { return }
       for (const e of entries) {
         if (SKIP.has(e.name)) continue
         if (e.name.startsWith('.')) continue
         const full = d + '/' + e.name
-        if (e.isDirectory()) walk(full)
+        if (e.isDirectory()) await walk(full)
         else results.push(full)
       }
     }
-    walk(dir)
+    await walk(dir)
     return results.slice(0, 500)
   })
 
@@ -408,30 +410,30 @@ function registerIpcHandlers(): void {
   })
   ipcMain.handle('tools:readFile', async (_, p: string) => {
     validatePath(p)
-    return fs.readFileSync(p, 'utf-8')
+    return fsPromises.readFile(p, 'utf-8')
   })
   ipcMain.handle('tools:writeFile', async (_, p: string, content: string) => {
     validatePath(p)
-    fs.mkdirSync(nodePath.dirname(p), { recursive: true })
-    fs.writeFileSync(p, content, 'utf-8')
+    await fsPromises.mkdir(nodePath.dirname(p), { recursive: true })
+    await fsPromises.writeFile(p, content, 'utf-8')
   })
   ipcMain.handle('tools:editFile', async (_, p: string, oldString: string, newString: string) => {
     validatePath(p)
-    const content = fs.readFileSync(p, 'utf-8')
+    const content = await fsPromises.readFile(p, 'utf-8')
     if (!content.includes(oldString)) {
       throw new Error(`Could not find "${oldString.slice(0, 50)}..." in ${p}`)
     }
     const updated = content.replace(oldString, newString)
-    fs.writeFileSync(p, updated, 'utf-8')
+    await fsPromises.writeFile(p, updated, 'utf-8')
   })
   ipcMain.handle('tools:createFile', async (_, p: string, content: string) => {
     validatePath(p)
-    fs.mkdirSync(nodePath.dirname(p), { recursive: true })
-    fs.writeFileSync(p, content, 'utf-8')
+    await fsPromises.mkdir(nodePath.dirname(p), { recursive: true })
+    await fsPromises.writeFile(p, content, 'utf-8')
   })
   ipcMain.handle('tools:listFiles', async (_, dir: string) => {
     validatePath(dir)
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const entries = await fsPromises.readdir(dir, { withFileTypes: true })
     return entries
       .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
       .map((e) => ({ name: e.name, path: nodePath.join(dir, e.name), isDirectory: e.isDirectory() }))

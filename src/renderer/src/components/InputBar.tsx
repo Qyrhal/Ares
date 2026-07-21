@@ -23,7 +23,7 @@ interface PickerItem {
   content?: string       // skill content or command prompt template
 }
 
-const BUILTIN_COMMANDS: PickerItem[] = [
+export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'model',        description: 'Change the model for this session' },
   { kind: 'builtin', name: 'folder',       description: 'Open or switch workspace folder' },
   { kind: 'builtin', name: 'overview',     description: 'Get an AI-generated summary of the current project' },
@@ -43,7 +43,9 @@ const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'branches',      description: 'List, create, or switch git branches' },
   { kind: 'builtin', name: 'stage',         description: 'Stage or unstage files for commit' },
   { kind: 'builtin', name: 'commit',        description: 'Commit staged changes with a message' },
+  { kind: 'builtin', name: 'undo',           description: 'Remove the last exchange from the session' },
   { kind: 'builtin', name: 'debug',         description: 'Show diagnostic and debug information' },
+  { kind: 'builtin', name: 'doctor',        description: 'Run environment diagnostics and health checks' },
   { kind: 'builtin', name: 'history',       description: 'Show recent prompt history' },
   { kind: 'builtin', name: 'log',          description: 'Show recent git commits' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
