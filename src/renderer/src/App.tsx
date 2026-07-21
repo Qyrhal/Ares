@@ -118,13 +118,22 @@ export default function App(): React.ReactElement {
   }, [])
 
   // ── Derived selectors ────────────────────────────────────────────────────────
-  const activeSessionTab = store.tabs.find(
-    (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
+  const activeSessionTab = React.useMemo(
+    () => store.tabs.find(
+      (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
+    ),
+    [store.tabs, store.activeTabId]
   )
-  const activeTab = store.tabs.find((t) =>
-    t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
+  const activeTab = React.useMemo(
+    () => store.tabs.find((t) =>
+      t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
+    ),
+    [store.tabs, store.activeTabId]
   )
-  const activeSession = store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null
+  const activeSession = React.useMemo(
+    () => store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null,
+    [store.sessions, activeSessionTab?.id]
+  )
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1462,7 +1471,7 @@ export default function App(): React.ReactElement {
             } else {
               for (const branch of result.local) {
                 const marker = branch === result.current ? '* ' : '  '
-                lines.push(`${marker}\\`${branch}\\``)
+                lines.push(`${marker}\`${branch}\``)
               }
             }
             const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
@@ -1482,7 +1491,7 @@ export default function App(): React.ReactElement {
           }
           try {
             await el.git.createBranch(wsPath, branchName)
-            const msg = await el.db.addMessage(sess.id, 'system', `Created and switched to branch \\`${branchName}\\``)
+            const msg = await el.db.addMessage(sess.id, 'system', `Created and switched to branch \`${branchName}\``)
             if (msg) store.appendMessage(parseMessage(msg))
           } catch (err) {
             const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
@@ -1493,7 +1502,7 @@ export default function App(): React.ReactElement {
         const branchName = args.trim()
         try {
           await el.git.checkout(wsPath, branchName)
-          const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \\`${branchName}\\``)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \`${branchName}\``)
           if (msg) store.appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)

@@ -7,7 +7,7 @@ interface TokenBadgeProps {
   duration?: number
 }
 
-export function TokenBadge({ tokens, tokensPerSecond, cost, duration }: TokenBadgeProps): React.ReactElement {
+export const TokenBadge = React.memo(function TokenBadge({ tokens, tokensPerSecond, cost, duration }: TokenBadgeProps): React.ReactElement {
   if (tokens === 0) return <></>
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground shadow-xs">
@@ -23,4 +23,4 @@ export function TokenBadge({ tokens, tokensPerSecond, cost, duration }: TokenBad
       )}
     </span>
   )
-}
+})

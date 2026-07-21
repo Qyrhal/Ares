@@ -1120,3 +1120,166 @@ describe('store — openSessionTab edge cases', () => {
     expect(useAppStore.getState().tabs[0]).toEqual(expect.objectContaining({ id: 's1' }))
   })
 })
+
+// ── additional edge cases ────────────────────────────────────────────────
+
+describe('store — upsertMessage idempotency', () => {
+  it('upserting same message twice does not duplicate', () => {
+    const msg = mkMessage({ id: 'm1', content: 'first' })
+    useAppStore.getState().appendMessage(msg)
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', content: 'updated' }))
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', content: 'updated again' }))
+    const msgs = useAppStore.getState().messages.filter((m) => m.id === 'm1')
+    expect(msgs).toHaveLength(1)
+    expect(msgs[0].content).toBe('updated again')
+  })
+
+  it('upsertMessage on non-existent id appends', () => {
+    useAppStore.getState().upsertMessage('brand-new', { id: 'brand-new', content: 'new', role: 'user', sessionId: 's1', createdAt: 0 } as any)
+    expect(useAppStore.getState().messages.find((m) => m.id === 'brand-new')).toBeDefined()
+  })
+})
+
+describe('store — removeMessage edge cases', () => {
+  it('removeMessage on empty list is no-op', () => {
+    useAppStore.setState({ messages: [] })
+    useAppStore.getState().removeMessage('m1')
+    expect(useAppStore.getState().messages).toHaveLength(0)
+  })
+
+  it('removeMessage preserves order of remaining messages', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', content: 'a' }),
+        mkMessage({ id: 'm2', content: 'b' }),
+        mkMessage({ id: 'm3', content: 'c' }),
+      ],
+    })
+    useAppStore.getState().removeMessage('m2')
+    const ids = useAppStore.getState().messages.map((m) => m.id)
+    expect(ids).toEqual(['m1', 'm3'])
+  })
+})
+
+describe('store — closeTab edge cases', () => {
+  it('closeTab on non-existent id is no-op', () => {
+    useAppStore.setState({ tabs: [{ type: 'session', id: 't1' } as any] })
+    useAppStore.getState().closeTab('nonexistent')
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+  })
+
+  it('closeTab with no tabs is no-op', () => {
+    useAppStore.setState({ tabs: [] })
+    useAppStore.getState().closeTab('anything')
+    expect(useAppStore.getState().tabs).toHaveLength(0)
+  })
+
+  it('closing last tab clears activeTabId', () => {
+    useAppStore.setState({
+      tabs: [{ type: 'session', id: 't1' } as any],
+      activeTabId: 't1',
+    })
+    useAppStore.getState().closeTab('t1')
+    expect(useAppStore.getState().activeTabId).toBeNull()
+  })
+})
+
+describe('store — updateSession edge cases', () => {
+  it('updateSession on non-existent id does not crash', () => {
+    expect(() => useAppStore.getState().updateSession('nonexistent', { title: 'new' })).not.toThrow()
+  })
+
+  it('updateSession with partial fields', () => {
+    const s = mkSession({ id: 's1', title: 'Old', model: 'gpt-4' })
+    useAppStore.getState().addSession(s)
+    useAppStore.getState().updateSession('s1', { title: 'New' })
+    const updated = useAppStore.getState().sessions.find((s) => s.id === 's1')
+    expect(updated?.title).toBe('New')
+    expect(updated?.model).toBe('gpt-4') // model unchanged
+  })
+})
+
+describe('store — appendMessage batching', () => {
+  it('appending 100 messages maintains order', () => {
+    useAppStore.setState({ messages: [] })
+    for (let i = 0; i < 100; i++) {
+      useAppStore.getState().appendMessage(mkMessage({ id: `m${i}`, content: `msg${i}` }))
+    }
+    const msgs = useAppStore.getState().messages
+    expect(msgs).toHaveLength(100)
+    expect(msgs[0].content).toBe('msg0')
+    expect(msgs[99].content).toBe('msg99')
+  })
+})
+
+describe('store — selectTab does not crash on missing tab', () => {
+  it('selectTab with non-existent id does not crash', () => {
+    expect(() => useAppStore.getState().selectTab('nonexistent')).not.toThrow()
+  })
+})
+
+describe('store — setWorkspace edge cases', () => {
+  it('setWorkspace with null clears path and nodes', () => {
+    useAppStore.setState({ workspacePath: '/some/path', fileNodes: [{ name: 'f.ts', path: '/f.ts', type: 'file', children: [] }] })
+    useAppStore.getState().setWorkspace(null, [])
+    expect(useAppStore.getState().workspacePath).toBeNull()
+    expect(useAppStore.getState().fileNodes).toHaveLength(0)
+  })
+
+  it('setWorkspace with path sets path and nodes', () => {
+    useAppStore.getState().setWorkspace('/project', [{ name: 'src', path: '/src', type: 'directory', children: [] }])
+    expect(useAppStore.getState().workspacePath).toBe('/project')
+    expect(useAppStore.getState().fileNodes).toHaveLength(1)
+  })
+})
+
+describe('store — toggleZenMode', () => {
+  it('toggles zen mode on and off', () => {
+    useAppStore.setState({ zenMode: false })
+    useAppStore.getState().toggleZenMode()
+    expect(useAppStore.getState().zenMode).toBe(true)
+    useAppStore.getState().toggleZenMode()
+    expect(useAppStore.getState().zenMode).toBe(false)
+  })
+})
+
+describe('store — updateRunningTool idempotency', () => {
+  it('calling updateRunningTool with no running tool and status=done is no-op', () => {
+    useAppStore.setState({ messages: [] })
+    useAppStore.getState().updateRunningTool({ toolStatus: 'done' })
+    // No crash, no messages added
+    expect(useAppStore.getState().messages).toHaveLength(0)
+  })
+
+  it('calling updateRunningTool updates the last running tool message', () => {
+    // First create a running tool message
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', role: 'tool', toolName: 'bash', toolStatus: 'running', toolInput: 'ls' } as any),
+      ],
+    })
+    useAppStore.getState().updateRunningTool({ toolStatus: 'done', toolOutput: 'result' })
+    const toolMsg = useAppStore.getState().messages.find((m) => m.id === 'm1')
+    expect(toolMsg?.toolStatus).toBe('done')
+    expect(toolMsg?.toolOutput).toBe('result')
+  })
+})
+
+describe('store — multiple session operations', () => {
+  it('add + select + remove session lifecycle', () => {
+    const s = mkSession({ id: 's1', title: 'Test' })
+    useAppStore.getState().addSession(s)
+    expect(useAppStore.getState().sessions).toHaveLength(1)
+    useAppStore.getState().selectTab('s1')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+    useAppStore.getState().removeSession('s1')
+    expect(useAppStore.getState().sessions).toHaveLength(0)
+    // Note: removeSession only removes from sessions array, activeTabId is managed separately
+  })
+
+  it('removeSession on non-existent id is no-op', () => {
+    useAppStore.setState({ sessions: [] })
+    useAppStore.getState().removeSession('nonexistent')
+    expect(useAppStore.getState().sessions).toHaveLength(0)
+  })
+})

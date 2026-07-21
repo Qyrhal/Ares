@@ -9,7 +9,7 @@ interface PermissionPromptProps {
   onDeny: () => void
 }
 
-export function PermissionPrompt({ toolName, toolArgs, onApprove, onDeny }: PermissionPromptProps): React.ReactElement {
+export const PermissionPrompt = React.memo(function PermissionPrompt({ toolName, toolArgs, onApprove, onDeny }: PermissionPromptProps): React.ReactElement {
   let argsDisplay: string
   try {
     const parsed = JSON.parse(toolArgs)
@@ -51,4 +51,4 @@ export function PermissionPrompt({ toolName, toolArgs, onApprove, onDeny }: Perm
       </div>
     </div>
   )
-}
+})
