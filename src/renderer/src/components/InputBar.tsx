@@ -43,6 +43,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'branches',      description: 'List, create, or switch git branches' },
   { kind: 'builtin', name: 'stage',         description: 'Stage or unstage files for commit' },
   { kind: 'builtin', name: 'commit',        description: 'Commit staged changes with a message' },
+  { kind: 'builtin', name: 'undo',           description: 'Remove the last exchange from the session' },
   { kind: 'builtin', name: 'debug',         description: 'Show diagnostic and debug information' },
   { kind: 'builtin', name: 'doctor',        description: 'Run environment diagnostics and health checks' },
   { kind: 'builtin', name: 'history',       description: 'Show recent prompt history' },
