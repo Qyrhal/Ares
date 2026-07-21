@@ -1741,6 +1741,37 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'fetch': {
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /fetch <url> — Fetch web content from a URL.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const fetchUrl = args.trim()
+        if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://')) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Error:** URL must start with `http://` or `https://`.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const result = await el.ext.fetchUrl(fetchUrl)
+          if (!result.ok) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Fetch failed:** ${result.error}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const content = result.content || ''
+          const truncated = content.length >= 8000 ? '\n\n*[content truncated at 8000 chars]*' : ''
+          const display = content.length > 4000 ? content.slice(0, 4000) + truncated : content
+          const header = `**Fetched** \`${fetchUrl}\` (${result.length?.toLocaleString() || '?'} chars, ${result.contentType || 'unknown'})`
+          const msg = await el.db.addMessage(sess.id, 'system', `${header}\n\n${display}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
     }
   }, [activeSession, store])
 

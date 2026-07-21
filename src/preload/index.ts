@@ -82,7 +82,8 @@ const nativeTerminal = {
 }
 
 const extApi = {
-  fetchModels: (baseUrl: string, apiKey: string) => ipcRenderer.invoke('api:fetchModels', baseUrl, apiKey),
+  fetchModels: (baseUrl: string, apiKey: *** => ipcRenderer.invoke('api:fetchModels', baseUrl, apiKey),
+  fetchUrl: (url: string) => ipcRenderer.invoke('fetch:url', url),
 }
 
 const piApi = {

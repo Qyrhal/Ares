@@ -363,6 +363,21 @@ function registerIpcHandlers(): void {
   // MCP status
   ipcMain.handle('mcp:status', () => getMcpStatus())
 
+  // Web fetch — proxy URL fetch through main process to avoid CORS
+  ipcMain.handle('fetch:url', async (_, url: string) => {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status} ${res.statusText}` }
+      const contentType = res.headers.get('content-type') || ''
+      const text = await res.text()
+      const maxLen = 8000
+      const truncated = text.length > maxLen
+      return { ok: true, content: truncated ? text.slice(0, maxLen) + '\n\n[truncated]' : text, contentType, length: text.length }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
   // API — proxy fetch through main process to avoid CORS
   ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string) => {
     const url = baseUrl.replace(/\/$/, '') + '/models'

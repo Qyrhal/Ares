@@ -70,7 +70,7 @@ declare global {
         kill(id: string): void
         onOutput(cb: (id: string, data: string) => void): () => void
       }
-      ext: { fetchModels(baseUrl: string, apiKey: string): Promise<{ data: { id: string }[] }> }
+      ext: { fetchModels(baseUrl: string, apiKey: *** Promise<{ data: { id: string }[] }>, fetchUrl(url: string): Promise<{ ok: boolean; content?: string; error?: string; contentType?: string; length?: number }> }
       tools: {
         readFile(path: string): Promise<string>
         writeFile(path: string, content: string): Promise<void>
