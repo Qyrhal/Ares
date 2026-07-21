@@ -499,6 +499,10 @@ function registerIpcHandlers(): void {
   })
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
     const { shell } = await import('electron')
+    try {
+      const parsed = new URL(url)
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return
+    } catch { return }
     shell.openExternal(url)
   })
 }
