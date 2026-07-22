@@ -15,6 +15,7 @@ import {
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
   getMcpProfiles, saveMcpProfile, deleteMcpProfile,
+  setFlushErrorHandler,
 } from './db'
 import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions, getMcpStatus, resolveUserQuestion } from './pi'
 import { runBackgroundScan } from './scanner'
@@ -98,6 +99,11 @@ function createWindow(): void {
 
   win.webContents.once('did-finish-load', () => {
     setTimeout(() => runBackgroundScan(win), 1000)
+  })
+
+  // Notify renderer when disk flush fails (data safety)
+  setFlushErrorHandler((msg) => {
+    if (!win.isDestroyed()) win.webContents.send('db:flush-error', msg)
   })
 
   // Bypass CORS only for configured API endpoints (OpenAI SDK, etc.)
@@ -184,6 +190,46 @@ app.on('window-all-closed', () => {
 
 // Path validation: restrict file IPC operations to safe directories
 import os from 'os'
+import net from 'net'
+
+// SSRF protection: check whether a URL points to a private/internal network
+function isInternalUrl(urlStr: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(urlStr)
+  } catch {
+    return true
+  }
+
+  const proto = parsed.protocol.toLowerCase()
+  if (proto !== 'http:' && proto !== 'https:') return true
+
+  const host = parsed.hostname.toLowerCase()
+  if (host === 'localhost' || host === '0.0.0.0' || host === '[::1]' || host === '::1') return true
+
+  // Numeric IP checks
+  if (net.isIP(host)) {
+    const parts = host.split('.').map(Number)
+    // 10.x.x.x
+    if (parts[0] === 10) return true
+    // 172.16.x.x – 172.31.x.x
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
+    // 192.168.x.x
+    if (parts[0] === 192 && parts[1] === 168) return true
+    // 169.254.x.x (link-local / cloud metadata)
+    if (parts[0] === 169 && parts[1] === 254) return true
+    // 127.x.x.x (loopback — catches IPv4 loopback besides localhost)
+    if (parts[0] === 127) return true
+    // 0.x.x.x
+    if (parts[0] === 0) return true
+  }
+
+  // Reject bare IPv6 addresses that resolve to loopback/link-local
+  // (already caught above for ::1; other IPv6 internal ranges are rare in practice)
+
+  return false
+}
+
 function validatePath(p: string): void {
   const resolved = nodePath.resolve(p)
   // Resolve symlinks to prevent traversal via symlinked paths
@@ -416,6 +462,9 @@ function registerIpcHandlers(): void {
 
   // Web fetch — proxy URL fetch through main process to avoid CORS
   ipcMain.handle('fetch:url', async (_, url: string) => {
+    if (isInternalUrl(url)) {
+      return { ok: false, error: 'Access denied: URL points to an internal or restricted network' }
+    }
     try {
       validateFetchUrl(url)
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })

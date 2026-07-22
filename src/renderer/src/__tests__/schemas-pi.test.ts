@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSettings, AppSettingsSchema } from '@/schemas'
+import { parseSettings, AppSettingsSchema, ProviderConfigSchema } from '@/schemas'
 
 describe('parseSettings', () => {
   it('defaults apiBaseUrl to empty string when not present', () => {
@@ -61,5 +61,44 @@ describe('AppSettingsSchema direct', () => {
       defaultModel: '',
       permissionMode: 'ask',
     })
+  })
+})
+
+describe('ProviderConfigSchema', () => {
+  it('parses a valid provider config', () => {
+    const result = ProviderConfigSchema.parse({
+      id: 'openai',
+      label: 'OpenAI',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    })
+    expect(result).toEqual({
+      id: 'openai',
+      label: 'OpenAI',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'sk-test',
+    })
+  })
+
+  it('defaults apiKey to empty string', () => {
+    const result = ProviderConfigSchema.parse({
+      id: 'local',
+      label: 'Local',
+      baseUrl: 'http://localhost:11434/v1',
+    })
+    expect(result.apiKey).toBe('')
+  })
+
+  it('rejects missing required fields', () => {
+    expect(() => ProviderConfigSchema.parse({ id: 'x' })).toThrow()
+    expect(() => ProviderConfigSchema.parse({})).toThrow()
+  })
+
+  it('rejects non-string field types', () => {
+    expect(() => ProviderConfigSchema.parse({
+      id: 123,
+      label: 'Test',
+      baseUrl: 'http://test.com',
+    })).toThrow()
   })
 })

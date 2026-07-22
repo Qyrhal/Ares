@@ -13,13 +13,24 @@ let isDirty = false
 let flushTimer: ReturnType<typeof setInterval> | null = null
 const FLUSH_INTERVAL_MS = 1000
 
+// Disk write error callback — set by main process to notify renderer
+let flushErrorHandler: ((error: string) => void) | null = null
+
+/** Register a callback for flush errors (called by main process after window creation). */
+export function setFlushErrorHandler(handler: (error: string) => void): void {
+  flushErrorHandler = handler
+}
+
 /** Force-flush dirty cache to disk. */
 function flushStore(): void {
   if (!isDirty || !cachedStore) return
   try {
     fs.writeFileSync(getStorePath(), JSON.stringify(cachedStore, null, 2), 'utf-8')
     isDirty = false
-  } catch {
+  } catch (err) {
+    // Notify renderer of write failure so user sees a warning
+    const msg = `Disk write failed: ${(err as Error).message}. Unsaved changes may be lost.`
+    try { flushErrorHandler?.(msg) } catch { /* don't crash on error handler failure */ }
     // best-effort — will retry on next flush
   }
 }
@@ -104,6 +115,7 @@ export interface DbSettings {
   systemPrompt: string
   permissionMode: string
   maxSubagentSpawns?: number
+  maxConcurrentSubagents?: number
   maxWebSearches?: number
   planPreviewEnabled?: boolean
   mcpAutoBackgroundMs?: number
@@ -232,6 +244,7 @@ Call when the entire goal is accomplished. Shows a completion toast. title is a 
 - Write your recap in the assistant message, then call notifyComplete.`,
   permissionMode: 'ask',
   maxSubagentSpawns: 200,
+  maxConcurrentSubagents: 5,
   maxWebSearches: 200,
   planPreviewEnabled: true,
 }

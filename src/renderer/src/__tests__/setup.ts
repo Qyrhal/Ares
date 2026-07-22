@@ -147,6 +147,9 @@ const electronMock = {
   lint: {
     run: vi.fn().mockResolvedValue({ ok: true, errors: 0, output: 'No errors found.' }),
   },
+  dbEvents: {
+    onFlushError: vi.fn().mockReturnValue(() => {}),
+  },
 }
 
 Object.defineProperty(window, 'electron', { value: electronMock, writable: true })

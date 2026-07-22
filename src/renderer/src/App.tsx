@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion } from '@/types'
+import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion, Session } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TabBar } from '@/components/TabBar'
@@ -23,7 +23,7 @@ import { SessionSearchOverlay } from '@/components/SessionSearchOverlay'
 import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
-import { applyTheme, applyColorMode } from '@/lib/theme'
+import { applyTheme, applyColorMode, THEMES, type ColorMode } from '@/lib/theme'
 import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
 import { estimateCost } from '@/lib/pricing'
 import { hasProvider, displayModel } from '@/lib/providers'
@@ -233,7 +233,11 @@ export default function App(): React.ReactElement {
       toast.success(title, { description: summary, duration: 10_000 })
     })
 
-    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete() }
+    const offFlushError = el.dbEvents.onFlushError((msg) => {
+      toast.warning('Disk write error', { description: msg, duration: 10_000 })
+    })
+
+    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete(); offFlushError() }
   }, [])
 
   // Load messages and todos when active session changes
@@ -491,6 +495,14 @@ export default function App(): React.ReactElement {
           await el.db.deleteMessage(m.id)
         }
         store.setMessages([])
+        if (args === '--hard') {
+          const defaultModel = store.settings.defaultModel || 'gpt-4o-mini'
+          await el.db.updateSession(sess.id, { model: defaultModel, pinned: false, workspace_path: null })
+          store.updateSession(sess.id, { model: defaultModel, pinned: false })
+          store.setWorkspace(null, [])
+          const msg = await el.db.addMessage(sess.id, 'system', '**Session reset.** Messages cleared, model restored to default, workspace cleared, session unpinned.')
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
         break
       }
       case 'compact': {
@@ -742,8 +754,63 @@ export default function App(): React.ReactElement {
         if (costMsg) store.appendMessage(parseMessage(costMsg))
         break
       }
+      case 'context': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const used = estimateTokens(msgs)
+        const window = contextWindow(model)
+        const pct = Math.min(100, Math.round((used / window) * 100))
+        const barLen = 20
+        const filled = Math.round((pct / 100) * barLen)
+        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled)
+        const color = pct < 50 ? 'green' : pct < 75 ? 'yellow' : pct < 90 ? 'orange' : 'red'
+        const lines = [
+          `**Context Window**\n`,
+          `**Model:** ${displayModel(model)}`,
+          `**Used:** ~${used.toLocaleString()} tokens`,
+          `**Window:** ${window.toLocaleString()} tokens`,
+          `**Utilization:** ${pct}%  \`${bar}\``,
+          `\n*${color === 'green' ? ' Plenty of room.' : color === 'yellow' ? ' Getting warm.' : color === 'orange' ? ' Getting full — consider /compact.' : ' Near capacity — run /compact soon.'}*`,
+        ]
+        const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'theme': {
+        const settings = useAppStore.getState().settings
+        const arg = args?.trim().toLowerCase()
+        if (!arg) {
+          const themeList = THEMES.map((t) => t.id === settings.themeId ? `**${t.label}** (current)` : t.label).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `**Current theme:** ${settings.colorMode} mode, accent: ${settings.themeId}\n\n**Accents:** ${themeList}\n**Modes:** dark, light\n\nUsage: /theme dark|light, /theme <accent>`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (arg === 'dark' || arg === 'light') {
+          const next = { ...settings, colorMode: arg as ColorMode }
+          await el.settings.set(next)
+          store.setSettings(next)
+          applyColorMode(arg as ColorMode)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to **${arg}** mode.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const match = THEMES.find((t) => t.id === arg || t.label.toLowerCase() === arg)
+        if (!match) {
+          const ids = THEMES.map((t) => t.id).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `Unknown theme: \`${arg}\`. Available: ${ids}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const next = { ...settings, themeId: match.id }
+        await el.settings.set(next)
+        store.setSettings(next)
+        applyTheme(match.id)
+        const msg = await el.db.addMessage(sess.id, 'system', `Accent changed to **${match.label}**.`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1869,6 +1936,85 @@ export default function App(): React.ReactElement {
           break
         }
         const msg = await el.db.addMessage(sess.id, 'system', '**Usage:**\n- `/task` or `/task list` — show all tasks\n- `/task add <text>` — add a new task\n- `/task done <n>` — mark task n as complete\n- `/task remove <n>` — remove task n')
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'agents': {
+        const { sessions } = useAppStore.getState()
+        const filter = args.trim().toLowerCase()
+        const subAgents = sessions.filter((s: Session) => s.parentId)
+        const filtered = filter === 'running'
+          ? subAgents.filter((s: Session) => s.agentStatus === 'running')
+          : subAgents
+        if (filtered.length === 0) {
+          const hint = filter === 'running'
+            ? 'No running sub-agents. Use `/agents` to see all sub-agents.'
+            : 'No sub-agents found. Use `spawnAgent` or `spawnAgents` to create them.'
+          const msg = await el.db.addMessage(sess.id, 'system', hint)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const statusIcon = (status?: string) => {
+          switch (status) {
+            case 'running': return '🟢'
+            case 'done': return '✅'
+            case 'error': return '❌'
+            default: return '⚪'
+          }
+        }
+        const elapsed = (createdAt: number) => {
+          const ms = Date.now() - createdAt
+          const s = Math.floor(ms / 1000)
+          if (s < 60) return `${s}s`
+          const m = Math.floor(s / 60)
+          return `${m}m ${s % 60}s`
+        }
+        const lines = [`**🤖 Sub-Agents** (${filtered.length})\n`]
+        for (const sa of filtered) {
+          const parent = sessions.find((s: Session) => s.id === sa.parentId)
+          const parentLabel = parent ? parent.title : 'unknown'
+          lines.push(
+            `${statusIcon(sa.agentStatus)} **${sa.title}** — ${sa.agentStatus || 'idle'}`,
+            `   Parent: ${parentLabel} · Msgs: ${sa.messageCount} · Age: ${elapsed(sa.createdAt)}`,
+          )
+        }
+        if (filter !== 'running') {
+          lines.push(`\nFilter: \`/agents running\` to show only active agents.`)
+        }
+        const agentsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (agentsMsg) store.appendMessage(parseMessage(agentsMsg))
+        break
+      }
+      case 'kill': {
+        const { sessions } = useAppStore.getState()
+        const subAgents = sessions.filter((s: Session) => s.parentId && s.agentStatus === 'running')
+        if (!args.trim()) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/kill <name or number>` — stop a running sub-agent.\n\nUse `/agents running` to see active agents.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (subAgents.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No running sub-agents to kill.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const query = args.trim().toLowerCase()
+        const numIdx = parseInt(query, 10)
+        let target: Session | undefined
+        if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= subAgents.length) {
+          target = subAgents[numIdx - 1]
+        } else {
+          target = subAgents.find((s) => s.title.toLowerCase().includes(query))
+        }
+        if (!target) {
+          const list = subAgents.map((s, i) => `${i + 1}. ${s.title}`).join('\n')
+          const msg = await el.db.addMessage(sess.id, 'system', `No sub-agent matching \`${args.trim()}\`.\n\nRunning agents:\n${list}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        el.pi.abort(target.id)
+        store.updateSession(target.id, { agentStatus: 'done' })
+        const msg = await el.db.addMessage(sess.id, 'system', `**Stopped:** ${target.title}`)
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
