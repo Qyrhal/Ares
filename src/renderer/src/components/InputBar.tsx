@@ -41,7 +41,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'model',        description: 'Change the model for this session' },
   { kind: 'builtin', name: 'folder',       description: 'Open or switch workspace folder' },
   { kind: 'builtin', name: 'overview',     description: 'Get an AI-generated summary of the current project' },
-  { kind: 'builtin', name: 'clear',        description: 'Clear all messages in the current session' },
+  { kind: 'builtin', name: 'clear',        description: 'Clear messages (--hard: full session reset)' },
   { kind: 'builtin', name: 'pr',           description: 'Generate a pull request from the current session context' },
   { kind: 'builtin', name: 'fork',         description: 'Clone this session as a new working session' },
   { kind: 'builtin', name: 'helpful',      description: 'Mark the last assistant response as helpful' },

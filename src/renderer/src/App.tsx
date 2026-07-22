@@ -486,6 +486,14 @@ export default function App(): React.ReactElement {
           await el.db.deleteMessage(m.id)
         }
         store.setMessages([])
+        if (args === '--hard') {
+          const defaultModel = store.settings.defaultModel || 'gpt-4o-mini'
+          await el.db.updateSession(sess.id, { model: defaultModel, pinned: false, workspace_path: null })
+          store.updateSession(sess.id, { model: defaultModel, pinned: false })
+          store.setWorkspace(null, [])
+          const msg = await el.db.addMessage(sess.id, 'system', '**Session reset.** Messages cleared, model restored to default, workspace cleared, session unpinned.')
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
         break
       }
       case 'compact': {
