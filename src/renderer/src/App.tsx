@@ -925,7 +925,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -2170,6 +2170,58 @@ export default function App(): React.ReactElement {
         }
         const searchMsg = await el.db.addMessage(sess.id, 'system', resultLines.join('\n'))
         if (searchMsg) store.appendMessage(parseMessage(searchMsg))
+        break
+      }
+      case 'export-all': {
+        const { sessions } = useAppStore.getState()
+        if (sessions.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No sessions to export.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const exportLines: string[] = []
+        exportLines.push('# Ares — All Sessions Export')
+        exportLines.push('')
+        exportLines.push(`*Exported ${new Date().toISOString().slice(0, 10)} · ${sessions.length} sessions*`)
+        exportLines.push('')
+        exportLines.push('---')
+        exportLines.push('')
+
+        let totalMessages = 0
+        for (const s of sessions) {
+          const rawMsgs = await el.db.getMessages(s.id)
+          const parsed = rawMsgs.map(parseMessage)
+          totalMessages += parsed.length
+          exportLines.push(`## ${s.title || 'Untitled Session'}`)
+          exportLines.push('')
+          exportLines.push(`*Created: ${new Date(s.createdAt).toLocaleString()} · Messages: ${parsed.length} · Model: ${s.model || 'default'}${s.notes ? ' · Notes: ' + s.notes : ''}*`)
+          exportLines.push('')
+          for (const m of parsed) {
+            const role = m.role === 'assistant' ? '**Assistant**' : m.role === 'user' ? '**User**' : m.role === 'system' ? '*System*' : `*${m.role}*`
+            exportLines.push(`### ${role}`)
+            exportLines.push('')
+            exportLines.push(m.content)
+            if (m.toolName) {
+              exportLines.push('')
+              exportLines.push(`*Tool: \`${m.toolName}\`*`)
+            }
+            exportLines.push('')
+            exportLines.push('---')
+            exportLines.push('')
+          }
+        }
+
+        const md = exportLines.join('\n')
+        const blob = new Blob([md], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `ares-all-sessions-${new Date().toISOString().slice(0, 10)}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+
+        const exportMsg = await el.db.addMessage(sess.id, 'system', `**Exported** ${sessions.length} sessions (${totalMessages} total messages) as Markdown (${md.length.toLocaleString()} characters).`)
+        if (exportMsg) store.appendMessage(parseMessage(exportMsg))
         break
       }
     }
