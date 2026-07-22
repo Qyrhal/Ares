@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
-import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion } from '@/types'
+import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion, Session } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
 import { Sidebar } from '@/components/Sidebar'
 import { TabBar } from '@/components/TabBar'
@@ -801,7 +801,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1974,6 +1974,39 @@ export default function App(): React.ReactElement {
         }
         const agentsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (agentsMsg) store.appendMessage(parseMessage(agentsMsg))
+        break
+      }
+      case 'kill': {
+        const { sessions } = useAppStore.getState()
+        const subAgents = sessions.filter((s: Session) => s.parentId && s.agentStatus === 'running')
+        if (!args.trim()) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/kill <name or number>` — stop a running sub-agent.\n\nUse `/agents running` to see active agents.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (subAgents.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No running sub-agents to kill.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const query = args.trim().toLowerCase()
+        const numIdx = parseInt(query, 10)
+        let target: Session | undefined
+        if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= subAgents.length) {
+          target = subAgents[numIdx - 1]
+        } else {
+          target = subAgents.find((s) => s.title.toLowerCase().includes(query))
+        }
+        if (!target) {
+          const list = subAgents.map((s, i) => `${i + 1}. ${s.title}`).join('\n')
+          const msg = await el.db.addMessage(sess.id, 'system', `No sub-agent matching \`${args.trim()}\`.\n\nRunning agents:\n${list}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        el.pi.abort(target.id)
+        store.updateSession(target.id, { agentStatus: 'done' })
+        const msg = await el.db.addMessage(sess.id, 'system', `**Stopped:** ${target.title}`)
+        if (msg) store.appendMessage(parseMessage(msg))
         break
       }
     }
