@@ -14,6 +14,7 @@ import {
   getSettings, setSettings, getWorkspacePath, setWorkspacePath, getRecentProjects,
   getAgentConfig, setAgentConfig,
   getMcpProfiles, saveMcpProfile, deleteMcpProfile,
+  setFlushErrorHandler,
 } from './db'
 import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions, getMcpStatus, resolveUserQuestion } from './pi'
 import { runBackgroundScan } from './scanner'
@@ -96,6 +97,11 @@ function createWindow(): void {
 
   win.webContents.once('did-finish-load', () => {
     setTimeout(() => runBackgroundScan(win), 1000)
+  })
+
+  // Notify renderer when disk flush fails (data safety)
+  setFlushErrorHandler((msg) => {
+    if (!win.isDestroyed()) win.webContents.send('db:flush-error', msg)
   })
 
   // Bypass CORS only for configured API endpoints (OpenAI SDK, etc.)
