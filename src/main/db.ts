@@ -274,9 +274,16 @@ function writeStore(data: Store): void {
 
 export function getSessions(includeArchived = false): DbSession[] {
   const { sessions, messages } = readStore()
+
+  // Single-pass message count — O(s + m) instead of O(s × m)
+  const counts = new Map<string, number>()
+  for (const m of messages) {
+    counts.set(m.session_id, (counts.get(m.session_id) ?? 0) + 1)
+  }
+
   return sessions
     .filter((s) => includeArchived || !s.archived)
-    .map((s) => ({ ...s, message_count: messages.filter((m) => m.session_id === s.id).length }))
+    .map((s) => ({ ...s, message_count: counts.get(s.id) ?? 0 }))
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1
       if (!a.pinned && b.pinned) return 1
