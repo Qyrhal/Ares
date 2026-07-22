@@ -97,6 +97,7 @@ export interface AppSettings {
   permissionMode: PermissionMode
   /** Per-session guardrails to prevent runaway agents */
   maxSubagentSpawns?: number
+  maxConcurrentSubagents?: number
   maxWebSearches?: number
   /** Show a generated plan before executing in agent mode */
   planPreviewEnabled?: boolean

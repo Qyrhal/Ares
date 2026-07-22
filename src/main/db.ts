@@ -115,6 +115,7 @@ export interface DbSettings {
   systemPrompt: string
   permissionMode: string
   maxSubagentSpawns?: number
+  maxConcurrentSubagents?: number
   maxWebSearches?: number
   planPreviewEnabled?: boolean
   mcpAutoBackgroundMs?: number
@@ -243,6 +244,7 @@ Call when the entire goal is accomplished. Shows a completion toast. title is a 
 - Write your recap in the assistant message, then call notifyComplete.`,
   permissionMode: 'ask',
   maxSubagentSpawns: 200,
+  maxConcurrentSubagents: 5,
   maxWebSearches: 200,
   planPreviewEnabled: true,
 }
