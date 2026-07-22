@@ -43,6 +43,25 @@ import { contextWindow } from '../shared/context-window'
 
 const esmImport = new Function('spec', 'return import(spec)') as (spec: string) => Promise<any>
 
+// Concurrency limiter — prevents resource exhaustion from too many parallel sub-agents
+async function runWithConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  limit: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length)
+  let nextIdx = 0
+
+  async function worker() {
+    while (nextIdx < tasks.length) {
+      const idx = nextIdx++
+      results[idx] = await tasks[idx]()
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(limit, tasks.length) }, () => worker()))
+  return results
+}
+
 // One-shot completion (no tools, no full agent session) used to answer a sub-agent's
 // askUser question on the orchestrator's behalf, so it never needs a human mid-task.
 async function autoAnswerQuestion(
@@ -527,9 +546,10 @@ async function getOrCreate(
         return { childDb, briefing }
       })
 
-      // Run all in parallel
-      const results = await Promise.all(
-        children.map(async ({ childDb, briefing }) => {
+      // Run with concurrency limit to prevent resource exhaustion
+      const maxConcurrent = settings.maxConcurrentSubagents ?? 5
+      const results = await runWithConcurrency(
+        children.map(({ childDb, briefing }) => async () => {
           let accumulated = ''
           try {
             const childPiSession = await getOrCreate(win, childDb.id, apiBaseUrl, apiKey, modelId, cwd)
@@ -553,7 +573,8 @@ async function getOrCreate(
             const recent = getMessages(childDb.id).slice(-3).map((m) => `[${m.role}] ${(m.content ?? '').slice(0, 300)}`).join('\n')
             return { title: childDb.title, result: `${(err as Error).message}\n\nRecent activity:\n${recent}\n\nUse messageAgent with agentId "${childDb.id}" to correct and resume.`, ok: false }
           }
-        })
+        }),
+        maxConcurrent,
       )
 
       const text = results.map((r) => `[${r.ok ? '✓' : '✗'} ${r.title}]\n${r.result}`).join('\n\n')
