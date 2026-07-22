@@ -800,8 +800,132 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'config': {
+        const settings = useAppStore.getState().settings
+        const CONFIG_KEYS: Record<string, { label: string; type: 'string' | 'number' | 'boolean' | 'enum'; enumValues?: string[] }> = {
+          defaultModel:    { label: 'Default Model', type: 'string' },
+          colorMode:       { label: 'Color Mode', type: 'enum', enumValues: ['dark', 'light'] },
+          themeId:         { label: 'Theme Accent', type: 'string' },
+          systemPrompt:    { label: 'System Prompt', type: 'string' },
+          permissionMode:  { label: 'Permission Mode', type: 'enum', enumValues: ['ask', 'auto', 'yolo'] },
+          planPreviewEnabled: { label: 'Plan Preview', type: 'boolean' },
+          maxSubagentSpawns: { label: 'Max Subagent Spawns', type: 'number' },
+          maxConcurrentSubagents: { label: 'Max Concurrent Subagents', type: 'number' },
+          maxWebSearches:  { label: 'Max Web Searches', type: 'number' },
+          mcpAutoBackgroundMs: { label: 'MCP Auto-Background (ms)', type: 'number' },
+        }
+        if (!args) {
+          const lines = ['**Current Settings**\n']
+          for (const [key, meta] of Object.entries(CONFIG_KEYS)) {
+            const val = (settings as unknown as Record<string, unknown>)[key]
+            const display = val === undefined || val === '' ? '(default)' : String(val)
+            lines.push(`· **${meta.label}** (\`${key}\`): ${display}`)
+          }
+          lines.push('\nUsage: `/config <key>` to view, `/config <key> <value>` to set')
+          const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const parts = args.trim().split(/\s+/)
+        const key = parts[0].toLowerCase()
+        const meta = CONFIG_KEYS[key]
+        if (!meta) {
+          const validKeys = Object.keys(CONFIG_KEYS).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `Unknown setting: \`${key}\`\n\nValid keys: ${validKeys}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (parts.length === 1) {
+          const val = (settings as unknown as Record<string, unknown>)[key]
+          const display = val === undefined || val === '' ? '(default)' : String(val)
+          const msg = await el.db.addMessage(sess.id, 'system', `**${meta.label}** (\`${key}\`): ${display}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const rawVal = parts.slice(1).join(' ')
+        let newVal: unknown
+        if (meta.type === 'boolean') {
+          if (['true', '1', 'yes', 'on'].includes(rawVal.toLowerCase())) newVal = true
+          else if (['false', '0', 'no', 'off'].includes(rawVal.toLowerCase())) newVal = false
+          else {
+            const msg = await el.db.addMessage(sess.id, 'system', `Invalid boolean value: \`${rawVal}\`. Use true/false.`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+        } else if (meta.type === 'number') {
+          const n = Number(rawVal)
+          if (isNaN(n)) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Invalid number: \`${rawVal}\``)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          newVal = n
+        } else if (meta.type === 'enum' && meta.enumValues) {
+          const match = meta.enumValues.find((v) => v.toLowerCase() === rawVal.toLowerCase())
+          if (!match) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Invalid value: \`${rawVal}\`. Options: ${meta.enumValues.join(', ')}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          newVal = match
+        } else {
+          newVal = rawVal
+        }
+        const next = { ...settings, [key]: newVal }
+        await el.settings.set(next)
+        store.setSettings(next)
+        const msg = await el.db.addMessage(sess.id, 'system', `**${meta.label}** set to: \`${newVal}\``)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'rewind': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages to rewind.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const userMsgs = msgs.filter((m) => m.role === 'user')
+        if (userMsgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No user messages to rewind to.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!args) {
+          const lines = ['**Conversation Checkpoints** (user messages)\n']
+          userMsgs.forEach((m, i) => {
+            const preview = m.content.slice(0, 80).replace(/\n/g, ' ')
+            lines.push(`${i + 1}. ${preview}${m.content.length > 80 ? '…' : ''}`)
+          })
+          lines.push('\nUsage: `/rewind <n>` to go back to checkpoint n')
+          const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const idx = parseInt(args, 10)
+        if (isNaN(idx) || idx < 1 || idx > userMsgs.length) {
+          const msg = await el.db.addMessage(sess.id, 'system', `Invalid checkpoint: \`${args}\`. Use a number between 1 and ${userMsgs.length}.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const targetMsg = userMsgs[idx - 1]
+        const targetIdx = msgs.findIndex((m) => m.id === targetMsg.id)
+        const toDelete = msgs.slice(targetIdx + 1)
+        if (toDelete.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Already at the latest point — nothing to rewind.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        for (const m of toDelete) {
+          await el.db.deleteMessage(m.id)
+        }
+        store.setMessages(msgs.slice(0, targetIdx + 1))
+        const msg = await el.db.addMessage(sess.id, 'system', `Rewound to checkpoint ${idx}. Removed ${toDelete.length} message${toDelete.length !== 1 ? 's' : ''}.`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break

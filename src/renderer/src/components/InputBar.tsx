@@ -65,6 +65,8 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'fetch',        description: 'Fetch web content from a URL' },
   { kind: 'builtin', name: 'lint',         description: 'Run TypeScript type checking on the workspace' },
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },
+  { kind: 'builtin', name: 'config',        description: 'View or change settings from chat' },
+  { kind: 'builtin', name: 'rewind',        description: 'Rewind conversation to an earlier point' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
