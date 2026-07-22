@@ -191,7 +191,7 @@ interface ModelOption {
   provider?: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, providers = [], workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, colorMode = 'dark', onToggleColorMode, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
+function InputBarInner({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, providers = [], workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, colorMode = 'dark', onToggleColorMode, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
@@ -1075,3 +1075,6 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
     </div>
   )
 }
+
+const InputBar = React.memo(InputBarInner)
+export { InputBar }

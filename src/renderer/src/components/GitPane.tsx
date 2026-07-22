@@ -291,7 +291,7 @@ function ResizeHandle({ onResize }: { onResize: (dy: number) => void }): React.R
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
+function GitPaneInner({ workspacePath }: GitPaneProps): React.ReactElement {
   const [status, setStatus] = useState<GitStatus | null>(null)
   const [branches, setBranches] = useState<GitBranches>({ local: [], current: '' })
   const [commits, setCommits] = useState<GitCommit[]>([])
@@ -687,3 +687,6 @@ export function GitPane({ workspacePath }: GitPaneProps): React.ReactElement {
     </div>
   )
 }
+
+const GitPane = React.memo(GitPaneInner)
+export { GitPane }

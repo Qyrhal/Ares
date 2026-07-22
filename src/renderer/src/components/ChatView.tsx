@@ -55,7 +55,7 @@ interface ChatViewProps {
   onReact?: (id: string, reactions: { up: boolean | null }) => void
 }
 
-export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todos, modelName, onReply, onEdit, onDelete, onRegenerate, onReact }: ChatViewProps): React.ReactElement {
+function ChatViewInner({ messages, sessionTitle, isLoading, onSuggestion, todos, modelName, onReply, onEdit, onDelete, onRegenerate, onReact }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -206,6 +206,9 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
     </div>
   )
 }
+
+const ChatView = React.memo(ChatViewInner)
+export { ChatView }
 
 interface Capability {
   label: string

@@ -37,7 +37,7 @@ interface SidebarProps {
   onFsDelete: FileTreeProps['onDelete']
 }
 
-export function Sidebar({
+function SidebarInner({
   mode,
   sessions, activeSessionId, onNewSession, onSelectSession, onDeleteSession, onTogglePinSession,
   fileNodes, workspacePath, selectedFilePath, onOpenFile, onOpenFolder,
@@ -83,6 +83,9 @@ export function Sidebar({
     </aside>
   )
 }
+
+const Sidebar = React.memo(SidebarInner)
+export { Sidebar }
 
 // ── Sessions pane ─────────────────────────────────────────────────────────────
 
