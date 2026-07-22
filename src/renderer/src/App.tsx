@@ -224,7 +224,11 @@ export default function App(): React.ReactElement {
       toast.success(title, { description: summary, duration: 10_000 })
     })
 
-    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete() }
+    const offFlushError = el.dbEvents.onFlushError((msg) => {
+      toast.warning('Disk write error', { description: msg, duration: 10_000 })
+    })
+
+    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete(); offFlushError() }
   }, [])
 
   // Load messages and todos when active session changes
