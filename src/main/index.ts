@@ -157,11 +157,11 @@ function createWindow(): void {
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (e, url) => {
-    if (url.startsWith('http')) { e.preventDefault(); shell.openExternal(url) }
+    if (/^https?:\/\//i.test(url)) { e.preventDefault(); shell.openExternal(url) }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
