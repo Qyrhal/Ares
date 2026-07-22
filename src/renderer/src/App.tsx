@@ -801,7 +801,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1928,6 +1928,52 @@ export default function App(): React.ReactElement {
         }
         const msg = await el.db.addMessage(sess.id, 'system', '**Usage:**\n- `/task` or `/task list` — show all tasks\n- `/task add <text>` — add a new task\n- `/task done <n>` — mark task n as complete\n- `/task remove <n>` — remove task n')
         if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'agents': {
+        const { sessions } = useAppStore.getState()
+        const filter = args.trim().toLowerCase()
+        const subAgents = sessions.filter((s: Session) => s.parentId)
+        const filtered = filter === 'running'
+          ? subAgents.filter((s: Session) => s.agentStatus === 'running')
+          : subAgents
+        if (filtered.length === 0) {
+          const hint = filter === 'running'
+            ? 'No running sub-agents. Use `/agents` to see all sub-agents.'
+            : 'No sub-agents found. Use `spawnAgent` or `spawnAgents` to create them.'
+          const msg = await el.db.addMessage(sess.id, 'system', hint)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const statusIcon = (status?: string) => {
+          switch (status) {
+            case 'running': return '🟢'
+            case 'done': return '✅'
+            case 'error': return '❌'
+            default: return '⚪'
+          }
+        }
+        const elapsed = (createdAt: number) => {
+          const ms = Date.now() - createdAt
+          const s = Math.floor(ms / 1000)
+          if (s < 60) return `${s}s`
+          const m = Math.floor(s / 60)
+          return `${m}m ${s % 60}s`
+        }
+        const lines = [`**🤖 Sub-Agents** (${filtered.length})\n`]
+        for (const sa of filtered) {
+          const parent = sessions.find((s: Session) => s.id === sa.parentId)
+          const parentLabel = parent ? parent.title : 'unknown'
+          lines.push(
+            `${statusIcon(sa.agentStatus)} **${sa.title}** — ${sa.agentStatus || 'idle'}`,
+            `   Parent: ${parentLabel} · Msgs: ${sa.messageCount} · Age: ${elapsed(sa.createdAt)}`,
+          )
+        }
+        if (filter !== 'running') {
+          lines.push(`\nFilter: \`/agents running\` to show only active agents.`)
+        }
+        const agentsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (agentsMsg) store.appendMessage(parseMessage(agentsMsg))
         break
       }
     }
