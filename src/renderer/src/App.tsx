@@ -925,7 +925,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -2222,6 +2222,61 @@ export default function App(): React.ReactElement {
 
         const exportMsg = await el.db.addMessage(sess.id, 'system', `**Exported** ${sessions.length} sessions (${totalMessages} total messages) as Markdown (${md.length.toLocaleString()} characters).`)
         if (exportMsg) store.appendMessage(parseMessage(exportMsg))
+        break
+      }
+      case 'stats': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const roleCounts: Record<string, number> = {}
+        let totalChars = 0
+        let toolCalls = 0
+        const toolNames: Record<string, number> = {}
+        const hourlyActivity: Record<number, number> = {}
+        let earliest = Infinity
+        let latest = 0
+
+        for (const m of msgs) {
+          roleCounts[m.role] = (roleCounts[m.role] || 0) + 1
+          totalChars += m.content.length
+          if (m.toolName) {
+            toolCalls++
+            toolNames[m.toolName] = (toolNames[m.toolName] || 0) + 1
+          }
+          const hour = new Date(m.createdAt).getHours()
+          hourlyActivity[hour] = (hourlyActivity[hour] || 0) + 1
+          if (m.createdAt < earliest) earliest = m.createdAt
+          if (m.createdAt > latest) latest = m.createdAt
+        }
+
+        const avgMsgLength = Math.round(totalChars / msgs.length)
+        const durationMs = latest - earliest
+        const durationMin = Math.round(durationMs / 60000)
+        const msgsPerMin = durationMin > 0 ? (msgs.length / durationMin).toFixed(1) : '∞'
+        const peakHour = Object.entries(hourlyActivity).sort(([, a], [, b]) => b - a)[0]
+
+        const lines: string[] = ['**Session Statistics**\n']
+        lines.push(`**Total messages:** ${msgs.length}`)
+        const roleParts = Object.entries(roleCounts).map(([r, c]) => `${r}: ${c}`)
+        lines.push(`**By role:** ${roleParts.join(', ')}`)
+        lines.push(`**Total characters:** ${totalChars.toLocaleString()}`)
+        lines.push(`**Avg message length:** ${avgMsgLength.toLocaleString()} chars`)
+        lines.push(`**Session duration:** ${durationMin} min`)
+        lines.push(`**Message rate:** ${msgsPerMin} msgs/min`)
+        if (toolCalls > 0) {
+          lines.push(`**Tool calls:** ${toolCalls}`)
+          const toolParts = Object.entries(toolNames).sort(([, a], [, b]) => b - a).map(([n, c]) => `\`${n}\`: ${c}`)
+          lines.push(`**Tool breakdown:** ${toolParts.join(', ')}`)
+        }
+        if (peakHour) {
+          lines.push(`**Peak activity hour:** ${peakHour[0]}:00 (${peakHour[1]} messages)`)
+        }
+
+        const statsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (statsMsg) store.appendMessage(parseMessage(statsMsg))
         break
       }
     }
