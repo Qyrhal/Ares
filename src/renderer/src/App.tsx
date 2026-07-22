@@ -925,7 +925,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -2131,6 +2131,45 @@ export default function App(): React.ReactElement {
         store.updateSession(target.id, { agentStatus: 'done' })
         const msg = await el.db.addMessage(sess.id, 'system', `**Stopped:** ${target.title}`)
         if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'search': {
+        if (!args.trim()) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/search <query>` — search messages in the current session.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const query = args.trim().toLowerCase()
+        const msgs = useAppStore.getState().messages
+        const matches: { idx: number; role: string; snippet: string }[] = []
+        for (let i = 0; i < msgs.length; i++) {
+          const m = msgs[i]
+          const lowerContent = m.content.toLowerCase()
+          const matchIdx = lowerContent.indexOf(query)
+          if (matchIdx !== -1) {
+            const start = Math.max(0, matchIdx - 30)
+            const end = Math.min(m.content.length, matchIdx + query.length + 50)
+            const prefix = start > 0 ? '...' : ''
+            const suffix = end < m.content.length ? '...' : ''
+            const snippet = `${prefix}${m.content.slice(start, end).replace(/\n/g, ' ')}${suffix}`
+            matches.push({ idx: i + 1, role: m.role, snippet })
+          }
+        }
+        if (matches.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', `No matches found for **"${args.trim()}"** in ${msgs.length} messages.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const resultLines: string[] = [`**Search Results:** ${matches.length} match${matches.length === 1 ? '' : 'es'} for **"${args.trim()}"** (in ${msgs.length} messages)\n`]
+        for (const m of matches.slice(0, 20)) {
+          const roleLabel = m.role === 'user' ? '👤 User' : m.role === 'assistant' ? '🤖 Assistant' : m.role === 'system' ? '⚙️ System' : m.role
+          resultLines.push(`**#${m.idx}** ${roleLabel}: ${m.snippet}`)
+        }
+        if (matches.length > 20) {
+          resultLines.push(`\n*...and ${matches.length - 20} more matches*`)
+        }
+        const searchMsg = await el.db.addMessage(sess.id, 'system', resultLines.join('\n'))
+        if (searchMsg) store.appendMessage(parseMessage(searchMsg))
         break
       }
     }
