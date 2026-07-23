@@ -650,24 +650,27 @@ export default function App(): React.ReactElement {
           role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
           content: m.content,
         }))
-        try {
-          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
-          const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
-          const response = await fetch(`${baseUrl}/chat/completions`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
-            },
-            body: JSON.stringify({
-              model: modelId,
-              messages: [
-                { role: 'system', content: reviewSystemPrompt },
-                ...reviewMessages,
-              ],
-              stream: false,
-            }),
-          })
+        // Show starting message immediately
+        const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Starting review...')
+        if (startMsg) store.appendMessage(parseMessage(startMsg))
+        // Fire API call in background — don't await
+        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [
+              { role: 'system', content: reviewSystemPrompt },
+              ...reviewMessages,
+            ],
+            stream: false,
+          }),
+        }).then(async (response) => {
           if (response.ok) {
             const json = await response.json()
             const reviewContent = json.choices?.[0]?.message?.content ?? 'No review generated.'
@@ -677,10 +680,10 @@ export default function App(): React.ReactElement {
             const msg = await el.db.addMessage(sess.id, 'system', `Review failed: ${response.status}`)
             if (msg) store.appendMessage(parseMessage(msg))
           }
-        } catch {
+        }).catch(async () => {
           const msg = await el.db.addMessage(sess.id, 'system', 'Review failed: network error')
           if (msg) store.appendMessage(parseMessage(msg))
-        }
+        })
         break
       }
       case 'cost': {
