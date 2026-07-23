@@ -2228,15 +2228,40 @@ export default function App(): React.ReactElement {
       }
       case 'search': {
         if (!args.trim()) {
-          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/search <query>` — search messages in the current session.')
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/search <query>` or `/search --user|--assistant|--system|--tool <query>`')
           if (msg) store.appendMessage(parseMessage(msg))
           break
         }
-        const query = args.trim().toLowerCase()
+
+        // Parse optional role filter
+        let roleFilter: string | null = null
+        let queryStr = args.trim()
+        const roleFlags = ['--user', '--assistant', '--system', '--tool']
+        for (const flag of roleFlags) {
+          const lower = queryStr.toLowerCase()
+          if (lower === flag) {
+            roleFilter = flag.slice(2) // 'user', 'assistant', etc.
+            queryStr = ''
+            break
+          } else if (lower.startsWith(flag + ' ')) {
+            roleFilter = flag.slice(2)
+            queryStr = queryStr.slice(flag.length).trim()
+            break
+          }
+        }
+
+        if (!queryStr) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/search <query>` or `/search --user|--assistant|--system|--tool <query>`')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const query = queryStr.toLowerCase()
         const msgs = useAppStore.getState().messages
         const matches: { idx: number; role: string; snippet: string }[] = []
         for (let i = 0; i < msgs.length; i++) {
           const m = msgs[i]
+          if (roleFilter && m.role !== roleFilter) continue
           const lowerContent = m.content.toLowerCase()
           const matchIdx = lowerContent.indexOf(query)
           if (matchIdx !== -1) {
@@ -2249,11 +2274,13 @@ export default function App(): React.ReactElement {
           }
         }
         if (matches.length === 0) {
-          const msg = await el.db.addMessage(sess.id, 'system', `No matches found for **"${args.trim()}"** in ${msgs.length} messages.`)
+          const roleNote = roleFilter ? ` (role: ${roleFilter})` : ''
+          const msg = await el.db.addMessage(sess.id, 'system', `No matches found for **"${queryStr}"** in ${msgs.length} messages${roleNote}.`)
           if (msg) store.appendMessage(parseMessage(msg))
           break
         }
-        const resultLines: string[] = [`**Search Results:** ${matches.length} match${matches.length === 1 ? '' : 'es'} for **"${args.trim()}"** (in ${msgs.length} messages)\n`]
+        const roleNote = roleFilter ? ` (role: ${roleFilter})` : ''
+        const resultLines: string[] = [`**Search Results:** ${matches.length} match${matches.length === 1 ? '' : 'es'} for **"${queryStr}"** (in ${msgs.length} messages${roleNote})\n`]
         for (const m of matches.slice(0, 20)) {
           const roleLabel = m.role === 'user' ? '👤 User' : m.role === 'assistant' ? '🤖 Assistant' : m.role === 'system' ? '⚙️ System' : m.role
           resultLines.push(`**#${m.idx}** ${roleLabel}: ${m.snippet}`)
