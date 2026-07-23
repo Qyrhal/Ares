@@ -118,6 +118,7 @@ declare global {
       mcp: { status(): Promise<McpStatus[]> }
       shell: { openExternal(url: string): Promise<void> }
       lint: { run(cwd: string): Promise<{ ok: boolean; errors: number; output: string }> }
+      test: { run(cwd: string): Promise<{ ok: boolean; passed: number; failed: number; total: number; output: string }> }
       dbEvents: {
         onFlushError(cb: (msg: string) => void): () => void
       }

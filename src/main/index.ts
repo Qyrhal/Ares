@@ -499,6 +499,32 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('test:run', async (_, cwd: string) => {
+    const execAsync = promisify(execCb)
+    try {
+      const { stdout, stderr } = await execAsync('npx vitest run 2>&1', { cwd, timeout: 120_000 })
+      const output = (stdout + stderr).trim()
+      const passMatch = output.match(/Tests\s+([\d,]+)\s+passed/)
+      const failMatch = output.match(/([\d,]+)\s+failed/)
+      const totalMatch = output.match(/\((\d+)\)/)
+      const passed = passMatch ? parseInt(passMatch[1], 10) : 0
+      const failed = failMatch ? parseInt(failMatch[1], 10) : 0
+      const total = totalMatch ? parseInt(totalMatch[1], 10) : passed + failed
+      return { ok: failed === 0, passed, failed, total, output: output.slice(-3000) }
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; message: string }
+      const output = ((err.stdout || '') + (err.stderr || '')).trim()
+      const passMatch = output.match(/Tests\s+([\d,]+)\s+passed/)
+      const failMatch = output.match(/([\d,]+)\s+failed/)
+      const totalMatch = output.match(/\((\d+)\)/)
+      const passed = passMatch ? parseInt(passMatch[1], 10) : 0
+      const failed = failMatch ? parseInt(failMatch[1], 10) : 0
+      const total = totalMatch ? parseInt(totalMatch[1], 10) : passed + failed
+      if (output) return { ok: false, passed, failed, total, output: output.slice(-3000) }
+      return { ok: false, passed: 0, failed: 0, total: 0, output: err.message }
+    }
+  })
+
   // API — proxy fetch through main process to avoid CORS
   ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string | undefined) => {
     const parsed = validateFetchUrl(baseUrl.replace(/\/$/, '') + '/models')

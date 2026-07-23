@@ -2082,6 +2082,32 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'test': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const testMsg = await el.db.addMessage(sess.id, 'system', '**Running tests...**')
+        if (testMsg) store.appendMessage(parseMessage(testMsg))
+        try {
+          const result = await el.test.run(wsPath)
+          if (result.ok) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**All tests passed** — ${result.passed} passed, ${result.total} total`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const summary = result.failed > 0 ? `${result.failed} failed, ${result.passed} passed, ${result.total} total` : 'Tests completed with issues'
+            const output = result.output.length > 3000 ? result.output.slice(0, 3000) + '\n\n[truncated]' : result.output
+            const msg = await el.db.addMessage(sess.id, 'system', `**Tests: ${summary}**\n\n${output}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Test error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'task': {
         const sub = args.trim().toLowerCase()
         if (!sub || sub === 'list') {
