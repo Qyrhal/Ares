@@ -1,17 +1,17 @@
 import React from 'react'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { useAppStore } from '@/store/useAppStore'
 import { CommitDetail } from '../components/CommitDetail'
 
-describe('CommitDetail', () => {
-  beforeEach(() => {
-    useAppStore.setState({
-      commits: [],
-      activeCommit: null,
-    })
+beforeEach(() => {
+  useAppStore.setState({
+    commits: [],
+    activeCommit: null,
   })
+})
 
+describe('CommitDetail — null/empty states', () => {
   it('returns null when no active commit', () => {
     const { container } = render(<CommitDetail />)
     expect(container.innerHTML).toBe('')
@@ -26,6 +26,17 @@ describe('CommitDetail', () => {
     expect(container.innerHTML).toBe('')
   })
 
+  it('returns null when commits list is empty but activeCommit is set', () => {
+    useAppStore.setState({
+      commits: [],
+      activeCommit: 'some-hash',
+    })
+    const { container } = render(<CommitDetail />)
+    expect(container.innerHTML).toBe('')
+  })
+})
+
+describe('CommitDetail — renders commit info', () => {
   it('renders commit details when activeCommit matches', () => {
     useAppStore.setState({
       commits: [{ hash: 'abc123', shortHash: 'abc123', parents: [], author: 'Alice', date: '2024-01-01T12:00:00Z', message: 'Initial commit' }],
@@ -33,7 +44,6 @@ describe('CommitDetail', () => {
     })
     render(<CommitDetail />)
 
-    // Commit message appears in both header title and body — use getAllByText to confirm
     expect(screen.getAllByText('Initial commit').length).toBeGreaterThanOrEqual(1)
     expect(screen.getByText('abc123')).toBeInTheDocument()
     expect(screen.getByText('Alice')).toBeInTheDocument()
@@ -50,24 +60,9 @@ describe('CommitDetail', () => {
     })
     render(<CommitDetail />)
 
-    // Commit message appears twice (header + body)
     expect(screen.getAllByText('Merge PR').length).toBeGreaterThanOrEqual(1)
-    // Parent hashes shown as truncated codes
     expect(screen.getByText('abc123')).toBeInTheDocument()
     expect(screen.getByText('xyz789')).toBeInTheDocument()
-  })
-
-  it('clears active commit when close button is clicked', () => {
-    useAppStore.setState({
-      commits: [{ hash: 'abc', shortHash: 'abc', parents: [], author: 'me', date: '2024-01-01', message: 'Test' }],
-      activeCommit: 'abc',
-    })
-    render(<CommitDetail />)
-
-    // Find the X close button
-    const closeBtn = screen.getByRole('button')
-    fireEvent.click(closeBtn)
-    expect(useAppStore.getState().activeCommit).toBeNull()
   })
 
   it('formats the commit date in a human-readable way', () => {
@@ -79,8 +74,6 @@ describe('CommitDetail', () => {
       activeCommit: 'a1b2c3',
     })
     render(<CommitDetail />)
-
-    // Should have a date displayed containing Dec 2024
     expect(screen.getByText(/Dec.*2024/)).toBeInTheDocument()
   })
 
@@ -88,16 +81,40 @@ describe('CommitDetail', () => {
     useAppStore.setState({
       commits: [{
         hash: 'xyz', shortHash: 'xyz', parents: [],
-        author: 'Dev', date: '2024-03-15', message: 'Multi-line\ncommit message\nwith details',
+        author: 'Dev', date: '2024-03-15',
+        message: 'Multi-line\ncommit message\nwith details',
       }],
       activeCommit: 'xyz',
     })
     render(<CommitDetail />)
 
-    // The message appears both in header (span) and body (p) — use getAllByText
     expect(screen.getAllByText(/Multi-line/).length).toBe(2)
-    // Verify the message text is present in the rendered output
     expect(screen.getAllByText(/with details/).length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('displays commit hash as monospace code element', () => {
+    useAppStore.setState({
+      commits: [{ hash: 'abc123', shortHash: 'abc123', parents: [], author: 'A', date: '2024-01-01', message: 'Msg' }],
+      activeCommit: 'abc123',
+    })
+    render(<CommitDetail />)
+    const code = screen.getByText('abc123')
+    expect(code.tagName).toBe('CODE')
+    expect(code.className).toContain('font-mono')
+  })
+})
+
+describe('CommitDetail — interactions', () => {
+  it('clears active commit when close button is clicked', () => {
+    useAppStore.setState({
+      commits: [{ hash: 'abc', shortHash: 'abc', parents: [], author: 'me', date: '2024-01-01', message: 'Test' }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+
+    const closeBtn = screen.getByRole('button')
+    fireEvent.click(closeBtn)
+    expect(useAppStore.getState().activeCommit).toBeNull()
   })
 
   it('switches displayed commit when activeCommit changes', () => {
@@ -111,21 +128,72 @@ describe('CommitDetail', () => {
     const { rerender } = render(<CommitDetail />)
     expect(screen.getAllByText('First').length).toBeGreaterThanOrEqual(1)
 
-    // Switch active commit
     useAppStore.setState({ activeCommit: 'bbb' })
     rerender(<CommitDetail />)
     expect(screen.getAllByText('Second').length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByText('First')).not.toBeInTheDocument()
   })
+})
 
-  it('displays commit hash as monospace code element', () => {
+describe('CommitDetail — layout structure', () => {
+  it('has proper header with commit message and close button', () => {
     useAppStore.setState({
-      commits: [{ hash: 'abc123', shortHash: 'abc123', parents: [], author: 'A', date: '2024-01-01', message: 'Msg' }],
-      activeCommit: 'abc123',
+      commits: [{ hash: 'abc', shortHash: 'abc', parents: [], author: 'me', date: '2024-01-01', message: 'Test commit' }],
+      activeCommit: 'abc',
     })
     render(<CommitDetail />)
-    const code = screen.getByText('abc123')
-    expect(code.tagName).toBe('CODE')
-    expect(code.className).toContain('font-mono')
+    // Should have the close button
+    expect(screen.getByRole('button')).toBeDefined()
+    // Should have the commit message in header
+    expect(screen.getAllByText('Test commit').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('shows Author label', () => {
+    useAppStore.setState({
+      commits: [{ hash: 'abc', shortHash: 'abc', parents: [], author: 'Alice', date: '2024-01-01', message: 'Test' }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    expect(screen.getByText('Author:')).toBeInTheDocument()
+  })
+
+  it('shows Date label', () => {
+    useAppStore.setState({
+      commits: [{ hash: 'abc', shortHash: 'abc', parents: [], author: 'Alice', date: '2024-01-01', message: 'Test' }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    expect(screen.getByText('Date:')).toBeInTheDocument()
+  })
+
+  it('shows Commit label', () => {
+    useAppStore.setState({
+      commits: [{ hash: 'abc', shortHash: 'abc', parents: [], author: 'Alice', date: '2024-01-01', message: 'Test' }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    expect(screen.getByText('Commit:')).toBeInTheDocument()
+  })
+
+  it('hides Parents label when no parents', () => {
+    useAppStore.setState({
+      commits: [{ hash: 'abc', shortHash: 'abc', parents: [], author: 'Alice', date: '2024-01-01', message: 'Test' }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    expect(screen.queryByText('Parents:')).toBeNull()
+  })
+
+  it('shows Parents label when parents exist', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'abc', shortHash: 'abc',
+        parents: ['def123'],
+        author: 'Alice', date: '2024-01-01', message: 'Merge',
+      }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    expect(screen.getByText('Parents:')).toBeInTheDocument()
   })
 })

@@ -53,9 +53,10 @@ interface ChatViewProps {
   onDelete?: (message: Message) => void
   onRegenerate?: (message: Message) => void
   onReact?: (id: string, reactions: { up: boolean | null }) => void
+  onEditResend?: (message: Message) => void
 }
 
-export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todos, modelName, onReply, onEdit, onDelete, onRegenerate, onReact }: ChatViewProps): React.ReactElement {
+export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todos, modelName, onReply, onEdit, onDelete, onRegenerate, onReact, onEditResend }: ChatViewProps): React.ReactElement {
   const bottomRef = useRef<HTMLDivElement>(null)
   const viewportRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement | null>(null)
@@ -166,7 +167,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
     <ScrollArea className="flex-1" viewportRef={viewportRef}>
       <div className="py-4">
          {messages.filter((m) => !m.isStreaming).map((msg) => (
-          <MessageItem key={msg.id} message={msg} modelName={modelName} onReply={onReply} onEdit={onEdit} onDelete={onDelete} onRegenerate={onRegenerate} onReact={onReact} />
+          <MessageItem key={msg.id} message={msg} modelName={modelName} onReply={onReply} onEdit={onEdit} onDelete={onDelete} onRegenerate={onRegenerate} onReact={onReact} onEditResend={onEditResend} />
          ))}
         {isLoading && (
           <div className="px-4 py-2">

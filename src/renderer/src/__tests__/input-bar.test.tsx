@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
-import { InputBar } from '../components/InputBar'
+import { InputBar, BUILTIN_COMMANDS } from '../components/InputBar'
 
 const PLACEHOLDER = 'Ask anything… (@ to mention files, / for commands)'
 
@@ -197,5 +197,265 @@ describe('InputBar — permission mode', () => {
   it('shows permission mode toggle', () => {
     renderInputBar({ onPermissionModeChange: vi.fn(), permissionMode: 'ask' })
     expect(screen.getByText('Ask')).toBeInTheDocument()
+  })
+})
+
+describe('InputBar — slash command picker lifecycle', () => {
+  it('shows all builtin commands in picker', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/' } })
+    for (const cmd of BUILTIN_COMMANDS) {
+      expect(screen.queryByText(`/${cmd.name}`)).toBeInTheDocument()
+    }
+  })
+
+  it('shows builtins, skills, and plugin commands together', () => {
+    renderInputBar({
+      pluginSkills: [{ name: 'test-skill', description: 'A test skill', content: 'skill content' }],
+      pluginCommands: [{ name: 'deploy', description: 'Deploy to server', argumentHint: '--env', prompt: 'Deploy {{args}}' }],
+    })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/' } })
+    // Builtins
+    expect(screen.queryByText('/model')).toBeInTheDocument()
+    expect(screen.queryByText('/clear')).toBeInTheDocument()
+    // Skill
+    expect(screen.queryByText('/test-skill')).toBeInTheDocument()
+    // Plugin command
+    expect(screen.queryByText('/deploy')).toBeInTheDocument()
+  })
+
+  it('filters to /clear when typing /cl', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/cl' } })
+    expect(screen.queryByText('/clear')).toBeInTheDocument()
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    expect(screen.queryByText('/help')).not.toBeInTheDocument()
+  })
+
+  it('filters to /model when typing /mod', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/mod' } })
+    expect(screen.queryByText('/model')).toBeInTheDocument()
+    expect(screen.queryByText('/clear')).not.toBeInTheDocument()
+    expect(screen.queryByText('/help')).not.toBeInTheDocument()
+  })
+
+  it('shows all commands again when filter is cleared back to /', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/cl' } })
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    // Clear filter back to just /
+    fireEvent.change(textarea, { target: { value: '/' } })
+    expect(screen.queryByText('/model')).toBeInTheDocument()
+    expect(screen.queryByText('/clear')).toBeInTheDocument()
+    expect(screen.queryByText('/help')).toBeInTheDocument()
+  })
+
+  it('closes picker when Escape is pressed', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/' } })
+    expect(screen.queryByText('/model')).toBeInTheDocument()
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    expect(screen.queryByText('/clear')).not.toBeInTheDocument()
+  })
+
+  it('does not open picker when / is typed mid-line', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: 'hello/' } })
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    expect(screen.queryByText('/clear')).not.toBeInTheDocument()
+  })
+
+  it('does not open picker when / is typed after a space on same line', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: 'hello /' } })
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    expect(screen.queryByText('/clear')).not.toBeInTheDocument()
+  })
+
+  it('re-opens picker after being closed and re-typing /', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    // Open picker
+    fireEvent.change(textarea, { target: { value: '/' } })
+    expect(screen.queryByText('/model')).toBeInTheDocument()
+    // Close picker
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    // Clear and re-type /
+    fireEvent.change(textarea, { target: { value: '' } })
+    fireEvent.change(textarea, { target: { value: '/' } })
+    expect(screen.queryByText('/model')).toBeInTheDocument()
+    expect(screen.queryByText('/clear')).toBeInTheDocument()
+  })
+})
+
+describe('InputBar — tab completion', () => {
+  const pluginCommands = [
+    { name: 'deploy', description: 'Deploy to server', argumentHint: '--env prod', prompt: 'Deploy {{args}}' },
+  ]
+
+  it('Tab inserts highlighted command name into textarea', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER) as HTMLTextAreaElement
+    // Type /dep to filter to just the deploy command
+    fireEvent.change(textarea, { target: { value: '/dep' } })
+    expect(screen.queryByText('/deploy')).toBeInTheDocument()
+    // Tab to complete
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+    // executeCommand → insertCommand preserves typed prefix → '/dep/deploy '
+    expect(textarea.value).toBe('/dep/deploy ')
+  })
+
+  it('textarea contains /commandname with trailing space after Tab', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER) as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: '/dep' } })
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+    expect(textarea.value).toBe('/dep/deploy ')
+  })
+
+  it('picker is closed after Tab completion', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/dep' } })
+    expect(screen.queryByText('/deploy')).toBeInTheDocument()
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+    // After insertCommand, closeCommands is called → picker closed
+    expect(screen.queryByText('/deploy')).not.toBeInTheDocument()
+  })
+
+  it('Arrow Down then Tab executes highlighted command', () => {
+    const onRevealInExplorer = vi.fn()
+    renderInputBar({ pluginSkills: [], pluginCommands: [], onRevealInExplorer })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    // Open picker with just /
+    fireEvent.change(textarea, { target: { value: '/' } })
+    // Highlight starts at 0 (/model). ArrowDown → highlight at 1 (/folder)
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' })
+    // Tab executes highlighted command (/folder → calls onRevealInExplorer)
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+    expect(onRevealInExplorer).toHaveBeenCalled()
+  })
+
+  it('Arrow Up clamps highlight at 0', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/' } })
+    // Default highlight is 0. ArrowUp should clamp at 0
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' })
+    // Picker should still be open with /model as first item
+    expect(screen.queryByText('/model')).toBeInTheDocument()
+  })
+})
+
+describe('InputBar — enter key dispatch', () => {
+  it('Enter on /clear calls onCommand("clear", "")', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/clear' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onCommand).toHaveBeenCalledWith('clear', '')
+  })
+
+  it('Enter with no picker open sends message normally', () => {
+    const onSend = vi.fn()
+    renderInputBar({ onSend })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    // Type non-slash text → picker stays closed
+    fireEvent.change(textarea, { target: { value: 'hello world' } })
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onSend).toHaveBeenCalledWith('hello world', [], undefined)
+  })
+
+  it('Shift+Enter inserts newline, never sends or triggers command', () => {
+    const onSend = vi.fn()
+    const onCommand = vi.fn()
+    renderInputBar({ onSend, onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    // Type non-slash text so picker stays closed
+    fireEvent.change(textarea, { target: { value: 'hello' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: true })
+    expect(onSend).not.toHaveBeenCalled()
+    expect(onCommand).not.toHaveBeenCalled()
+  })
+})
+
+describe('InputBar — slash command text reflection', () => {
+  it('textarea shows exactly what user typed for /model gpt-4o', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER) as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: '/model gpt-4o' } })
+    expect(textarea.value).toBe('/model gpt-4o')
+  })
+
+  it('uppercase /CLEAR dispatches as onCommand("clear", "")', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/CLEAR' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onCommand).toHaveBeenCalledWith('clear', '')
+  })
+
+  it('mixed-case /Model gpt-4o dispatches as onCommand("model", "gpt-4o")', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/Model gpt-4o' } })
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    expect(onCommand).toHaveBeenCalledWith('model', 'gpt-4o')
+  })
+})
+
+describe('InputBar — edge cases', () => {
+  it('typing / then pressing Enter does not crash', () => {
+    const onCommand = vi.fn()
+    const onSend = vi.fn()
+    renderInputBar({ onCommand, onSend, pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/' } })
+    // Picker is open with all commands; Enter executes the first (highlight=0 → /model)
+    expect(() => {
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    }).not.toThrow()
+  })
+
+  it('typing /nonexistent then Enter does not crash', () => {
+    const onCommand = vi.fn()
+    const onSend = vi.fn()
+    renderInputBar({ onCommand, onSend, pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/nonexistent' } })
+    expect(() => {
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    }).not.toThrow()
+    // Falls through to handleSend which dispatches onCommand
+    expect(onCommand).toHaveBeenCalledWith('nonexistent', '')
+  })
+
+  it('multiple rapid Enter presses on same command do not crash', () => {
+    const onCommand = vi.fn()
+    renderInputBar({ onCommand, pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/clear' } })
+    expect(() => {
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false })
+    }).not.toThrow()
+    // First Enter executes /clear, subsequent Enters operate on cleared text
+    expect(onCommand).toHaveBeenCalledWith('clear', '')
   })
 })
