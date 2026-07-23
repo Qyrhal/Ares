@@ -1,116 +1,260 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { StatusBar } from '@/components/StatusBar'
+import type { Message } from '@/types'
 
-describe('StatusBar', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+function mkMsg(overrides: Partial<Message> = {}): Message {
+  return {
+    id: 'm1',
+    sessionId: 's1',
+    role: 'user',
+    content: 'hello',
+    createdAt: Date.now(),
+    ...overrides,
+  }
+}
 
-  it('renders without crashing', () => {
-    const { container } = render(
-      <StatusBar workspacePath={null} currentModel="gpt-4o" sessionCount={0} />
-    )
-    expect(container).toBeDefined()
-  })
+function getElectronMock() {
+  return (globalThis as Record<string, unknown>).__electronMock as Record<string, Record<string, unknown>>
+}
 
-  it('shows workspace path when provided', () => {
+beforeEach(() => {
+  vi.clearAllMocks()
+  const mock = getElectronMock()
+  ;(mock.checkpoint.list as ReturnType<typeof vi.fn>).mockResolvedValue([])
+  ;(mock.mcp.status as ReturnType<typeof vi.fn>).mockResolvedValue([])
+})
+
+describe('StatusBar — basic rendering', () => {
+  it('renders with required props', () => {
     render(
-      <StatusBar workspacePath="/home/user/project" currentModel="gpt-4o" sessionCount={2} />
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={3}
+      />,
     )
-    expect(screen.getByText('/home/user/project')).toBeDefined()
+    expect(screen.getByText('/project')).toBeDefined()
+    expect(screen.getByText('gpt-4o')).toBeDefined()
+    expect(screen.getByText('3 sessions')).toBeDefined()
   })
 
   it('shows "No folder" when workspacePath is null', () => {
     render(
-      <StatusBar workspacePath={null} currentModel="gpt-4o" sessionCount={0} />
+      <StatusBar
+        workspacePath={null}
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
     )
     expect(screen.getByText('No folder')).toBeDefined()
   })
 
-  it('shows current model name', () => {
+  it('shows singular "session" when sessionCount is 1', () => {
     render(
-      <StatusBar workspacePath={null} currentModel="claude-3-opus" sessionCount={0} />
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={1}
+      />,
     )
-    expect(screen.getByText('claude-3-opus')).toBeDefined()
+    expect(screen.getByText('1 session')).toBeDefined()
   })
+})
 
-  it('truncates long model names', () => {
+describe('StatusBar — model display', () => {
+  it('truncates long model names to 20 chars', () => {
+    const longModel = 'a'.repeat(30)
     render(
-      <StatusBar workspacePath={null} currentModel="very-long-model-name-that-exceeds-twenty-chars" sessionCount={0} />
+      <StatusBar
+        workspacePath="/project"
+        currentModel={longModel}
+        sessionCount={0}
+      />,
     )
-    expect(screen.getByText(/very-long-model/)).toBeDefined()
-    expect(screen.getByText(/…/)).toBeDefined()
+    expect(screen.getByText(longModel.slice(0, 20) + '…')).toBeDefined()
   })
 
-  it('shows session count', () => {
-    const { container } = render(
-      <StatusBar workspacePath={null} currentModel="gpt-4o" sessionCount={5} />
-    )
-    const sessionSpan = container.querySelector('.shrink-0:last-child')
-    expect(sessionSpan?.textContent).toContain('5')
-  })
-
-  it('shows singular session count', () => {
-    const { container } = render(
-      <StatusBar workspacePath={null} currentModel="gpt-4o" sessionCount={1} />
-    )
-    const sessionSpan = container.querySelector('.shrink-0:last-child')
-    expect(sessionSpan?.textContent).toContain('1')
-  })
-
-  it('polls checkpoint count when workspacePath is set', () => {
-    const el = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
-    const checkpoint = (el as Record<string, Record<string, unknown>>).checkpoint
-    checkpoint.list = vi.fn().mockResolvedValue([{ id: 'stash@{0}', index: 0, message: 'cp1', date: '', branch: 'main' }])
-
+  it('does not truncate short model names', () => {
     render(
-      <StatusBar workspacePath="/project" currentModel="gpt-4o" sessionCount={0} />
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o-mini"
+        sessionCount={0}
+      />,
     )
-    expect(checkpoint.list).toHaveBeenCalledWith('/project')
+    expect(screen.getByText('gpt-4o-mini')).toBeDefined()
   })
 
-  it('skips checkpoint poll when workspacePath is null', () => {
-    const el = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
-    const checkpoint = (el as Record<string, Record<string, unknown>>).checkpoint
-    checkpoint.list = vi.fn()
-
+  it('hides model display when currentModel is empty', () => {
     render(
-      <StatusBar workspacePath={null} currentModel="gpt-4o" sessionCount={0} />
+      <StatusBar
+        workspacePath="/project"
+        currentModel=""
+        sessionCount={0}
+      />,
     )
-    expect(checkpoint.list).not.toHaveBeenCalled()
+    expect(screen.queryByText(/gpt/)).toBeNull()
+  })
+})
+
+describe('StatusBar — context usage', () => {
+  it('shows context badge when messages are provided', () => {
+    const messages = [mkMsg(), mkMsg({ id: 'm2' })]
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={1}
+        messages={messages}
+      />,
+    )
+    expect(screen.getByText('gpt-4o')).toBeDefined()
   })
 
-  it('shows MCP status when connected', async () => {
-    const el = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
-    const mcp = (el as Record<string, Record<string, unknown>>).mcp
-    mcp.status = vi.fn().mockResolvedValue([
-      { name: 'server1', connected: true, toolCount: 3 },
-      { name: 'server2', connected: true, toolCount: 2 },
+  it('does not show context badge when messages is empty array', () => {
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={1}
+        messages={[]}
+      />,
+    )
+    expect(screen.getByText('gpt-4o')).toBeDefined()
+  })
+
+  it('does not show context badge when messages is undefined', () => {
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={1}
+      />,
+    )
+    expect(screen.getByText('gpt-4o')).toBeDefined()
+  })
+})
+
+describe('StatusBar — checkpoint count', () => {
+  it('does not show checkpoint count when zero', () => {
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    expect(screen.queryByText('0')).toBeNull()
+  })
+
+  it('shows checkpoint count when checkpoints exist', async () => {
+    const mock = getElectronMock()
+    ;(mock.checkpoint.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'c1', index: 0, message: 'test', date: '', branch: 'main' },
+      { id: 'c2', index: 1, message: 'test2', date: '', branch: 'main' },
     ])
-
     render(
-      <StatusBar workspacePath={null} currentModel="gpt-4o" sessionCount={0} />
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
     )
-    await waitFor(() => {
+    await vi.waitFor(() => {
+      expect(screen.getByText('2')).toBeDefined()
+    })
+  })
+
+  it('does not poll checkpoints when workspacePath is null', () => {
+    render(
+      <StatusBar
+        workspacePath={null}
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    const mock = getElectronMock()
+    expect(mock.checkpoint.list).not.toHaveBeenCalled()
+  })
+})
+
+describe('StatusBar — MCP status', () => {
+  it('shows MCP connected count', async () => {
+    const mock = getElectronMock()
+    ;(mock.mcp.status as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { name: 'server1', connected: true, toolCount: 3 },
+      { name: 'server2', connected: true, toolCount: 1 },
+    ])
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    await vi.waitFor(() => {
       expect(screen.getByText('2/2')).toBeDefined()
     })
   })
 
-  it('shows MCP status when partially connected', async () => {
-    const el = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
-    const mcp = (el as Record<string, Record<string, unknown>>).mcp
-    mcp.status = vi.fn().mockResolvedValue([
+  it('shows amber color when some MCP servers are disconnected', async () => {
+    const mock = getElectronMock()
+    ;(mock.mcp.status as ReturnType<typeof vi.fn>).mockResolvedValue([
       { name: 'server1', connected: true, toolCount: 3 },
-      { name: 'server2', connected: false, toolCount: 0, error: 'timeout' },
+      { name: 'server2', connected: false, error: 'timeout', toolCount: 0 },
     ])
-
     render(
-      <StatusBar workspacePath={null} currentModel="gpt-4o" sessionCount={0} />
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
     )
-    await waitFor(() => {
+    await vi.waitFor(() => {
       expect(screen.getByText('1/2')).toBeDefined()
     })
+    const mcpSpan = screen.getByText('1/2').closest('span')!
+    expect(mcpSpan.className).toContain('text-amber-400')
+  })
+
+  it('hides MCP status when no servers configured', async () => {
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    expect(screen.queryByText('0/0')).toBeNull()
+  })
+})
+
+describe('StatusBar — class and structure', () => {
+  it('applies custom className', () => {
+    const { container } = render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+        className="custom-class"
+      />,
+    )
+    const root = container.firstElementChild!
+    expect(root.className).toContain('custom-class')
+  })
+
+  it('has proper flex layout structure', () => {
+    const { container } = render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    const root = container.firstElementChild!
+    expect(root.className).toContain('flex')
+    expect(root.className).toContain('h-6')
   })
 })

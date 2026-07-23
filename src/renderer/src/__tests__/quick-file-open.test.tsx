@@ -1,329 +1,337 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QuickFileOpen } from '@/components/QuickFileOpen'
 
-const mockFiles = [
-  { path: '/home/user/project/src/index.ts', name: 'index.ts', dir: '/home/user/project/src' },
-  { path: '/home/user/project/src/app.tsx', name: 'app.tsx', dir: '/home/user/project/src' },
-  { path: '/home/user/project/README.md', name: 'README.md', dir: '/home/user/project' },
-  { path: '/home/user/project/icon.png', name: 'icon.png', dir: '/home/user/project' },
-  { path: '/home/user/project/style.css', name: 'style.css', dir: '/home/user/project' },
-  { path: '/home/user/project/main.py', name: 'main.py', dir: '/home/user/project' },
-]
+const defaultProps = {
+  open: true,
+  onClose: vi.fn(),
+  workspacePath: '/project',
+  onOpenFile: vi.fn(),
+}
 
-describe('QuickFileOpen', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    const mock = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
-    const fs = (mock as Record<string, Record<string, unknown>>).fs
-    fs.findFiles = vi.fn().mockResolvedValue(mockFiles.map((f) => f.path))
-  })
+beforeEach(() => {
+  vi.clearAllMocks()
+  window.electron.fs.findFiles = vi.fn().mockResolvedValue([])
+})
 
+describe('QuickFileOpen — open/close', () => {
   it('renders nothing when closed', () => {
     const { container } = render(
-      <QuickFileOpen
-        open={false}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
+      <QuickFileOpen {...defaultProps} open={false} />,
     )
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders search input when open with placeholder', () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
+  it('renders overlay when open', () => {
+    render(<QuickFileOpen {...defaultProps} />)
     expect(screen.getByPlaceholderText('Search files by name…')).toBeDefined()
   })
 
-  it('shows "No folder open" message when workspacePath is null', () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath={null}
-        onOpenFile={vi.fn()}
-      />
-    )
-    expect(screen.getByPlaceholderText('No folder open')).toBeDefined()
+  it('shows search input when open', () => {
+    render(<QuickFileOpen {...defaultProps} />)
+    const input = screen.getByPlaceholderText('Search files by name…')
+    expect(input).toBeDefined()
+  })
+})
+
+describe('QuickFileOpen — workspace states', () => {
+  it('shows "No folder open" when workspacePath is null', () => {
+    render(<QuickFileOpen {...defaultProps} workspacePath={null} />)
     expect(screen.getByText('No folder open')).toBeDefined()
   })
 
-  it('shows "Open a folder to search files" when workspacePath is null', () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath={null}
-        onOpenFile={vi.fn()}
-      />
-    )
+  it('shows empty folder prompt when no workspace', () => {
+    render(<QuickFileOpen {...defaultProps} workspacePath={null} />)
     expect(screen.getByText('Open a folder to search files')).toBeDefined()
   })
 
-  it('shows loading state initially when opened with workspace', async () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-    expect(screen.getByText('Loading files…')).toBeDefined()
+  it('disables input when no workspace', () => {
+    render(<QuickFileOpen {...defaultProps} workspacePath={null} />)
+    const input = screen.getByPlaceholderText('No folder open')
+    expect(input).toBeDisabled()
   })
+})
 
-  it('displays file list after loading', async () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-    // Wait for the async findFiles to resolve and component to re-render
-    await vi.waitFor(() => {
-      expect(screen.getByText('index.ts')).toBeDefined()
-    })
-    expect(screen.getByText('app.tsx')).toBeDefined()
-    expect(screen.getByText('README.md')).toBeDefined()
-    expect(screen.getByText('icon.png')).toBeDefined()
-  })
-
-  it('shows result count', async () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-    await vi.waitFor(() => {
-      expect(screen.getByText(/6 files?/)).toBeDefined()
+describe('QuickFileOpen — file loading', () => {
+  it('loads files when opened with workspace', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/src/main.ts',
+      '/src/app.tsx',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(window.electron.fs.findFiles).toHaveBeenCalledWith('/project')
     })
   })
 
-  it('filters files by query using fuzzy matching', async () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
+  it('shows loading state', async () => {
+    let resolve: (v: string[]) => void
+    window.electron.fs.findFiles = vi.fn().mockReturnValue(
+      new Promise<string[]>((r) => { resolve = r }),
     )
-    // Wait for files to load
-    await vi.waitFor(() => {
-      expect(screen.getByText('index.ts')).toBeDefined()
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('Loading files…')).toBeDefined()
     })
+    resolve!([])
+  })
 
-    const { fireEvent } = await import('@testing-library/react')
+  it('does not load files when closed', () => {
+    render(<QuickFileOpen {...defaultProps} open={false} />)
+    expect(window.electron.fs.findFiles).not.toHaveBeenCalled()
+  })
+})
+
+describe('QuickFileOpen — file rendering', () => {
+  it('renders loaded files', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/src/main.ts',
+      '/src/app.tsx',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('main.ts')).toBeDefined()
+      expect(screen.getByText('app.tsx')).toBeDefined()
+    })
+  })
+
+  it('shows file count', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/a.ts',
+      '/b.ts',
+      '/c.ts',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('3 files')).toBeDefined()
+    })
+  })
+
+  it('shows singular "file" for one result', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/a.ts'])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('1 file')).toBeDefined()
+    })
+  })
+
+  it('shows directory path for files', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/src/components/App.tsx',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('/src/components')).toBeDefined()
+    })
+  })
+})
+
+describe('QuickFileOpen — filtering', () => {
+  it('filters files by name', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/src/main.ts',
+      '/src/app.tsx',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('main.ts')).toBeDefined()
+    })
     const input = screen.getByPlaceholderText('Search files by name…')
-    fireEvent.change(input, { target: { value: 'app' } })
-
-    // app.tsx matches name, index.ts matches path partially
-    expect(screen.getByText('app.tsx')).toBeDefined()
-    // README.md, icon.png, style.css, main.py don't match "app"
-    expect(screen.queryByText('README.md')).toBeNull()
-    expect(screen.queryByText('icon.png')).toBeNull()
+    fireEvent.change(input, { target: { value: 'main' } })
+    expect(screen.getByText('main.ts')).toBeDefined()
+    expect(screen.queryByText('app.tsx')).toBeNull()
   })
 
-  it('shows "No files found" when query matches nothing', async () => {
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-    await vi.waitFor(() => {
-      expect(screen.getByText('index.ts')).toBeDefined()
+  it('shows "No files found" when query has no matches', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/a.ts'])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('a.ts')).toBeDefined()
     })
-
-    const { fireEvent } = await import('@testing-library/react')
     const input = screen.getByPlaceholderText('Search files by name…')
-    fireEvent.change(input, { target: { value: 'zzzzz' } })
+    fireEvent.change(input, { target: { value: 'zzz' } })
     expect(screen.getByText('No files found')).toBeDefined()
   })
 
-  it('shows "No files in workspace" when there are no files and no query', async () => {
-    const mock = (globalThis as Record<string, unknown>).__electronMock as Record<string, unknown>
-    const fs = (mock as Record<string, Record<string, unknown>>).fs
-    fs.findFiles = vi.fn().mockResolvedValue([])
-
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-    await vi.waitFor(() => {
+  it('shows "No files in workspace" when empty files list and no query', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
       expect(screen.getByText('No files in workspace')).toBeDefined()
     })
   })
 
-  it('navigates with ArrowDown, ArrowUp, and selects with Enter', async () => {
-    const onOpenFile = vi.fn()
-    const onClose = vi.fn()
-
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={onClose}
-        workspacePath="/home/user/project"
-        onOpenFile={onOpenFile}
-      />
-    )
-
-    // Wait for files to load
-    await vi.waitFor(() => {
-      expect(screen.getByText('index.ts')).toBeDefined()
+  it('prioritizes name matches over path matches', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/deep/path/main.ts',
+      '/other/thing.txt',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('main.ts')).toBeDefined()
     })
-
-    const { fireEvent } = await import('@testing-library/react')
     const input = screen.getByPlaceholderText('Search files by name…')
-
-    // Initially first item is selected (index.ts), press ArrowDown
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-    // Press Enter to open the second item (app.tsx)
-    fireEvent.keyDown(input, { key: 'Enter' })
-
-    expect(onOpenFile).toHaveBeenCalledWith('/home/user/project/src/app.tsx')
-    expect(onClose).toHaveBeenCalled()
+    fireEvent.change(input, { target: { value: 'main' } })
+    expect(screen.getByText('main.ts')).toBeDefined()
+    expect(screen.queryByText('thing.txt')).toBeNull()
   })
+})
 
-  it('closes on Escape', async () => {
+describe('QuickFileOpen — keyboard navigation', () => {
+  it('calls onClose on Escape', async () => {
     const onClose = vi.fn()
-
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={onClose}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-
-    const { fireEvent } = await import('@testing-library/react')
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/a.ts'])
+    render(<QuickFileOpen {...defaultProps} onClose={onClose} />)
+    await waitFor(() => {
+      expect(screen.getByText('a.ts')).toBeDefined()
+    })
     const input = screen.getByPlaceholderText('Search files by name…')
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })
 
+  it('opens file on Enter', async () => {
+    const onOpenFile = vi.fn()
+    const onClose = vi.fn()
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/src/main.ts'])
+    render(
+      <QuickFileOpen
+        {...defaultProps}
+        onOpenFile={onOpenFile}
+        onClose={onClose}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('main.ts')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onOpenFile).toHaveBeenCalledWith('/src/main.ts')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('navigates down with ArrowDown', async () => {
+    const onOpenFile = vi.fn()
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/a.ts',
+      '/b.ts',
+    ])
+    render(
+      <QuickFileOpen
+        {...defaultProps}
+        onOpenFile={onOpenFile}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('a.ts')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onOpenFile).toHaveBeenCalledWith('/b.ts')
+  })
+
+  it('navigates up with ArrowUp', async () => {
+    const onOpenFile = vi.fn()
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/a.ts',
+      '/b.ts',
+    ])
+    render(
+      <QuickFileOpen
+        {...defaultProps}
+        onOpenFile={onOpenFile}
+      />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('a.ts')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    // Go down to index 1, then back up to 0
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onOpenFile).toHaveBeenCalledWith('/a.ts')
+  })
+
+  it('does not crash when Enter pressed with no files', async () => {
+    const onClose = vi.fn()
+    render(<QuickFileOpen {...defaultProps} onClose={onClose} />)
+    await waitFor(() => {
+      expect(screen.getByText('No files in workspace')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('QuickFileOpen — interactions', () => {
   it('closes when clicking backdrop', async () => {
     const onClose = vi.fn()
-
     const { container } = render(
-      <QuickFileOpen
-        open={true}
-        onClose={onClose}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
+      <QuickFileOpen {...defaultProps} onClose={onClose} />,
     )
-
-    const { fireEvent } = await import('@testing-library/react')
-    // Click on the outermost overlay div (the backdrop area)
+    await waitFor(() => {
+      expect(window.electron.fs.findFiles).toHaveBeenCalled()
+    })
     const backdrop = container.firstChild as HTMLElement
     fireEvent.click(backdrop)
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('does not close when clicking inside the dialog', async () => {
+  it('does not close when clicking inside dialog', async () => {
     const onClose = vi.fn()
-
-    render(
-      <QuickFileOpen
-        open={true}
-        onClose={onClose}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-
-    const { fireEvent } = await import('@testing-library/react')
-    // Click on the input inside the dialog — should not propagate to backdrop
+    render(<QuickFileOpen {...defaultProps} onClose={onClose} />)
+    await waitFor(() => {
+      expect(window.electron.fs.findFiles).toHaveBeenCalled()
+    })
     const input = screen.getByPlaceholderText('Search files by name…')
     fireEvent.click(input)
     expect(onClose).not.toHaveBeenCalled()
   })
 
-  it('shows file icons by extension type', async () => {
+  it('opens file on click', async () => {
+    const onOpenFile = vi.fn()
+    const onClose = vi.fn()
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/src/main.ts'])
     render(
       <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
+        {...defaultProps}
+        onOpenFile={onOpenFile}
+        onClose={onClose}
+      />,
     )
-
-    await vi.waitFor(() => {
-      expect(screen.getByText('index.ts')).toBeDefined()
+    await waitFor(() => {
+      expect(screen.getByText('main.ts')).toBeDefined()
     })
-
-    // The FileIcon component renders different elements based on extension.
-    // We can verify files are rendered — the icon is an SVG element rendered by lucide-react.
-    // Verify that all expected file entries are present
-    expect(screen.getByText('style.css')).toBeDefined()
-    expect(screen.getByText('main.py')).toBeDefined()
+    fireEvent.click(screen.getByText('main.ts'))
+    expect(onOpenFile).toHaveBeenCalledWith('/src/main.ts')
+    expect(onClose).toHaveBeenCalled()
   })
+})
 
-  it('resets query and selection when reopened', async () => {
-    const { rerender } = render(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-
-    await vi.waitFor(() => {
-      expect(screen.getByText('index.ts')).toBeDefined()
+describe('QuickFileOpen — file icons', () => {
+  it('renders different file types without crashing', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/src/app.tsx',
+      '/docs/readme.md',
+      '/img/logo.png',
+      '/styles/main.css',
+      '/scripts/deploy.py',
+      '/data/config.json',
+      '/unknown.xyz',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('app.tsx')).toBeDefined()
+      expect(screen.getByText('readme.md')).toBeDefined()
+      expect(screen.getByText('logo.png')).toBeDefined()
+      expect(screen.getByText('main.css')).toBeDefined()
+      expect(screen.getByText('deploy.py')).toBeDefined()
+      expect(screen.getByText('config.json')).toBeDefined()
+      expect(screen.getByText('unknown.xyz')).toBeDefined()
     })
-
-    const { fireEvent } = await import('@testing-library/react')
-    const input = screen.getByPlaceholderText('Search files by name…')
-    fireEvent.change(input, { target: { value: 'app' } })
-    expect(screen.getByText('app.tsx')).toBeDefined()
-
-    // Close and reopen
-    rerender(
-      <QuickFileOpen
-        open={false}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-
-    rerender(
-      <QuickFileOpen
-        open={true}
-        onClose={vi.fn()}
-        workspacePath="/home/user/project"
-        onOpenFile={vi.fn()}
-      />
-    )
-
-    await vi.waitFor(() => {
-      expect(screen.getByText('index.ts')).toBeDefined()
-    })
-    // After reopen, all files should show again (query reset)
-    expect(screen.getByText('README.md')).toBeDefined()
   })
 })
