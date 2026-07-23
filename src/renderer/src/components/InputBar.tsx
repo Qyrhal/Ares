@@ -666,6 +666,40 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
     setAttachments((prev) => [...prev, ...newAttachments])
   }
 
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    for (const item of items) {
+      if (item.type.startsWith('image/')) {
+        e.preventDefault()
+        const blob = item.getAsFile()
+        if (!blob) continue
+
+        // Generate a timestamped filename
+        const ext = blob.type.split('/')[1] || 'png'
+        const filename = `pasted-image-${Date.now()}.${ext}`
+
+        // Read as data URL for preview
+        const reader = new FileReader()
+        reader.onload = () => {
+          const dataUrl = reader.result as string
+          const attachment: FileAttachment = {
+            id: crypto.randomUUID(),
+            name: filename,
+            path: '',
+            size: blob.size,
+            type: blob.type,
+            dataUrl,
+          }
+          setAttachments((prev) => [...prev, attachment])
+        }
+        reader.readAsDataURL(blob)
+        break // Only handle first image per paste
+      }
+    }
+  }, [])
+
   const anyDropdownOpen = showMentions || showCommands || showModelPicker || showEmoji
   useEffect(() => {
     if (!anyDropdownOpen) return
@@ -701,7 +735,12 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
         <AttachmentGroup className="mb-1.5">
           {attachments.map((att) => (
             <Attachment key={att.id} size="sm" className="max-w-48">
-              <AttachmentMedia>{fileIcon(att.type)}</AttachmentMedia>
+              <AttachmentMedia>
+                {att.dataUrl
+                  ? <img src={att.dataUrl} alt={att.name} className="size-4 rounded object-cover" />
+                  : fileIcon(att.type)
+                }
+              </AttachmentMedia>
               <AttachmentContent>
                 <AttachmentTitle>{att.name}</AttachmentTitle>
                 <AttachmentDescription>{formatBytes(att.size)}</AttachmentDescription>
@@ -773,6 +812,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             value={text}
             onChange={handleChange}
             onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
             disabled={disabled}
             placeholder={placeholder ?? 'Ask anything… (@ to mention files, / for commands)'}
             rows={1}

@@ -7,6 +7,8 @@ export interface FileAttachment {
   size: number
   type: string
   path: string
+  /** Inline data URL for clipboard-pasted images (for preview before sending) */
+  dataUrl?: string
 }
 
 export interface ReplyTo {
