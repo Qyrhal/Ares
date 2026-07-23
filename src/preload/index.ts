@@ -242,7 +242,11 @@ const lintApi = {
   run: (cwd: string) => ipcRenderer.invoke('lint:run', cwd),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, dbEvents: dbEventsApi }
+const testApi = {
+  run: (cwd: string) => ipcRenderer.invoke('test:run', cwd),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, dbEvents: dbEventsApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

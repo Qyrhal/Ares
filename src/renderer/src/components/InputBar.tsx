@@ -68,6 +68,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },
   { kind: 'builtin', name: 'config',        description: 'View or change settings from chat' },
   { kind: 'builtin', name: 'rewind',        description: 'Rewind conversation to an earlier point' },
+  { kind: 'builtin', name: 'test',          description: 'Run the test suite and show results' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
