@@ -109,8 +109,13 @@ function executeScriptHook(hook: HookConfig, context: Record<string, string>): H
 
 async function executeWebhookHook(hook: HookConfig, context: Record<string, string>): Promise<HookResult> {
   try {
-    const url = hook.target.replace(/\$\{(\w+)\}/g, (_, k) => context[k] ?? '')
-    const res = await fetch(url, {
+    const rawUrl = hook.target.replace(/\$\{(\w+)\}/g, (_, k) => context[k] ?? '')
+    // Validate protocol — only http/https allowed
+    const parsed = new URL(rawUrl)
+    if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+      throw new Error(`Blocked: only http/https URLs allowed (got ${parsed.protocol}//...)`)
+    }
+    const res = await fetch(parsed.toString(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(context),

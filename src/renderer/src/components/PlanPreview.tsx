@@ -7,7 +7,7 @@ interface PlanPreviewProps {
   onCancel: () => void
 }
 
-export function PlanPreview({ content, onApprove, onCancel }: PlanPreviewProps): React.ReactElement {
+export const PlanPreview = React.memo(function PlanPreview({ content, onApprove, onCancel }: PlanPreviewProps): React.ReactElement {
   return (
     <div className="border-t border-border bg-gradient-to-b from-accent/5 to-background px-4 py-3">
       <div className="mx-auto max-w-3xl">
@@ -42,4 +42,4 @@ export function PlanPreview({ content, onApprove, onCancel }: PlanPreviewProps):
       </div>
     </div>
   )
-}
+})

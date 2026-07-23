@@ -20,7 +20,7 @@ function tabLabel(tab: Tab): string {
   return tab.type === 'session' ? tab.title : tab.name
 }
 
-export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession }: TabBarProps): React.ReactElement {
+export const TabBar = React.memo(function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSession }: TabBarProps): React.ReactElement {
   return (
     <div className="flex h-9 shrink-0 items-end overflow-x-auto border-b border-border bg-card/50" data-testid="tab-bar">
       <button
@@ -72,4 +72,4 @@ export function TabBar({ tabs, activeTabId, onSelectTab, onCloseTab, onNewSessio
       })}
     </div>
   )
-}
+})

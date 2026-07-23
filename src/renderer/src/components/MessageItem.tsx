@@ -406,7 +406,7 @@ function EditMode({
 
 // ── Main MessageItem ──────────────────────────────────────────────────────────
 
-export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onRegenerate, onReact, onEditResend }: MessageItemProps): React.ReactElement {
+export const MessageItem = React.memo(function MessageItem({ message, modelName, onReply, onEdit, onDelete, onRegenerate, onReact, onEditResend }: MessageItemProps): React.ReactElement {
   const [isEditing, setIsEditing] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
 
@@ -655,7 +655,7 @@ export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onR
       </div>
     </div>
   )
-}
+})
 
 // ── Streaming content ─────────────────────────────────────────────────────────
 

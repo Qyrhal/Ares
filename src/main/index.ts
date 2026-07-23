@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, shell, dialog, session } from 'electron'
 import type NodePty from 'node-pty'
 import { join } from 'path'
 import fs from 'fs'
+import { promises as fsPromises } from 'fs'
 import nodePath from 'path'
 import { exec as execCb } from 'child_process'
 import { promisify } from 'util'
@@ -52,21 +53,22 @@ const EXCLUDED = new Set([
   '__pycache__', '.cache', '.venv', 'venv', 'build', 'coverage'
 ])
 
-function readDir(dirPath: string, depth = 0): FileNode[] {
+async function readDir(dirPath: string, depth = 0): Promise<FileNode[]> {
   if (depth > 5) return []
   try {
-    return fs.readdirSync(dirPath)
-      .filter((name) => !EXCLUDED.has(name) && !name.startsWith('.'))
-      .map((name): FileNode | null => {
-        const fullPath = nodePath.join(dirPath, name)
-        try {
-          const stat = fs.statSync(fullPath)
-          if (stat.isDirectory()) {
-            return { name, path: fullPath, type: 'directory', children: readDir(fullPath, depth + 1) }
-          }
-          return { name, path: fullPath, type: 'file' }
-        } catch { return null }
-      })
+    const names = await fsPromises.readdir(dirPath)
+    const filtered = names.filter((name) => !EXCLUDED.has(name) && !name.startsWith('.'))
+    const nodes: (FileNode | null)[] = await Promise.all(filtered.map(async (name): Promise<FileNode | null> => {
+      const fullPath = nodePath.join(dirPath, name)
+      try {
+        const stat = await fsPromises.stat(fullPath)
+        if (stat.isDirectory()) {
+          return { name, path: fullPath, type: 'directory', children: await readDir(fullPath, depth + 1) }
+        }
+        return { name, path: fullPath, type: 'file' }
+      } catch { return null }
+    }))
+    return nodes
       .filter((n): n is FileNode => n !== null)
       .sort((a, b) => {
         if (a.type !== b.type) return a.type === 'directory' ? -1 : 1
@@ -155,11 +157,11 @@ function createWindow(): void {
   })
 
   win.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url)
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url)
     return { action: 'deny' }
   })
   win.webContents.on('will-navigate', (e, url) => {
-    if (url.startsWith('http')) { e.preventDefault(); shell.openExternal(url) }
+    if (/^https?:\/\//i.test(url)) { e.preventDefault(); shell.openExternal(url) }
   })
 
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
@@ -188,6 +190,46 @@ app.on('window-all-closed', () => {
 
 // Path validation: restrict file IPC operations to safe directories
 import os from 'os'
+import net from 'net'
+
+// SSRF protection: check whether a URL points to a private/internal network
+function isInternalUrl(urlStr: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(urlStr)
+  } catch {
+    return true
+  }
+
+  const proto = parsed.protocol.toLowerCase()
+  if (proto !== 'http:' && proto !== 'https:') return true
+
+  const host = parsed.hostname.toLowerCase()
+  if (host === 'localhost' || host === '0.0.0.0' || host === '[::1]' || host === '::1') return true
+
+  // Numeric IP checks
+  if (net.isIP(host)) {
+    const parts = host.split('.').map(Number)
+    // 10.x.x.x
+    if (parts[0] === 10) return true
+    // 172.16.x.x – 172.31.x.x
+    if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true
+    // 192.168.x.x
+    if (parts[0] === 192 && parts[1] === 168) return true
+    // 169.254.x.x (link-local / cloud metadata)
+    if (parts[0] === 169 && parts[1] === 254) return true
+    // 127.x.x.x (loopback — catches IPv4 loopback besides localhost)
+    if (parts[0] === 127) return true
+    // 0.x.x.x
+    if (parts[0] === 0) return true
+  }
+
+  // Reject bare IPv6 addresses that resolve to loopback/link-local
+  // (already caught above for ::1; other IPv6 internal ranges are rare in practice)
+
+  return false
+}
+
 function validatePath(p: string): void {
   const resolved = nodePath.resolve(p)
   // Resolve symlinks to prevent traversal via symlinked paths
@@ -227,6 +269,53 @@ function validatePath(p: string): void {
       throw new Error(`Access denied: sensitive directory (${topDir})`)
     }
   }
+}
+
+// URL validation: restrict fetch-proxy IPC handlers to safe URLs
+import { isIP } from 'net'
+function validateFetchUrl(raw: string): URL {
+  let parsed: URL
+  try {
+    parsed = new URL(raw)
+  } catch {
+    throw new Error(`Blocked: malformed URL (got ${raw.slice(0, 80)})`)
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new Error(`Blocked: only http/https URLs allowed (got ${parsed.protocol}//...)`)
+  }
+  const hostname = parsed.hostname
+  if (isIP(hostname)) {
+    const ip = isIP(hostname)
+    if (ip === 4) {
+      const parts = hostname.split('.').map(Number)
+      // 127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+      if (parts[0] === 127 || parts[0] === 10 ||
+          (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+          (parts[0] === 192 && parts[1] === 168)) {
+        throw new Error(`Blocked: private/internal IP address (${hostname})`)
+      }
+      // 169.254.0.0/16 (link-local / cloud metadata)
+      if (parts[0] === 169 && parts[1] === 254) {
+        throw new Error(`Blocked: link-local address (${hostname})`)
+      }
+      // 0.0.0.0
+      if (parts[0] === 0) {
+        throw new Error(`Blocked: zero address (${hostname})`)
+      }
+    } else if (ip === 6) {
+      // ::1 (loopback) and fe80::/10 (link-local)
+      if (hostname === '::1' || hostname.startsWith('fe80:')) {
+        throw new Error(`Blocked: internal IPv6 address (${hostname})`)
+      }
+    }
+  } else {
+    // Block localhost and common internal hostnames
+    const internalHosts = ['localhost', 'metadata.google.internal', 'instance-data', '169.254.169.254']
+    if (internalHosts.includes(hostname.toLowerCase())) {
+      throw new Error(`Blocked: internal hostname (${hostname})`)
+    }
+  }
+  return parsed
 }
 
 function registerIpcHandlers(): void {
@@ -286,45 +375,45 @@ function registerIpcHandlers(): void {
   })
 
   // File system
-  ipcMain.handle('fs:readDir', (_, p: string) => { validatePath(p); return readDir(p) })
-  ipcMain.handle('fs:readFile', (_, p: string) => { validatePath(p); return fs.readFileSync(p, 'utf-8') })
-  ipcMain.handle('fs:writeFile', (_, p: string, content: string) => {
+  ipcMain.handle('fs:readDir', async (_, p: string) => { validatePath(p); return readDir(p) })
+  ipcMain.handle('fs:readFile', async (_, p: string) => { validatePath(p); return fsPromises.readFile(p, 'utf-8') })
+  ipcMain.handle('fs:writeFile', async (_, p: string, content: string) => {
     validatePath(p)
-    fs.writeFileSync(p, content, 'utf-8')
+    await fsPromises.writeFile(p, content, 'utf-8')
   })
-  ipcMain.handle('fs:createFile', (_, p: string) => {
+  ipcMain.handle('fs:createFile', async (_, p: string) => {
     validatePath(p)
-    fs.writeFileSync(p, '', { flag: 'wx' })
+    await fsPromises.writeFile(p, '', { flag: 'wx' })
   })
-  ipcMain.handle('fs:createFolder', (_, p: string) => {
+  ipcMain.handle('fs:createFolder', async (_, p: string) => {
     validatePath(p)
-    fs.mkdirSync(p)
+    await fsPromises.mkdir(p)
   })
-  ipcMain.handle('fs:rename', (_, oldPath: string, newPath: string) => {
+  ipcMain.handle('fs:rename', async (_, oldPath: string, newPath: string) => {
     validatePath(oldPath)
     validatePath(newPath)
-    fs.renameSync(oldPath, newPath)
+    await fsPromises.rename(oldPath, newPath)
   })
-  ipcMain.handle('fs:delete', (_, p: string) => {
+  ipcMain.handle('fs:delete', async (_, p: string) => {
     validatePath(p)
-    fs.rmSync(p, { recursive: true, force: true })
+    await fsPromises.rm(p, { recursive: true, force: true })
   })
-  ipcMain.handle('fs:findFiles', (_, dir: string) => {
+  ipcMain.handle('fs:findFiles', async (_, dir: string) => {
     validatePath(dir)
     const results: string[] = []
     const SKIP = new Set(['node_modules', '.git', '.next', 'dist', 'build', '.cache', '__pycache__', '.venv'])
-    function walk(d: string) {
+    async function walk(d: string) {
       let entries: fs.Dirent[]
-      try { entries = fs.readdirSync(d, { withFileTypes: true }) } catch { return }
+      try { entries = await fsPromises.readdir(d, { withFileTypes: true }) } catch { return }
       for (const e of entries) {
         if (SKIP.has(e.name)) continue
         if (e.name.startsWith('.')) continue
         const full = d + '/' + e.name
-        if (e.isDirectory()) walk(full)
+        if (e.isDirectory()) await walk(full)
         else results.push(full)
       }
     }
-    walk(dir)
+    await walk(dir)
     return results.slice(0, 500)
   })
 
@@ -373,7 +462,11 @@ function registerIpcHandlers(): void {
 
   // Web fetch — proxy URL fetch through main process to avoid CORS
   ipcMain.handle('fetch:url', async (_, url: string) => {
+    if (isInternalUrl(url)) {
+      return { ok: false, error: 'Access denied: URL points to an internal or restricted network' }
+    }
     try {
+      validateFetchUrl(url)
       const res = await fetch(url, { signal: AbortSignal.timeout(15_000) })
       if (!res.ok) return { ok: false, error: `HTTP ${res.status} ${res.statusText}` }
       const contentType = res.headers.get('content-type') || ''
@@ -407,8 +500,9 @@ function registerIpcHandlers(): void {
   })
 
   // API — proxy fetch through main process to avoid CORS
-  ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string) => {
-    const url = baseUrl.replace(/\/$/, '') + '/models'
+  ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string | undefined) => {
+    const parsed = validateFetchUrl(baseUrl.replace(/\/$/, '') + '/models')
+    const url = parsed.toString()
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`
     const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) })
@@ -417,8 +511,9 @@ function registerIpcHandlers(): void {
   })
 
   // Inline AI edit — calls chat completions to transform code
-  ipcMain.handle('inlineEdit:apply', async (_, code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string) => {
-    const url = (apiBaseUrl.replace(/\/$/, '')) + '/chat/completions'
+  ipcMain.handle('inlineEdit:apply', async (_, code: string, instruction: string, model: string, apiBaseUrl: string, apiKey: string | undefined) => {
+    const parsed = validateFetchUrl((apiBaseUrl.replace(/\/$/, '')) + '/chat/completions')
+    const url = parsed.toString()
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     }
@@ -451,30 +546,30 @@ function registerIpcHandlers(): void {
   })
   ipcMain.handle('tools:readFile', async (_, p: string) => {
     validatePath(p)
-    return fs.readFileSync(p, 'utf-8')
+    return fsPromises.readFile(p, 'utf-8')
   })
   ipcMain.handle('tools:writeFile', async (_, p: string, content: string) => {
     validatePath(p)
-    fs.mkdirSync(nodePath.dirname(p), { recursive: true })
-    fs.writeFileSync(p, content, 'utf-8')
+    await fsPromises.mkdir(nodePath.dirname(p), { recursive: true })
+    await fsPromises.writeFile(p, content, 'utf-8')
   })
   ipcMain.handle('tools:editFile', async (_, p: string, oldString: string, newString: string) => {
     validatePath(p)
-    const content = fs.readFileSync(p, 'utf-8')
+    const content = await fsPromises.readFile(p, 'utf-8')
     if (!content.includes(oldString)) {
       throw new Error(`Could not find "${oldString.slice(0, 50)}..." in ${p}`)
     }
     const updated = content.replace(oldString, newString)
-    fs.writeFileSync(p, updated, 'utf-8')
+    await fsPromises.writeFile(p, updated, 'utf-8')
   })
   ipcMain.handle('tools:createFile', async (_, p: string, content: string) => {
     validatePath(p)
-    fs.mkdirSync(nodePath.dirname(p), { recursive: true })
-    fs.writeFileSync(p, content, 'utf-8')
+    await fsPromises.mkdir(nodePath.dirname(p), { recursive: true })
+    await fsPromises.writeFile(p, content, 'utf-8')
   })
   ipcMain.handle('tools:listFiles', async (_, dir: string) => {
     validatePath(dir)
-    const entries = fs.readdirSync(dir, { withFileTypes: true })
+    const entries = await fsPromises.readdir(dir, { withFileTypes: true })
     return entries
       .filter((e) => !e.name.startsWith('.') && e.name !== 'node_modules')
       .map((e) => ({ name: e.name, path: nodePath.join(dir, e.name), isDirectory: e.isDirectory() }))
