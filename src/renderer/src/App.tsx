@@ -719,6 +719,60 @@ export default function App(): React.ReactElement {
         })
         break
       }
+      case 'summarize': {
+        const msgs = await el.db.getMessages(sess.id)
+        if (!msgs || msgs.length === 0) {
+          const noMsg = await el.db.addMessage(sess.id, 'system', 'No messages to summarize.')
+          if (noMsg) store.appendMessage(parseMessage(noMsg))
+          break
+        }
+        if (!hasProvider(store.settings)) {
+          const noProv = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured.')
+          if (noProv) store.appendMessage(parseMessage(noProv))
+          break
+        }
+        const summarizeSystemPrompt = 'You are a helpful assistant. Summarize the conversation below. Include: 1) Key topics discussed, 2) Decisions made, 3) Code changes mentioned, 4) Open questions or next steps. Be concise but thorough.'
+        const summarizeMessages = msgs
+          .filter((m: Message) => m.role === 'user' || m.role === 'assistant')
+          .slice(-30)
+          .map((m: Message) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content,
+          }))
+        const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Generating summary...')
+        if (startMsg) store.appendMessage(parseMessage(startMsg))
+        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [
+              { role: 'system', content: summarizeSystemPrompt },
+              ...summarizeMessages,
+            ],
+            stream: false,
+          }),
+        }).then(async (response) => {
+          if (response.ok) {
+            const json = await response.json()
+            const summaryContent = json.choices?.[0]?.message?.content ?? 'No summary generated.'
+            const msg = await el.db.addMessage(sess.id, 'system', `**📝 Session Summary**\n\n${summaryContent}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const msg = await el.db.addMessage(sess.id, 'system', `Summary failed: ${response.status}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        }).catch(async () => {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Summary failed: network error')
+          if (msg) store.appendMessage(parseMessage(msg))
+        })
+        break
+      }
       case 'cost': {
         const { sessions } = useAppStore.getState()
         if (sessions.length === 0) {
@@ -964,7 +1018,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break

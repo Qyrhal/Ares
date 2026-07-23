@@ -52,6 +52,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'export',       description: 'Export current session as a Markdown file' },
   { kind: 'builtin', name: 'shortcuts',   description: 'Show all keyboard shortcuts' },
   { kind: 'builtin', name: 'review',       description: 'AI-powered review of session code and patterns' },
+  { kind: 'builtin', name: 'summarize',    description: 'Generate an AI summary of the conversation' },
   { kind: 'builtin', name: 'rename',       description: 'Rename the current session' },
   { kind: 'builtin', name: 'pin',           description: 'Pin or unpin the current session' },
   { kind: 'builtin', name: 'branches',      description: 'List, create, or switch git branches' },
