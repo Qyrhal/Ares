@@ -2,6 +2,7 @@ import { execSync, spawn } from 'child_process'
 import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
+import { sanitizeEnv } from './env-filter'
 
 /**
  * Lifecycle hooks system (inspired by Claude Code Desktop).
@@ -102,7 +103,7 @@ function executeScriptHook(hook: HookConfig, context: Record<string, string>): H
   }
 
   // Build env with context vars
-  const env: Record<string, string> = { ...process.env as Record<string, string>, ...context }
+  const env = sanitizeEnv(context)
   const result = execSync(scriptPath, { env, encoding: 'utf-8', timeout: 30_000, maxBuffer: 1024 * 1024 })
   return { hookId: hook.id, event: hook.event, success: true, output: result.trim() }
 }

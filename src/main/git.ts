@@ -1,10 +1,11 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { sanitizeEnv } from './env-filter'
 
 const run = promisify(execFile)
 
 async function git(args: string[], cwd: string): Promise<string> {
-  const { stdout } = await run('git', args, { cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' } })
+  const { stdout } = await run('git', args, { cwd, env: sanitizeEnv({ GIT_TERMINAL_PROMPT: '0' }) })
   return stdout.trim()
 }
 
@@ -146,7 +147,7 @@ export async function commit(cwd: string, message: string): Promise<void> {
 export async function push(cwd: string): Promise<string> {
   try {
     const { stdout, stderr } = await run('git', ['push'], {
-      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+      cwd, env: sanitizeEnv({ GIT_TERMINAL_PROMPT: '0' })
     })
     return (stdout + stderr).trim()
   } catch (e: unknown) {
@@ -158,7 +159,7 @@ export async function push(cwd: string): Promise<string> {
 export async function pull(cwd: string): Promise<string> {
   try {
     const { stdout, stderr } = await run('git', ['pull'], {
-      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+      cwd, env: sanitizeEnv({ GIT_TERMINAL_PROMPT: '0' })
     })
     return (stdout + stderr).trim()
   } catch (e: unknown) {
