@@ -112,6 +112,9 @@ interface InputBarProps {
   // reply
   replyTo?: { id: string; content: string; role: string } | null
   onCancelReply?: () => void
+  // edit-resend prefill
+  prefillText?: string | null
+  onPrefillConsumed?: () => void
 }
 
 const PERM_MODES: PermissionMode[] = ['ask', 'auto', 'yolo']
@@ -193,7 +196,7 @@ interface ModelOption {
   provider?: string
 }
 
-export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, providers = [], workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, colorMode = 'dark', onToggleColorMode, replyTo, onCancelReply }: InputBarProps): React.ReactElement {
+export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCancel, placeholder, fileNodes = [], apiBaseUrl, apiKey, providers = [], workspacePath, recentProjects = [], onSelectProject, onOpenFinder, pluginSkills = [], pluginCommands = [], currentModel = '', messages = [], effort = 'medium', onEffortChange, permissionMode = 'ask', onPermissionModeChange, agentMode = 'agent', onAgentModeChange, colorMode = 'dark', onToggleColorMode, replyTo, onCancelReply, prefillText, onPrefillConsumed }: InputBarProps): React.ReactElement {
   const [text, setText] = useState('')
   const [attachments, setAttachments] = useState<FileAttachment[]>([])
   const [skillAttachments, setSkillAttachments] = useState<{ id: string; name: string; content: string }[]>([])
@@ -203,6 +206,23 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
   const resetPromptHistoryIdx = useAppStore((s) => s.resetPromptHistoryIdx)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  // ── Edit-resend prefill ──────────────────────────────────────────────────
+  useEffect(() => {
+    if (prefillText) {
+      setText(prefillText)
+      onPrefillConsumed?.()
+      requestAnimationFrame(() => {
+        const ta = textareaRef.current
+        if (ta) {
+          ta.style.height = 'auto'
+          ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`
+          ta.focus()
+          ta.setSelectionRange(ta.value.length, ta.value.length)
+        }
+      })
+    }
+  }, [prefillText, onPrefillConsumed])
   const dropdownRef = useRef<HTMLDivElement>(null)
   const modelSearchRef = useRef<HTMLInputElement>(null)
 
