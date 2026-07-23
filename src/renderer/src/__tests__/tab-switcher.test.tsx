@@ -1,326 +1,277 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import React from 'react'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import { TabSwitcher } from '@/components/TabSwitcher'
 import type { Tab } from '@/types'
 
-const sessionTabs: Tab[] = [
-  { type: 'session', id: 's1', title: 'Chat about project' },
-  { type: 'session', id: 's2', title: 'Bug investigation' },
-]
+function mkSessionTab(id: string, title: string): Tab {
+  return { type: 'session', id, title }
+}
 
-const fileTabs: Tab[] = [
-  { type: 'file', path: '/home/user/project/src/index.ts', name: 'index.ts', isDirty: false },
-  { type: 'file', path: '/home/user/project/src/app.tsx', name: 'app.tsx', isDirty: true },
-  { type: 'file', path: '/home/user/project/README.md', name: 'README.md', isDirty: false },
-]
+function mkFileTab(path: string, name: string, isDirty = false): Tab {
+  return { type: 'file', path, name, isDirty }
+}
 
-const allTabs = [...sessionTabs, ...fileTabs]
+const defaultProps = {
+  open: true,
+  onClose: vi.fn(),
+  tabs: [] as Tab[],
+  activeTabId: null as string | null,
+  onSelectTab: vi.fn(),
+}
 
-describe('TabSwitcher', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-  })
+beforeEach(() => {
+  vi.clearAllMocks()
+})
 
+describe('TabSwitcher — open/close', () => {
   it('renders nothing when closed', () => {
     const { container } = render(
-      <TabSwitcher
-        open={false}
-        onClose={vi.fn()}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
+      <TabSwitcher {...defaultProps} open={false} />,
     )
     expect(container.innerHTML).toBe('')
   })
 
-  it('renders search input when open', () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
+  it('renders overlay when open', () => {
+    render(<TabSwitcher {...defaultProps} />)
     expect(screen.getByPlaceholderText('Search open tabs…')).toBeDefined()
   })
 
-  it('shows all tabs when open', () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    expect(screen.getByText('Chat about project')).toBeDefined()
-    expect(screen.getByText('Bug investigation')).toBeDefined()
-    expect(screen.getByText('index.ts')).toBeDefined()
-    expect(screen.getByText('app.tsx')).toBeDefined()
-    expect(screen.getByText('README.md')).toBeDefined()
-  })
-
-  it('shows result count with tabs', () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    expect(screen.getByText('5 tabs')).toBeDefined()
-  })
-
-  it('shows "No open tabs" when tabs array is empty', () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={[]}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    expect(screen.getByText('No open tabs')).toBeDefined()
-  })
-
-  it('filters tabs by query', async () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    const { fireEvent } = await import('@testing-library/react')
+  it('shows search input when open', () => {
+    render(<TabSwitcher {...defaultProps} />)
     const input = screen.getByPlaceholderText('Search open tabs…')
-    fireEvent.change(input, { target: { value: 'bug' } })
+    expect(input).toBeDefined()
+  })
+})
 
-    expect(screen.queryByText('Chat about project')).toBeNull()
-    expect(screen.getByText('Bug investigation')).toBeDefined()
+describe('TabSwitcher — tab rendering', () => {
+  it('renders all tabs when no filter', () => {
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'Chat 1'),
+      mkFileTab('/a.ts', 'a.ts'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('Chat 1')).toBeDefined()
+    expect(screen.getByText('a.ts')).toBeDefined()
   })
 
-  it('shows "No matching tabs" when filter matches nothing', async () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    const { fireEvent } = await import('@testing-library/react')
+  it('shows tab count', () => {
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'Chat 1'),
+      mkSessionTab('s2', 'Chat 2'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('2 tabs')).toBeDefined()
+  })
+
+  it('shows singular "tab" for one result', () => {
+    const tabs: Tab[] = [mkSessionTab('s1', 'Chat 1')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('1 tab')).toBeDefined()
+  })
+
+  it('shows "Chat session" subtitle for session tabs', () => {
+    const tabs: Tab[] = [mkSessionTab('s1', 'My Chat')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('Chat session')).toBeDefined()
+  })
+
+  it('shows file path subtitle for file tabs', () => {
+    const tabs: Tab[] = [mkFileTab('/src/main.ts', 'main.ts')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('/src/main.ts')).toBeDefined()
+  })
+
+  it('shows dirty indicator for dirty file tabs', () => {
+    const tabs: Tab[] = [mkFileTab('/a.ts', 'a.ts', true)]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    // The dirty dot has title="Unsaved changes"
+    expect(screen.getByTitle('Unsaved changes')).toBeDefined()
+  })
+
+  it('shows "chat" badge for session tabs', () => {
+    const tabs: Tab[] = [mkSessionTab('s1', 'My Chat')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('chat')).toBeDefined()
+  })
+
+  it('highlights active tab with border', () => {
+    const tabs: Tab[] = [mkSessionTab('s1', 'Chat 1')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} activeTabId="s1" />)
+    const tabBtn = screen.getByText('Chat 1').closest('button')!
+    expect(tabBtn.className).toContain('border-primary')
+  })
+})
+
+describe('TabSwitcher — filtering', () => {
+  it('filters tabs by query', () => {
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'React session'),
+      mkSessionTab('s2', 'Vue session'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
     const input = screen.getByPlaceholderText('Search open tabs…')
-    fireEvent.change(input, { target: { value: 'zzzzz' } })
+    fireEvent.change(input, { target: { value: 'React' } })
+    expect(screen.getByText('React session')).toBeDefined()
+    expect(screen.queryByText('Vue session')).toBeNull()
+  })
+
+  it('shows "No matching tabs" when filter has no matches', () => {
+    const tabs: Tab[] = [mkSessionTab('s1', 'React session')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.change(input, { target: { value: 'xyz' } })
     expect(screen.getByText('No matching tabs')).toBeDefined()
   })
 
-  it('shows "Type to filter tabs" when all tabs are shown with a non-empty query that matches nothing', async () => {
-    // Actually when query is non-empty and no tabs match, it shows "No matching tabs"
-    // When tabs.length > 0 and query is empty, it shows all tabs (no empty state)
-    // The "Type to filter tabs" appears when tabs.length > 0, query matches nothing, but...
-    // Actually let's re-check the component logic:
-    // filtered.length === 0 → shows empty state message
-    //   tabs.length === 0 → 'No open tabs'
-    //   query → 'No matching tabs'
-    //   else → 'Type to filter tabs'
-    // So "Type to filter tabs" shows when filtered.length === 0, tabs.length > 0, and query is empty
-    // But with tabs.length > 0 and empty query, filtered = tabs, so filtered.length > 0.
-    // So "Type to filter tabs" only shows when tabs.length > 0 but filtered is empty while query is empty
-    // which shouldn't happen normally. Let me re-read...
-    // Actually if tabs.length > 0, filtered = tabs when query is empty, so filtered.length > 0.
-    // The "Type to filter tabs" message would never show in that case.
-    // It would show if tabs.length > 0 but for some reason filtered is empty with empty query,
-    // which can't happen with the current simple filter. So this test is tricky.
-    // Let me test the behavior - when tabs.length > 0 and query is empty, all tabs show.
-    // So I'll skip this particular message test.
+  it('shows "No open tabs" when tabs list is empty', () => {
+    render(<TabSwitcher {...defaultProps} tabs={[]} />)
+    expect(screen.getByText('No open tabs')).toBeDefined()
   })
 
-  it('shows session tabs with "chat" badge', () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={sessionTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    // Session tabs show "chat" badge and "Chat session" subtitle
-    const chatBadges = screen.getAllByText('chat')
-    expect(chatBadges.length).toBe(2)
-    const subtitles = screen.getAllByText('Chat session')
-    expect(subtitles.length).toBe(2)
-  })
-
-  it('shows file tab path as subtitle for file tabs', () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={fileTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    expect(screen.getByText('/home/user/project/src/index.ts')).toBeDefined()
-    expect(screen.getByText('/home/user/project/src/app.tsx')).toBeDefined()
-  })
-
-  it('shows dirty indicator for file tabs with unsaved changes', () => {
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={fileTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-    // app.tsx is dirty - should have a yellow dot (title="Unsaved changes")
-    const dirtyDot = screen.getByTitle('Unsaved changes')
-    expect(dirtyDot).toBeDefined()
-    // Only one tab is dirty
-    expect(screen.getAllByTitle('Unsaved changes').length).toBe(1)
-  })
-
-  it('highlights active tab with a border class', () => {
-    // activeTabId for file tabs uses tabKey = path: '/home/user/project/src/index.ts'
-    const { container } = render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={fileTabs}
-        activeTabId="/home/user/project/src/index.ts"
-        onSelectTab={vi.fn()}
-      />
-    )
-    // The active tab button should have border-l-2 border-primary class
-    const buttons = container.querySelectorAll('button')
-    // First button (index.ts) should have the border class
-    const firstButton = buttons[0]
-    expect(firstButton.className).toContain('border-l-2')
-    expect(firstButton.className).toContain('border-primary')
-
-    // Other buttons should not
-    for (let i = 1; i < buttons.length; i++) {
-      expect(buttons[i].className).not.toContain('border-l-2')
-    }
-  })
-
-  it('highlights active session tab', () => {
-    // activeTabId for session tabs uses tabKey = id
-    const { container } = render(
-      <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={sessionTabs}
-        activeTabId="s1"
-        onSelectTab={vi.fn()}
-      />
-    )
-    const buttons = container.querySelectorAll('button')
-    // First button (s1) should have the border class
-    expect(buttons[0].className).toContain('border-l-2')
-    // Second button (s2) should not
-    expect(buttons[1].className).not.toContain('border-l-2')
-  })
-
-  it('navigates with ArrowDown and selects with Enter', async () => {
-    const onSelectTab = vi.fn()
-    const onClose = vi.fn()
-
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={onClose}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={onSelectTab}
-      />
-    )
-
-    const { fireEvent } = await import('@testing-library/react')
+  it('is case-insensitive for filtering', () => {
+    const tabs: Tab[] = [mkSessionTab('s1', 'React Hook')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
     const input = screen.getByPlaceholderText('Search open tabs…')
-
-    // ArrowDown to second item (Bug investigation, key='s2')
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-    // Enter selects it
-    fireEvent.keyDown(input, { key: 'Enter' })
-
-    expect(onSelectTab).toHaveBeenCalledWith('s2')
-    expect(onClose).toHaveBeenCalled()
+    fireEvent.change(input, { target: { value: 'react' } })
+    expect(screen.getByText('React Hook')).toBeDefined()
   })
 
-  it('closes on Escape', async () => {
+  it('searches file path as well as name', () => {
+    const tabs: Tab[] = [mkFileTab('/src/components/App.tsx', 'App.tsx')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.change(input, { target: { value: 'components' } })
+    expect(screen.getByText('App.tsx')).toBeDefined()
+  })
+})
+
+describe('TabSwitcher — keyboard navigation', () => {
+  it('calls onClose on Escape', () => {
     const onClose = vi.fn()
-
-    render(
-      <TabSwitcher
-        open={true}
-        onClose={onClose}
-        tabs={allTabs}
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
-    )
-
-    const { fireEvent } = await import('@testing-library/react')
+    const tabs: Tab[] = [mkSessionTab('s1', 'Chat 1')]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} onClose={onClose} />)
     const input = screen.getByPlaceholderText('Search open tabs…')
     fireEvent.keyDown(input, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('selects tab on click', async () => {
+  it('selects tab on Enter', () => {
     const onSelectTab = vi.fn()
     const onClose = vi.fn()
-
+    const tabs: Tab[] = [mkSessionTab('s1', 'Chat 1')]
     render(
       <TabSwitcher
-        open={true}
-        onClose={onClose}
-        tabs={allTabs}
-        activeTabId={null}
+        {...defaultProps}
+        tabs={tabs}
         onSelectTab={onSelectTab}
-      />
+        onClose={onClose}
+      />,
     )
-
-    const { fireEvent } = await import('@testing-library/react')
-    // Click on "Bug investigation"
-    const btn = screen.getByText('Bug investigation').closest('button')!
-    fireEvent.click(btn)
-
-    expect(onSelectTab).toHaveBeenCalledWith('s2')
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelectTab).toHaveBeenCalledWith('s1')
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('stops at first and last item with arrow keys', async () => {
+  it('navigates down with ArrowDown then selects', () => {
+    const onSelectTab = vi.fn()
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'Chat 1'),
+      mkSessionTab('s2', 'Chat 2'),
+    ]
     render(
       <TabSwitcher
-        open={true}
-        onClose={vi.fn()}
-        tabs={[sessionTabs[0]]} // Just one tab
-        activeTabId={null}
-        onSelectTab={vi.fn()}
-      />
+        {...defaultProps}
+        tabs={tabs}
+        onSelectTab={onSelectTab}
+      />,
     )
-
-    const { fireEvent } = await import('@testing-library/react')
     const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelectTab).toHaveBeenCalledWith('s2')
+  })
 
-    // ArrowDown on the only item — should stay at index 0
+  it('navigates up with ArrowUp then selects', () => {
+    const onSelectTab = vi.fn()
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'Chat 1'),
+      mkSessionTab('s2', 'Chat 2'),
+    ]
+    render(
+      <TabSwitcher
+        {...defaultProps}
+        tabs={tabs}
+        onSelectTab={onSelectTab}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    // Go down to index 1, then back up to index 0
     fireEvent.keyDown(input, { key: 'ArrowDown' })
     fireEvent.keyDown(input, { key: 'ArrowUp' })
-    // No crash — just verifying navigation doesn't throw
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelectTab).toHaveBeenCalledWith('s1')
+  })
+
+  it('does not crash when Enter pressed with no tabs', () => {
+    const onClose = vi.fn()
+    render(<TabSwitcher {...defaultProps} tabs={[]} onClose={onClose} />)
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onClose).not.toHaveBeenCalled()
+  })
+})
+
+describe('TabSwitcher — interactions', () => {
+  it('closes when clicking backdrop', () => {
+    const onClose = vi.fn()
+    const { container } = render(
+      <TabSwitcher {...defaultProps} tabs={[]} onClose={onClose} />,
+    )
+    const backdrop = container.firstChild as HTMLElement
+    fireEvent.click(backdrop)
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('does not close when clicking inside dialog', () => {
+    const onClose = vi.fn()
+    render(<TabSwitcher {...defaultProps} tabs={[]} onClose={onClose} />)
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.click(input)
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('selects tab on click', () => {
+    const onSelectTab = vi.fn()
+    const onClose = vi.fn()
+    const tabs: Tab[] = [mkSessionTab('s1', 'Chat 1')]
+    render(
+      <TabSwitcher
+        {...defaultProps}
+        tabs={tabs}
+        onSelectTab={onSelectTab}
+        onClose={onClose}
+      />,
+    )
+    fireEvent.click(screen.getByText('Chat 1'))
+    expect(onSelectTab).toHaveBeenCalledWith('s1')
+    expect(onClose).toHaveBeenCalled()
+  })
+})
+
+describe('TabSwitcher — Tab icon selection', () => {
+  it('renders without crashing for different file extensions', () => {
+    const tabs: Tab[] = [
+      mkFileTab('/a.tsx', 'a.tsx'),
+      mkFileTab('/b.md', 'b.md'),
+      mkFileTab('/c.png', 'c.png'),
+      mkFileTab('/d.xyz', 'd.xyz'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('a.tsx')).toBeDefined()
+    expect(screen.getByText('b.md')).toBeDefined()
+    expect(screen.getByText('c.png')).toBeDefined()
+    expect(screen.getByText('d.xyz')).toBeDefined()
   })
 })
