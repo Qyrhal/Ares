@@ -26,7 +26,7 @@ import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme, applyColorMode, THEMES, type ColorMode } from '@/lib/theme'
 import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
 import { estimateCost } from '@/lib/pricing'
-import { hasProvider, displayModel } from '@/lib/providers'
+import { hasProvider, displayModel, effectiveProviders, makeModelRef } from '@/lib/providers'
 import { SideChatInput } from '@/components/SideChatInput'
 import { PlanPreview } from '@/components/PlanPreview'
 import { cn } from '@/lib/utils'
@@ -121,22 +121,13 @@ export default function App(): React.ReactElement {
   }, [])
 
   // ── Derived selectors ────────────────────────────────────────────────────────
-  const activeSessionTab = React.useMemo(
-    () => store.tabs.find(
-      (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
-    ),
-    [store.tabs, store.activeTabId]
+  const activeSessionTab = store.tabs.find(
+    (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
   )
-  const activeTab = React.useMemo(
-    () => store.tabs.find((t) =>
-      t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
-    ),
-    [store.tabs, store.activeTabId]
+  const activeTab = store.tabs.find((t) =>
+    t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
   )
-  const activeSession = React.useMemo(
-    () => store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null,
-    [store.sessions, activeSessionTab?.id]
-  )
+  const activeSession = store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -462,11 +453,1944 @@ export default function App(): React.ReactElement {
         const content = await el.tools.readFile(absPath)
         fileContexts.push(`\`${relPath}\`:\n\`\`\`\n${content}\n\`\`\``)
       } catch {
-        // file doesn't exist or ca
+        // file doesn't exist or can't be read — skip
+      }
+    }
+    if (fileContexts.length === 0) return msgs
 
-... [OUTPUT TRUNCATED - 100,375 chars omitted out of 150,300 total] ...
+    const prefix = fileContexts.join('\n\n')
+    const expanded = { ...last, content: `${prefix}\n\n${last.content}` }
+    return [...msgs.slice(0, -1), expanded]
+  }, [])
 
- === 'tool' && m.toolStatus === 'running'
+  // ── Slash commands ────────────────────────────────────────────────────────────
+  const handleCommand = useCallback(async (cmd: string, args: string) => {
+    const sess = activeSession
+    if (!sess) return
+
+    cmd = cmd.toLowerCase()
+    switch (cmd) {
+      case 'model': {
+        if (!args || args === 'list') {
+          const cur = sess.model || store.settings.defaultModel
+          const provs = effectiveProviders(store.settings)
+          if (provs.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured. Add a provider in Settings → Providers.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            return
+          }
+          const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Fetching available models...')
+          if (startMsg) store.appendMessage(parseMessage(startMsg))
+          const multi = provs.length > 1
+          Promise.allSettled(provs.map(async (p) => {
+            const json = await el.ext.fetchModels(p.baseUrl.replace(/\/$/, ''), p.apiKey)
+            return ((json.data ?? []) as { id: string }[])
+              .map((m) => multi ? makeModelRef(p.id, m.id) : m.id)
+              .sort()
+          })).then(async (results) => {
+            const models = results.flatMap((r) => r.status === 'fulfilled' ? r.value : [])
+            let content = `**Current model:** ${displayModel(cur || 'none')}\n\n`
+            if (models.length === 0) {
+              content += 'No models found from configured providers.'
+            } else {
+              content += `**Available models** (${models.length}):\n`
+              for (const m of models) {
+                const display = displayModel(m)
+                const isCurrent = m === (sess.model || store.settings.defaultModel)
+                content += `${isCurrent ? '→ ' : '  '}${display}${isCurrent ? ' *(current)*' : ''}\n`
+              }
+              content += '\nUse `/model <name>` to switch.'
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', content)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }).catch(async () => {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Failed to fetch models from providers.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          })
+          return
+        }
+        await el.db.updateSession(sess.id, { model: args })
+        store.updateSession(sess.id, { model: args })
+        const msg = await el.db.addMessage(sess.id, 'system', `Switched model to ${displayModel(args)}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'clear': {
+        const msgs = useAppStore.getState().messages
+        for (const m of msgs) {
+          await el.db.deleteMessage(m.id)
+        }
+        store.setMessages([])
+        if (args === '--hard') {
+          const defaultModel = store.settings.defaultModel || 'gpt-4o-mini'
+          await el.db.updateSession(sess.id, { model: defaultModel, pinned: false, workspace_path: null })
+          store.updateSession(sess.id, { model: defaultModel, pinned: false })
+          store.setWorkspace(null, [])
+          const msg = await el.db.addMessage(sess.id, 'system', '**Session reset.** Messages cleared, model restored to default, workspace cleared, session unpinned.')
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'compact': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages to compact.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!hasProvider(store.settings)) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured — cannot compact conversation.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const result = await compactConversation(sess.id, msgs, store.settings, model)
+          if (result.compacted > 0) {
+            store.setMessages(result.messages)
+            const msg = await el.db.addMessage(sess.id, 'system', `**Context compacted:** ${result.compacted} earlier messages were summarized to free up space in the context window.`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No compaction needed — the conversation is short enough to fit in the context window.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Compaction failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'shortcuts': {
+        const shortcutsText = [
+          '**Keyboard Shortcuts**\n',
+          '**General**',
+          '· `Cmd/Ctrl + N` / `Cmd/Ctrl + T` — New session',
+          '· `Cmd/Ctrl + W` — Close current tab',
+          '· `Cmd/Ctrl + Shift + P` — Command palette',
+          '· `Cmd/Ctrl + Shift + O` — Tab switcher',
+          '· `Cmd/Ctrl + P` — Quick file open',
+          '· `Cmd/Ctrl + ,` — Open settings',
+          '· `Cmd/Ctrl + Z` — Undo (restore deleted message)',
+          '',
+          '**Navigation**',
+          '· `Cmd/Ctrl + [` / `]` — Previous / next tab',
+          '· `Cmd/Ctrl + 1–9` — Jump to tab by number',
+          '· `ArrowUp` / `ArrowDown` in empty input — Recall prompt history',
+          '',
+          '**View**',
+          '· `Ctrl + \\`` / `Ctrl + J` — Toggle terminal',
+          '· `Ctrl + Shift + Z` — Toggle zen mode',
+          '',
+          '**In Chat**',
+          '· `Enter` — Send message',
+          '· `Shift + Enter` — New line',
+          '· `Escape` — Cancel agent / stop streaming',
+          '· `Ctrl + C` — Stop agent (when running)',
+          '· `Ctrl + Shift + R` — Regenerate last assistant response',
+          '',
+          '**Search**',
+          '· `Cmd/Ctrl + Shift + F` — Search all agent transcripts',
+        ].join('\n')
+        const msg = await el.db.addMessage(sess.id, 'system', shortcutsText)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'note': {
+        if (args === '--clear') {
+          await el.db.updateSession(sess.id, { notes: '' })
+          store.updateSession(sess.id, { notes: '' })
+          const msg = await el.db.addMessage(sess.id, 'system', 'Session notes cleared.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!args) {
+          const currentNotes = sess.notes || ''
+          const display = currentNotes
+            ? `**Session Notes:**\n\n${currentNotes}`
+            : 'No notes on this session. Use `/note <text>` to add notes.'
+          const msg = await el.db.addMessage(sess.id, 'system', display)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const existing = sess.notes || ''
+        const separator = existing ? '\n\n' : ''
+        const newNotes = `${existing}${separator}${args}`
+        await el.db.updateSession(sess.id, { notes: newNotes })
+        store.updateSession(sess.id, { notes: newNotes })
+        const msg = await el.db.addMessage(sess.id, 'system', `**Notes updated.**\n\n${newNotes}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'pin': {
+        store.togglePinSession(sess.id)
+        const pinned = useAppStore.getState().sessions.find((s) => s.id === sess.id)?.pinned
+        const pinMsg = await el.db.addMessage(sess.id, 'system', pinned ? '📌 Session pinned.' : 'Session unpinned.')
+        if (pinMsg) store.appendMessage(parseMessage(pinMsg))
+        break
+      }
+      case 'rename': {
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /rename <new title>')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        await el.db.updateSession(sess.id, { title: args })
+        store.updateSession(sess.id, { title: args })
+        const msg = await el.db.addMessage(sess.id, 'system', `Session renamed to: ${args}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'log': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Recent Commits**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          try {
+            const commits = await el.git.log(workspacePath, 15)
+            if (commits.length === 0) {
+              lines.push('No commits found.')
+            } else {
+              for (const c of commits) {
+                const msg = c.message.length > 80 ? c.message.slice(0, 77) + '...' : c.message
+                lines.push(`· \`${c.shortHash}\` — ${msg} (_${c.author}, ${c.date}_)`)
+              }
+            }
+          } catch (err) {
+            lines.push(`Error reading git log: ${(err as Error).message}`)
+          }
+        }
+        const logMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (logMsg) store.appendMessage(parseMessage(logMsg))
+        break
+      }
+      case 'review': {
+        const msgs = await el.db.getMessages(sess.id)
+        if (!msgs || msgs.length === 0) {
+          const noMsg = await el.db.addMessage(sess.id, 'system', 'No messages to review.')
+          if (noMsg) store.appendMessage(parseMessage(noMsg))
+          break
+        }
+        if (!hasProvider(store.settings)) {
+          const noProv = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured.')
+          if (noProv) store.appendMessage(parseMessage(noProv))
+          break
+        }
+        const reviewSystemPrompt = 'You are a code reviewer. Analyze the conversation below and provide: 1) A brief summary of what was discussed/accomplished. 2) Code quality observations (patterns, potential issues). 3) 2-3 specific suggestions for improvement. Be concise and actionable.'
+        const reviewMessages = msgs.slice(-20).map((m: Message) => ({
+          role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+          content: m.content,
+        }))
+        // Show starting message immediately
+        const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Starting review...')
+        if (startMsg) store.appendMessage(parseMessage(startMsg))
+        // Fire API call in background — don't await
+        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [
+              { role: 'system', content: reviewSystemPrompt },
+              ...reviewMessages,
+            ],
+            stream: false,
+          }),
+        }).then(async (response) => {
+          if (response.ok) {
+            const json = await response.json()
+            const reviewContent = json.choices?.[0]?.message?.content ?? 'No review generated.'
+            const msg = await el.db.addMessage(sess.id, 'system', `**📝 Session Review**\n\n${reviewContent}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const msg = await el.db.addMessage(sess.id, 'system', `Review failed: ${response.status}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        }).catch(async () => {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Review failed: network error')
+          if (msg) store.appendMessage(parseMessage(msg))
+        })
+        break
+      }
+      case 'cost': {
+        const { sessions } = useAppStore.getState()
+        if (sessions.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No sessions to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        store.appendMessage({
+          id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+          content: 'Calculating workspace costs...', isStreaming: false, createdAt: Date.now(),
+        })
+
+        // Gather per-model stats across all sessions
+        const modelStats: Record<string, { input: number; output: number; sessions: number; cost: number }> = {}
+        let totalSessions = 0
+        let totalMsgs = 0
+
+        for (const s of sessions) {
+          try {
+            const msgs = await el.db.getMessages(s.id)
+            if (!msgs || msgs.length === 0) continue
+            totalSessions++
+            totalMsgs += msgs.length
+
+            const model = s.model || store.settings.defaultModel || 'gpt-4o-mini'
+            if (!modelStats[model]) {
+              modelStats[model] = { input: 0, output: 0, sessions: 0, cost: 0 }
+            }
+
+            const userMsgs = msgs.filter((m: Message) => m.role === 'user')
+            const asstMsgs = msgs.filter((m: Message) => m.role === 'assistant')
+            const inputTokens = estimateTokens(userMsgs)
+            const outputTokens = estimateTokens(asstMsgs)
+            const cost = estimateCost(model, inputTokens, outputTokens)
+
+            modelStats[model].input += inputTokens
+            modelStats[model].output += outputTokens
+            modelStats[model].sessions++
+            modelStats[model].cost += cost
+          } catch {
+            // Skip sessions that fail to load
+          }
+        }
+
+        const totalCost = Object.values(modelStats).reduce((sum, s) => sum + s.cost, 0)
+        const totalInput = Object.values(modelStats).reduce((sum, s) => sum + s.input, 0)
+        const totalOutput = Object.values(modelStats).reduce((sum, s) => sum + s.output, 0)
+
+        const lines: string[] = ['**Workspace Cost Summary**\n']
+        lines.push(`**Sessions:** ${totalSessions} with messages`)
+        lines.push(`**Total messages:** ${totalMsgs}`)
+        lines.push(`**Total tokens:** ~${(totalInput + totalOutput).toLocaleString()} (${totalInput.toLocaleString()} in / ${totalOutput.toLocaleString()} out)`)
+        lines.push(`**Total estimated cost:** $${totalCost.toFixed(4)}`)
+        lines.push('\n**By Model:**')
+
+        for (const [model, stats] of Object.entries(modelStats)) {
+          lines.push(`· \`${model}\` — ${stats.sessions} sessions, ~${(stats.input + stats.output).toLocaleString()} tokens, $${stats.cost.toFixed(4)}`)
+        }
+
+        lines.push('\n*Costs are estimates based on ~4 chars/token heuristic.*')
+        const costMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (costMsg) store.appendMessage(parseMessage(costMsg))
+        break
+      }
+      case 'context': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const used = estimateTokens(msgs)
+        const window = contextWindow(model)
+        const pct = Math.min(100, Math.round((used / window) * 100))
+        const barLen = 20
+        const filled = Math.round((pct / 100) * barLen)
+        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled)
+        const color = pct < 50 ? 'green' : pct < 75 ? 'yellow' : pct < 90 ? 'orange' : 'red'
+        const lines = [
+          `**Context Window**\n`,
+          `**Model:** ${displayModel(model)}`,
+          `**Used:** ~${used.toLocaleString()} tokens`,
+          `**Window:** ${window.toLocaleString()} tokens`,
+          `**Utilization:** ${pct}%  \`${bar}\``,
+          `\n*${color === 'green' ? ' Plenty of room.' : color === 'yellow' ? ' Getting warm.' : color === 'orange' ? ' Getting full — consider /compact.' : ' Near capacity — run /compact soon.'}*`,
+        ]
+        const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'theme': {
+        const settings = useAppStore.getState().settings
+        const arg = args?.trim().toLowerCase()
+        if (!arg) {
+          const themeList = THEMES.map((t) => t.id === settings.themeId ? `**${t.label}** (current)` : t.label).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `**Current theme:** ${settings.colorMode} mode, accent: ${settings.themeId}\n\n**Accents:** ${themeList}\n**Modes:** dark, light\n\nUsage: /theme dark|light, /theme <accent>`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (arg === 'dark' || arg === 'light') {
+          const next = { ...settings, colorMode: arg as ColorMode }
+          await el.settings.set(next)
+          store.setSettings(next)
+          applyColorMode(arg as ColorMode)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to **${arg}** mode.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const match = THEMES.find((t) => t.id === arg || t.label.toLowerCase() === arg)
+        if (!match) {
+          const ids = THEMES.map((t) => t.id).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `Unknown theme: \`${arg}\`. Available: ${ids}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const next = { ...settings, themeId: match.id }
+        await el.settings.set(next)
+        store.setSettings(next)
+        applyTheme(match.id)
+        const msg = await el.db.addMessage(sess.id, 'system', `Accent changed to **${match.label}**.`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'config': {
+        const settings = useAppStore.getState().settings
+        const CONFIG_KEYS: Record<string, { label: string; type: 'string' | 'number' | 'boolean' | 'enum'; enumValues?: string[] }> = {
+          defaultModel:    { label: 'Default Model', type: 'string' },
+          colorMode:       { label: 'Color Mode', type: 'enum', enumValues: ['dark', 'light'] },
+          themeId:         { label: 'Theme Accent', type: 'string' },
+          systemPrompt:    { label: 'System Prompt', type: 'string' },
+          permissionMode:  { label: 'Permission Mode', type: 'enum', enumValues: ['ask', 'auto', 'yolo'] },
+          planPreviewEnabled: { label: 'Plan Preview', type: 'boolean' },
+          maxSubagentSpawns: { label: 'Max Subagent Spawns', type: 'number' },
+          maxConcurrentSubagents: { label: 'Max Concurrent Subagents', type: 'number' },
+          maxWebSearches:  { label: 'Max Web Searches', type: 'number' },
+          mcpAutoBackgroundMs: { label: 'MCP Auto-Background (ms)', type: 'number' },
+        }
+        if (!args) {
+          const lines = ['**Current Settings**\n']
+          for (const [key, meta] of Object.entries(CONFIG_KEYS)) {
+            const val = (settings as unknown as Record<string, unknown>)[key]
+            const display = val === undefined || val === '' ? '(default)' : String(val)
+            lines.push(`· **${meta.label}** (\`${key}\`): ${display}`)
+          }
+          lines.push('\nUsage: `/config <key>` to view, `/config <key> <value>` to set')
+          const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const parts = args.trim().split(/\s+/)
+        const key = parts[0].toLowerCase()
+        const meta = CONFIG_KEYS[key]
+        if (!meta) {
+          const validKeys = Object.keys(CONFIG_KEYS).join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', `Unknown setting: \`${key}\`\n\nValid keys: ${validKeys}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (parts.length === 1) {
+          const val = (settings as unknown as Record<string, unknown>)[key]
+          const display = val === undefined || val === '' ? '(default)' : String(val)
+          const msg = await el.db.addMessage(sess.id, 'system', `**${meta.label}** (\`${key}\`): ${display}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const rawVal = parts.slice(1).join(' ')
+        let newVal: unknown
+        if (meta.type === 'boolean') {
+          if (['true', '1', 'yes', 'on'].includes(rawVal.toLowerCase())) newVal = true
+          else if (['false', '0', 'no', 'off'].includes(rawVal.toLowerCase())) newVal = false
+          else {
+            const msg = await el.db.addMessage(sess.id, 'system', `Invalid boolean value: \`${rawVal}\`. Use true/false.`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+        } else if (meta.type === 'number') {
+          const n = Number(rawVal)
+          if (isNaN(n)) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Invalid number: \`${rawVal}\``)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          newVal = n
+        } else if (meta.type === 'enum' && meta.enumValues) {
+          const match = meta.enumValues.find((v) => v.toLowerCase() === rawVal.toLowerCase())
+          if (!match) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Invalid value: \`${rawVal}\`. Options: ${meta.enumValues.join(', ')}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          newVal = match
+        } else {
+          newVal = rawVal
+        }
+        const next = { ...settings, [key]: newVal }
+        await el.settings.set(next)
+        store.setSettings(next)
+        const msg = await el.db.addMessage(sess.id, 'system', `**${meta.label}** set to: \`${newVal}\``)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'rewind': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages to rewind.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const userMsgs = msgs.filter((m) => m.role === 'user')
+        if (userMsgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No user messages to rewind to.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!args) {
+          const lines = ['**Conversation Checkpoints** (user messages)\n']
+          userMsgs.forEach((m, i) => {
+            const preview = m.content.slice(0, 80).replace(/\n/g, ' ')
+            lines.push(`${i + 1}. ${preview}${m.content.length > 80 ? '…' : ''}`)
+          })
+          lines.push('\nUsage: `/rewind <n>` to go back to checkpoint n')
+          const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const idx = parseInt(args, 10)
+        if (isNaN(idx) || idx < 1 || idx > userMsgs.length) {
+          const msg = await el.db.addMessage(sess.id, 'system', `Invalid checkpoint: \`${args}\`. Use a number between 1 and ${userMsgs.length}.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const targetMsg = userMsgs[idx - 1]
+        const targetIdx = msgs.findIndex((m) => m.id === targetMsg.id)
+        const toDelete = msgs.slice(targetIdx + 1)
+        if (toDelete.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Already at the latest point — nothing to rewind.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        for (const m of toDelete) {
+          await el.db.deleteMessage(m.id)
+        }
+        store.setMessages(msgs.slice(0, targetIdx + 1))
+        const msg = await el.db.addMessage(sess.id, 'system', `Rewound to checkpoint ${idx}. Removed ${toDelete.length} message${toDelete.length !== 1 ? 's' : ''}.`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'help': {
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const msg = await el.db.addMessage(sess.id, 'system', helpText)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'status': {
+        const lines: string[] = ['**Ares Status Report**\n']
+        const { sessions, workspacePath } = useAppStore.getState()
+        const settings = store.settings
+
+        // App version
+        const appVersion = '__VERSION__'  // replaced at build time
+        lines.push(`**App:** Ares ${appVersion}`)
+
+        // Session count
+        const running = sessions.filter((s: Session) => s.agentStatus === 'running').length
+        const done = sessions.filter((s: Session) => s.agentStatus === 'done').length
+        lines.push(`**Sessions:** ${sessions.length} total (${running} running, ${done} completed)`)
+
+        // Workspace
+        if (workspacePath) {
+          lines.push(`**Workspace:** \`${workspacePath}\``)
+        } else {
+          lines.push('**Workspace:** None — use /folder to open one')
+        }
+
+        // API connectivity
+        const baseUrl = (settings.apiBaseUrl || '').replace(/\/$/, '')
+        if (baseUrl) {
+          lines.push(`**API endpoint:** \`${baseUrl}\``)
+          lines.push(`**Default model:** ${settings.defaultModel || 'not set'}`)
+          try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 5000)
+            const resp = await fetch(`${baseUrl}/models`, {
+              signal: controller.signal,
+              headers: settings.apiKey
+                ? { Authorization: `Bearer ${settings.apiKey}` }
+                : {},
+            })
+            clearTimeout(timeout)
+            if (resp.ok) {
+              lines.push('**API status:** ✅ Connected')
+            } else if (resp.status === 401 || resp.status === 403) {
+              lines.push('**API status:** ⚠️ Reached endpoint but auth failed — check your API key')
+            } else {
+              lines.push(`**API status:** ⚠️ HTTP ${resp.status} — endpoint may not support /models`)
+            }
+          } catch {
+            lines.push('**API status:** ❌ Unreachable — check your API URL and network')
+          }
+        } else {
+          lines.push('**API:** Not configured — set apiBaseUrl in settings')
+        }
+
+        lines.push('\nRun `/help` for all available commands.')
+        const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'debug': {
+        const lines: string[] = ['**🔍 Debug Info**\n']
+        const { sessions, workspacePath, activeTabId, tabs, messages } = useAppStore.getState()
+        const settings = store.settings
+
+        // Platform info
+        lines.push(`**Platform:** ${navigator.platform}`)
+        lines.push(`**User agent:** ${navigator.userAgent.slice(0, 80)}...`)
+
+        // App version
+        lines.push(`**App version:** ${'__VERSION__'}`)
+
+        // Memory (if available)
+        const mem = (performance as any).memory
+        if (mem) {
+          const usedMB = Math.round(mem.usedJSHeapSize / 1048576)
+          const totalMB = Math.round(mem.totalJSHeapSize / 1048576)
+          lines.push(`**Memory:** ${usedMB}MB / ${totalMB}MB JS heap`)
+        }
+
+        // Session stats
+        const pinned = sessions.filter((s: Session) => s.pinned).length
+        const archived = sessions.filter((s: Session) => s.archived).length
+        lines.push(`**Sessions:** ${sessions.length} total, ${pinned} pinned, ${archived} archived`)
+
+        // Current session details
+        lines.push(`**Active tab:** ${activeTabId || 'none'}`)
+        lines.push(`**Open tabs:** ${tabs.length}`)
+
+        // Messages in current session
+        lines.push(`**Messages in session:** ${messages.length}`)
+
+        // Workspace
+        lines.push(`**Workspace:** ${workspacePath || 'none'}`)
+
+        // API config
+        const hasApi = !!settings.apiBaseUrl
+        const hasKey = !!settings.apiKey
+        lines.push(`**API endpoint:** ${hasApi ? 'configured' : 'not set'}`)
+        lines.push(`**API key:** ${hasKey ? 'set' : 'not set'}`)
+        lines.push(`**Default model:** ${settings.defaultModel || 'not set'}`)
+
+        lines.push('\nRun `/status` for system health check.')
+        const dbgMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (dbgMsg) store.appendMessage(parseMessage(dbgMsg))
+        break
+      }
+      case 'doctor': {
+        const lines: string[] = ['**🩺 Ares Doctor — Environment Diagnostics**\n']
+        const { sessions, workspacePath } = useAppStore.getState()
+        const settings = store.settings
+        const checks: { label: string; ok: boolean; detail: string }[] = []
+
+        // 1. Platform
+        const platform = navigator.platform
+        lines.push(`**Platform:** ${platform}`)
+
+        // 2. App version
+        const appVersion = '__VERSION__'
+        lines.push(`**App version:** ${appVersion}`)
+
+        // 3. Electron / Node detection
+        const isElectron = !!(window as any).electron || !!(window as any).require
+        checks.push({ label: 'Electron runtime', ok: isElectron, detail: isElectron ? 'running in Electron' : 'not detected (web mode)' })
+
+        // 4. API configuration
+        const hasApi = !!settings.apiBaseUrl
+        const hasKey = !!settings.apiKey
+        checks.push({ label: 'API endpoint', ok: hasApi, detail: hasApi ? `\`${settings.apiBaseUrl}\`` : 'not configured — run /model to set up' })
+        checks.push({ label: 'API key', ok: hasKey, detail: hasKey ? 'set' : 'not set (may work for free models)' })
+        checks.push({ label: 'Default model', ok: !!settings.defaultModel, detail: settings.defaultModel || 'not set' })
+
+        // 5. API health check
+        if (hasApi) {
+          try {
+            const controller = new AbortController()
+            const timeout = setTimeout(() => controller.abort(), 5000)
+            const resp = await fetch(`${settings.apiBaseUrl.replace(/\/$/, '')}/models`, {
+              signal: controller.signal,
+              headers: hasKey ? { Authorization: `Bearer ${settings.apiKey}` } : {},
+            })
+            clearTimeout(timeout)
+            checks.push({ label: 'API connectivity', ok: resp.ok, detail: resp.ok ? 'reachable' : `HTTP ${resp.status}` })
+          } catch {
+            checks.push({ label: 'API connectivity', ok: false, detail: 'unreachable — check URL and network' })
+          }
+        }
+
+        // 6. Workspace
+        checks.push({ label: 'Workspace folder', ok: !!workspacePath, detail: workspacePath ? `\`${workspacePath}\`` : 'none — use /folder to open' })
+
+        // 7. Git
+        if (workspacePath) {
+          try {
+            const status = await el.git.status(workspacePath)
+            checks.push({ label: 'Git repository', ok: status.hasRepo, detail: status.hasRepo ? `branch \`${status.branch || '(detached)'}\`` : 'not a git repo' })
+          } catch (err) {
+            checks.push({ label: 'Git repository', ok: false, detail: `error: ${(err as Error).message}` })
+          }
+        } else {
+          checks.push({ label: 'Git repository', ok: false, detail: 'no workspace open' })
+        }
+
+        // 8. Sessions
+        const totalSessions = sessions.length
+        const running = sessions.filter((s: Session) => s.agentStatus === 'running').length
+        checks.push({ label: 'Sessions', ok: totalSessions > 0, detail: `${totalSessions} total, ${running} running` })
+
+        // 9. Memory (if available)
+        const mem = (performance as any).memory
+        if (mem) {
+          const usedMB = Math.round(mem.usedJSHeapSize / 1048576)
+          const totalMB = Math.round(mem.totalJSHeapSize / 1048576)
+          const pct = Math.round((mem.usedJSHeapSize / mem.jsHeapSizeLimit) * 100)
+          checks.push({ label: 'Memory (JS heap)', ok: pct < 80, detail: `${usedMB}MB / ${totalMB}MB (${pct}%)` })
+        }
+
+        // 10. Agent config summary (MCP, skills, extensions)
+        try {
+          const agentConfig = await el.agentConfig.get()
+          const mcpCount = agentConfig.mcpServers?.length ?? 0
+          const skillCount = agentConfig.skills?.length ?? 0
+          const extCount = agentConfig.extensions?.length ?? 0
+          const cmdCount = agentConfig.commands?.length ?? 0
+          checks.push({ label: 'MCP servers', ok: true, detail: `${mcpCount} configured` })
+          checks.push({ label: 'Skills', ok: true, detail: `${skillCount} loaded` })
+          checks.push({ label: 'Extensions', ok: true, detail: `${extCount} loaded` })
+          checks.push({ label: 'Plugin commands', ok: true, detail: `${cmdCount} registered` })
+        } catch {
+          checks.push({ label: 'Agent config', ok: false, detail: 'unable to load' })
+        }
+
+        // Render checks
+        lines.push('')
+        for (const c of checks) {
+          const icon = c.ok ? '✅' : '⚠️'
+          lines.push(`${icon} **${c.label}:** ${c.detail}`)
+        }
+
+        // Summary
+        const failCount = checks.filter((c) => !c.ok).length
+        lines.push('')
+        if (failCount === 0) {
+          lines.push('**All checks passed.** Your environment looks healthy.')
+        } else {
+          lines.push(`**${failCount} issue(s) found.** Review the warnings above.`)
+        }
+        lines.push('\nRun `/status` for a quick health check, or `/debug` for developer diagnostics.')
+
+        const doctorMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (doctorMsg) store.appendMessage(parseMessage(doctorMsg))
+        break
+      }
+      case 'history': {
+        const { promptHistory } = useAppStore.getState()
+        if (promptHistory.length === 0) {
+          const noHist = await el.db.addMessage(sess.id, 'system', 'No prompt history yet. Start typing to build history.')
+          if (noHist) store.appendMessage(parseMessage(noHist))
+          break
+        }
+        const limit = args ? Math.min(parseInt(args, 10) || 10, 50) : 10
+        const recent = promptHistory.slice(0, limit)
+        const lines: string[] = [`**Prompt History** (showing ${recent.length} of ${promptHistory.length})\n`]
+        for (let i = 0; i < recent.length; i++) {
+          const preview = recent[i].length > 80 ? recent[i].slice(0, 77) + '...' : recent[i]
+          lines.push(`${i + 1}. ${preview}`)
+        }
+        const histMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (histMsg) store.appendMessage(parseMessage(histMsg))
+        break
+      }
+      case 'summary': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const em = await el.db.addMessage(sess.id, 'system', 'No messages in this session to summarize.')
+          if (em) store.appendMessage(parseMessage(em))
+          break
+        }
+
+        store.appendMessage({
+          id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+          content: 'Generating session summary...', isStreaming: false, createdAt: Date.now(),
+        })
+
+        const userAndAssistant = msgs.filter((m: Message) => m.role === 'user' || m.role === 'assistant')
+        const conversation = userAndAssistant.map((m: Message) =>
+          `**${m.role === 'user' ? 'User' : 'Assistant'}**: ${m.content.slice(0, 2000)}`
+        ).join('\n\n')
+
+        const apiBaseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        if (apiBaseUrl.trim().length > 0) {
+          try {
+            const prompt = [
+              'Summarize this coding assistant conversation concisely. Cover:',
+              '1) What the user wanted to accomplish',
+              '2) Key decisions or approaches discussed',
+              '3) What was built or changed',
+              '4) Any open questions or next steps',
+              '',
+              conversation.slice(0, 12000),
+              '',
+              'Provide a brief markdown summary (3-5 bullet points).',
+            ].filter(Boolean).join('\n')
+
+            const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No summary generated.'
+            const finalMsg = await el.db.addMessage(sess.id, 'system', `**Session Summary**\n\n${content}`)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          } catch (err) {
+            const errorMsg = `**Error generating summary:** ${(err as Error).message}`
+            const finalMsg = await el.db.addMessage(sess.id, 'system', errorMsg)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          }
+        } else {
+          // Fallback: basic stats without AI
+          const userCount = userAndAssistant.filter((m: Message) => m.role === 'user').length
+          const assistantCount = userAndAssistant.filter((m: Message) => m.role === 'assistant').length
+          const totalChars = msgs.reduce((sum: number, m: Message) => sum + (m.content?.length ?? 0), 0)
+          const stats = [
+            '**Session Summary (offline)**\n',
+            `- ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant)`,
+            `- ~${Math.round(totalChars / 4)} estimated tokens`,
+            `- Session started ${new Date(sess.createdAt).toLocaleString()}`,
+            '\nConfigure an API endpoint to get AI-powered summaries.',
+          ].filter(Boolean).join('\n')
+          const finalMsg = await el.db.addMessage(sess.id, 'system', stats)
+          if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+        }
+        break
+      }
+      case 'usage': {
+        const msgs = useAppStore.getState().messages
+        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const userCount = msgs.filter((m: Message) => m.role === 'user').length
+        const assistantCount = msgs.filter((m: Message) => m.role === 'assistant').length
+        const systemCount = msgs.filter((m: Message) => m.role === 'system').length
+        const toolCount = msgs.filter((m: Message) => m.role === 'tool').length
+
+        const totalTokens = estimateTokens(msgs)
+        const inputTokens = estimateTokens(msgs.filter((m: Message) => m.role === 'user'))
+        const outputTokens = estimateTokens(msgs.filter((m: Message) => m.role === 'assistant'))
+
+        const windowSize = contextWindow(model)
+        const utilization = Math.round((totalTokens / windowSize) * 100)
+
+        const cost = estimateCost(model, inputTokens, outputTokens)
+
+        const durationMs = Date.now() - sess.createdAt
+        const durHours = Math.floor(durationMs / 3600000)
+        const durMinutes = Math.floor((durationMs % 3600000) / 60000)
+        const durationStr = durHours > 0 ? `${durHours}h ${durMinutes}m` : `${durMinutes}m`
+
+        const apiBaseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        if (apiBaseUrl.trim().length > 0) {
+          store.appendMessage({
+            id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
+            content: 'Generating session usage summary...', isStreaming: false, createdAt: Date.now(),
+          })
+          try {
+            const prompt = [
+              'You are analyzing token usage and cost for an AI coding assistant session.',
+              '',
+              'Session stats:',
+              `- ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant, ${systemCount} system, ${toolCount} tool)`,
+              `- Model: ${model}`,
+              `- Total tokens: ~${totalTokens}`,
+              `- Input tokens: ~${inputTokens}`,
+              `- Output tokens: ~${outputTokens}`,
+              `- Context window: ${windowSize.toLocaleString()} tokens`,
+              `- Context utilization: ${utilization}%`,
+              `- Estimated cost: $${cost.toFixed(6)}`,
+              `- Session duration: ${durationStr}`,
+              '',
+              'Provide a concise usage summary in a friendly tone. Include the raw stats above formatted nicely.',
+            ].join('\n')
+
+            const response = await fetch(`${apiBaseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model,
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No usage summary generated.'
+            const finalMsg = await el.db.addMessage(sess.id, 'system', `**Session Usage**\n\n${content}`)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          } catch (err) {
+            const errorMsg = `**Error generating usage summary:** ${(err as Error).message}`
+            const finalMsg = await el.db.addMessage(sess.id, 'system', errorMsg)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          }
+        } else {
+          const stats = [
+            '**Session Usage (offline)**\n',
+            `**Total messages:** ${msgs.length} (${userCount} user, ${assistantCount} assistant, ${systemCount} system, ${toolCount} tool)`,
+            `**Estimated tokens:** ~${totalTokens.toLocaleString()} total (${inputTokens.toLocaleString()} input, ${outputTokens.toLocaleString()} output)`,
+            `**Context window:** ${windowSize.toLocaleString()} tokens`,
+            `**Context utilization:** ${utilization}%`,
+            `**Estimated cost:** $${cost.toFixed(6)}`,
+            `**Session duration:** ${durationStr}`,
+            `**Model:** ${model}`,
+            '\nConfigure an API endpoint to get AI-powered usage analysis.',
+          ].filter(Boolean).join('\n')
+          const msg = await el.db.addMessage(sess.id, 'system', stats)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'overview': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        store.appendMessage({
+          id: uuidv4(), sessionId: sess.id, role: 'user',
+          content: 'Generating project overview...', isStreaming: false, createdAt: Date.now(),
+        })
+        try {
+          // Read key project files
+          let readmeContent = ''
+          try { readmeContent = await el.fs.readFile(`${wsPath}/README.md`) } catch { /* no README */ }
+          let packageJson = ''
+          try { packageJson = await el.fs.readFile(`${wsPath}/package.json`) } catch { /* no package.json */ }
+
+          // Read file tree (top 2 levels)
+          const rootNodes = await el.fs.readDir(wsPath)
+          const formatTree = (nodes: import('@/types').FileNode[], depth = 0): string => {
+            let result = ''
+            for (const n of nodes) {
+              result += '  '.repeat(depth) + (n.type === 'folder' ? '📁' : '📄') + ' ' + n.name + '\n'
+              if (n.children && depth < 2) result += formatTree(n.children, depth + 1)
+            }
+            return result
+          }
+          const tree = formatTree(rootNodes)
+
+          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const hasAi = baseUrl.trim().length > 0
+
+          if (!hasAi) {
+            // Fallback: show structure without AI
+            const overview = [
+              `**Project Overview**\n`,
+              tree ? `**File Structure:**\n\`\`\`\n${tree}\`\`\`\n` : '',
+              packageJson ? `**package.json:**\n\`\`\`json\n${packageJson.slice(0, 2000)}\n\`\`\`\n` : '',
+              readmeContent ? `**README:**\n${readmeContent.slice(0, 1500)}\n` : '',
+            ].filter(Boolean).join('\n')
+            const msg = await el.db.addMessage(sess.id, 'system', overview)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            // Build AI prompt
+            const promptParts = [
+              'You are looking at a software project. Give a concise, friendly overview.',
+              '',
+              readmeContent ? `README:\n${readmeContent.slice(0, 3000)}\n` : '',
+              packageJson ? `package.json (key fields):\n${packageJson.slice(0, 2000)}\n` : '',
+              tree ? `Project structure:\n${tree}\n` : '',
+              'Provide: 1) What this project does, 2) Tech stack, 3) Main directories and their purpose.',
+              'Keep it under 300 words. Use plain Markdown.',
+            ].filter(Boolean).join('\n')
+
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                messages: [{ role: 'user', content: promptParts }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No overview generated.'
+
+            const msg = await el.db.addMessage(sess.id, 'system', content)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const errorMsg = `**Error generating overview:** ${(err as Error).message}`
+          const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'helpful':
+      case 'not-helpful': {
+        const feedbackType = cmd === 'helpful' ? 'helpful' : 'not-helpful'
+        const msgs = useAppStore.getState().messages
+        // Find the last assistant message (skip system messages)
+        const lastAssistant = msgs.filter((m) => m.role === 'assistant').at(-1)
+        if (!lastAssistant) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No assistant response found to rate.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        await el.db.updateMessage(lastAssistant.id, { feedback: feedbackType })
+        store.upsertMessage(lastAssistant.id, { ...lastAssistant, feedback: feedbackType })
+        const emoji = feedbackType === 'helpful' ? '👍' : '👎'
+        const msg = await el.db.addMessage(sess.id, 'system', `Feedback recorded — marked as ${feedbackType} ${emoji}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'pr': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        store.appendMessage({
+          id: uuidv4(), sessionId: sess.id, role: 'user',
+          content: 'Generating pull request from session context...', isStreaming: false, createdAt: Date.now(),
+        })
+        try {
+          // Gather git context
+          const status = await el.git.status(wsPath)
+          const log = await el.git.log(wsPath, 5)
+          const branch = status.branch || '(detached)'
+
+          // Gather changed files
+          const changedFiles: string[] = []
+          for (const f of status.staged) changedFiles.push(f.path)
+          for (const f of status.unstaged) changedFiles.push(f.path)
+          for (const f of status.untracked) changedFiles.push(f.path)
+
+          // Gather session messages for context
+          const msgs = useAppStore.getState().messages
+          const userAndAssistant = msgs.filter((m: Message) => m.role === 'user' || m.role === 'assistant')
+          const conversationSummary = userAndAssistant.slice(-10).map((m: Message) =>
+            `**${m.role === 'user' ? 'User' : 'Assistant'}**: ${m.content.slice(0, 1000)}`
+          ).join('\n\n')
+          const userCount = userAndAssistant.filter((m: Message) => m.role === 'user').length
+          const assistantCount = userAndAssistant.filter((m: Message) => m.role === 'assistant').length
+
+          // Build git context string
+          const commitsStr = log.length > 0
+            ? log.map((c: import('@/types').GitCommit) => `- ${c.shortHash} - ${c.message}`).join('\n')
+            : 'No recent commits found.'
+          const changesStr = changedFiles.length > 0
+            ? changedFiles.map((p) => {
+                const staged = status.staged.some((f) => f.path === p)
+                const untracked = status.untracked.some((f) => f.path === p)
+                const prefix = untracked ? 'Added' : staged ? 'Modified' : 'Modified'
+                return `- ${prefix}: ${p}`
+              }).join('\n')
+            : 'No uncommitted changes.'
+
+          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const hasAi = baseUrl.trim().length > 0
+
+          if (hasAi) {
+            // AI-powered PR generation
+            const prompt = [
+              'You are generating a pull request title and body based on git context and session conversation.',
+              '',
+              `**Branch:** ${branch}`,
+              `**Upstream:** ${status.upstream || 'none'}`,
+              status.ahead > 0 ? `**Ahead by:** ${status.ahead} commit(s)` : '',
+              status.behind > 0 ? `**Behind by:** ${status.behind} commit(s)` : '',
+              '',
+              '**Recent commits:**',
+              commitsStr,
+              '',
+              '**Changed files:**',
+              changesStr,
+              '',
+              '**Session conversation (last messages):**',
+              conversationSummary || 'No conversation messages.',
+              '',
+              `Session stats: ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant)`,
+              '',
+              'Generate a concise pull request title and a well-structured markdown body. Include:',
+              '1) A clear one-line PR title starting with the conventional commit type (feat:, fix:, chore:, docs:, refactor:, etc.)',
+              '2) **What changed** — bullet list of key changes',
+              '3) **Why** — brief motivation or context',
+              '4) **How to test** — verification instructions',
+              'Use plain Markdown. Start with the title on the first line, then a blank line, then the body.',
+            ].filter(Boolean).join('\n')
+
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                messages: [{ role: 'user', content: prompt }],
+                stream: false,
+              }),
+            })
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}: ${await response.text().catch(() => 'Unknown error')}`)
+            }
+
+            const json = await response.json()
+            const content = json.choices?.[0]?.message?.content ?? 'No PR generated.'
+            const finalMsg = await el.db.addMessage(sess.id, 'system', `**Pull Request from Session**\n\n${content}`)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          } else {
+            // Structured PR from git data without AI
+            const sessionStart = msgs.length > 0
+              ? new Date(Math.min(...msgs.map((m: Message) => m.createdAt))).toLocaleString()
+              : new Date(sess.createdAt).toLocaleString()
+
+            const prBody = [
+              '**Pull Request from Session**',
+              '',
+              `**Branch:** \`${branch}\``,
+              `**Upstream:** ${status.upstream || 'none'}`,
+              '',
+              '**Changes:**',
+              changesStr,
+              '',
+              '**Recent Commits:**',
+              commitsStr,
+              '',
+              '**Session Context:**',
+              `- ${msgs.length} total messages (${userCount} user, ${assistantCount} assistant)`,
+              `- Started: ${sessionStart}`,
+              '',
+              '> Generated by Ares /pr command. Configure an API endpoint for AI-powered PR descriptions.',
+            ].join('\n')
+            const finalMsg = await el.db.addMessage(sess.id, 'system', prBody)
+            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          }
+        } catch (err) {
+          const errorMsg = `**Error generating pull request:** ${(err as Error).message}`
+          const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'fork': {
+        const msgs = useAppStore.getState().messages
+        const title = sess.title.replace(/\s*\(fork \d+\)$/, '')
+        // Find next fork number
+        const forks = useAppStore.getState().sessions.filter((s: Session) =>
+          s.id !== sess.id && s.title.startsWith(title)
+        )
+        const forkN = forks.length + 1
+        const forkTitle = `${title} (fork ${forkN})`
+
+        store.appendMessage({
+          id: uuidv4(), sessionId: sess.id, role: 'user',
+          content: `Forking session as "${forkTitle}"...`,
+          isStreaming: false, createdAt: Date.now(),
+        })
+
+        try {
+          const raw = await el.db.createSession(forkTitle, sess.model, sess.id)
+          const newSession = parseSession(raw)
+          // Inherit workspace from parent
+          if (sess.workspacePath) {
+            await el.db.updateSession(newSession.id, { workspace_path: sess.workspacePath })
+            newSession.workspacePath = sess.workspacePath
+          }
+          // Copy all messages to the new session
+          for (const m of msgs) {
+            await el.db.addMessage(newSession.id, m.role, m.content, {
+              attachments: m.attachments,
+              toolName: m.toolName,
+              toolStatus: m.toolStatus,
+              toolInput: m.toolInput,
+              toolOutput: m.toolOutput,
+              thinking: m.thinking,
+              replyTo: m.replyTo ? { id: m.replyTo.id, content: m.replyTo.content, role: m.replyTo.role } : undefined,
+              reactions: m.reactions ? { up: m.reactions.up } : undefined,
+            })
+          }
+          store.addSession(newSession)
+          store.openSessionTab(newSession)
+          // Load messages for the new session
+          const rawMsgs = await el.db.getMessages(newSession.id)
+          store.setMessages(rawMsgs.map((r: import('@/types').RawMessage) => parseMessage(r)))
+        } catch (err) {
+          const errorMsg = `**Error forking session:** ${(err as Error).message}`
+          const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'changes': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Workspace Changes**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          try {
+            const status = await el.git.status(workspacePath)
+            if (!status.hasRepo) {
+              lines.push('Not a git repository (or no git history).')
+            } else {
+              lines.push(`**Branch:** \`${status.branch || '(detached)'}\``)
+              if (status.upstream) {
+                lines.push(`**Remote:** \`${status.upstream}\``)
+                if (status.ahead > 0 || status.behind > 0) {
+                  lines.push(`**Sync:** ${status.ahead} ahead · ${status.behind} behind`)
+                }
+              }
+              lines.push('')
+              if (status.staged.length > 0) {
+                lines.push(`**Staged** (${status.staged.length} files)`)
+                for (const f of status.staged) {
+                  lines.push(`  \`${f.path}\` — ${f.status}`)
+                }
+                lines.push('')
+              }
+              if (status.unstaged.length > 0) {
+                lines.push(`**Unstaged changes** (${status.unstaged.length} files)`)
+                for (const f of status.unstaged) {
+                  lines.push(`  \`${f.path}\` — ${f.status}`)
+                }
+                lines.push('')
+              }
+              if (status.untracked.length > 0) {
+                lines.push(`**Untracked** (${status.untracked.length} files)`)
+                for (const f of status.untracked) {
+                  lines.push(`  \`${f.path}\``)
+                }
+              }
+              if (status.staged.length === 0 && status.unstaged.length === 0 && status.untracked.length === 0) {
+                lines.push('Working tree clean — no changes.')
+              }
+            }
+          } catch (err) {
+            lines.push(`**Error:** ${(err as Error).message}`)
+          }
+        }
+        const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'diff': {
+        const { workspacePath } = useAppStore.getState()
+        if (!workspacePath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace folder is open.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const status = await el.git.status(workspacePath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const allFiles = [...status.staged, ...status.unstaged]
+          if (allFiles.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No changes in working tree.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const diffParts: string[] = []
+          for (const f of allFiles.slice(0, 30)) {
+            const isStaged = status.staged.some((s) => s.path === f.path)
+            const diff = await el.git.diff(workspacePath, f.path, isStaged)
+            if (diff) diffParts.push(`### ${f.path} (${isStaged ? 'staged' : 'unstaged'})\n\`\`\`diff\n${diff}\n\`\`\``)
+          }
+          if (allFiles.length > 30) diffParts.push(`\n*...and ${allFiles.length - 30} more files*`)
+          const diffText = diffParts.length > 0 ? diffParts.join('\n\n') : 'No diff content available.'
+          const msg = await el.db.addMessage(sess.id, 'system', `**Git Diff**\n\n${diffText}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'export': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to export.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const exportLines: string[] = []
+        exportLines.push(`# ${sess.title || 'Untitled Session'}`)
+        exportLines.push('')
+        exportLines.push(`*Exported ${new Date().toISOString().slice(0, 10)} · ${msgs.length} messages · Model: ${sess.model || store.settings.defaultModel || 'default'}*`)
+        exportLines.push('')
+        exportLines.push('---')
+        exportLines.push('')
+
+        for (const m of msgs) {
+          const role = m.role === 'assistant' ? '**Assistant**' : m.role === 'user' ? '**User**' : m.role === 'system' ? '*System*' : `*${m.role}*`
+          exportLines.push(`### ${role}`)
+          exportLines.push('')
+          exportLines.push(m.content)
+          if (m.toolName) {
+            exportLines.push('')
+            exportLines.push(`*Tool: \`${m.toolName}\`*`)
+          }
+          exportLines.push('')
+          exportLines.push('---')
+          exportLines.push('')
+        }
+
+        const md = exportLines.join('\n')
+        const blob = new Blob([md], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `${(sess.title || 'session').replace(/[^a-zA-Z0-9]/g, '-').slice(0, 60)}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+
+        const msg = await el.db.addMessage(sess.id, 'system', `**Exported** ${msgs.length} messages as Markdown (${md.length.toLocaleString()} characters).`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'branches': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        if (!args) {
+          try {
+            const result = await el.git.branches(wsPath)
+            const lines: string[] = ['**Git Branches**\n']
+            if (result.local.length === 0) {
+              lines.push('No branches found. Is this a git repository?')
+            } else {
+              for (const branch of result.local) {
+                const marker = branch === result.current ? '* ' : '  '
+                lines.push(`${marker}\`${branch}\``)
+              }
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+        if (args.startsWith('--new ')) {
+          const branchName = args.slice(6).trim()
+          if (!branchName) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /branches --new <branch-name>')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          try {
+            await el.git.createBranch(wsPath, branchName)
+            const msg = await el.db.addMessage(sess.id, 'system', `Created and switched to branch \`${branchName}\``)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+        const branchName = args.trim()
+        try {
+          await el.git.checkout(wsPath, branchName)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \`${branchName}\``)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'commit': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /commit <message>')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          if (status.staged.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No staged changes to commit. Use /stage to stage files first.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const fileCount = status.staged.length
+          await el.git.commit(wsPath, args)
+          const branchName = status.branch || 'HEAD'
+          const msg = await el.db.addMessage(sess.id, 'system', `**Committed** ${fileCount} file${fileCount === 1 ? '' : 's'} on \`${branchName}\`: "${args}"`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Commit failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'undo': {
+        const msgs = useAppStore.getState().messages
+        // Find the last user message
+        const lastUserIdx = msgs.findLastIndex((m) => m.role === 'user')
+        if (lastUserIdx === -1) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Nothing to undo — no user messages found.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        // Collect messages to remove: the last user message and everything after it
+        const toRemove = msgs.slice(lastUserIdx)
+        for (const m of toRemove) {
+          await el.db.deleteMessage(m.id)
+        }
+        const remaining = msgs.slice(0, lastUserIdx)
+        store.setMessages(remaining)
+        const undoMsg = await el.db.addMessage(sess.id, 'system', `**Undone.** Removed ${toRemove.length} message${toRemove.length === 1 ? '' : 's'} (last exchange).`)
+        if (undoMsg) store.appendMessage(parseMessage(undoMsg))
+        break
+      }
+      case 'stage': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          if (!args) {
+            // Show staging status
+            const lines: string[] = ['**Staging Status**\n']
+            if (status.staged.length > 0) {
+              lines.push(`**Staged** (${status.staged.length} files)`)
+              for (const f of status.staged) {
+                lines.push(`  \`${f.path}\` — ${f.status}`)
+              }
+              lines.push('')
+            }
+            if (status.unstaged.length > 0) {
+              lines.push(`**Unstaged changes** (${status.unstaged.length} files)`)
+              for (const f of status.unstaged) {
+                lines.push(`  \`${f.path}\` — ${f.status}`)
+              }
+              lines.push('')
+            }
+            if (status.untracked.length > 0) {
+              lines.push(`**Untracked** (${status.untracked.length} files)`)
+              for (const f of status.untracked) {
+                lines.push(`  \`${f.path}\``)
+              }
+              lines.push('')
+            }
+            if (status.staged.length === 0 && status.unstaged.length === 0 && status.untracked.length === 0) {
+              lines.push('Working tree clean — nothing to stage.')
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else if (args === '--all') {
+            // Stage all files
+            await el.git.stageAll(wsPath)
+            const msg = await el.db.addMessage(sess.id, 'system', 'Staged all files.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else if (args.startsWith('--unstage ')) {
+            const target = args.slice(10).trim()
+            if (!target) {
+              const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /stage --unstage <file> or /stage --unstage --all')
+              if (msg) store.appendMessage(parseMessage(msg))
+              break
+            }
+            if (target === '--all') {
+              // Unstage all files
+              await el.git.unstageAll(wsPath)
+              const msg = await el.db.addMessage(sess.id, 'system', 'Unstaged all files.')
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              // Unstage a specific file
+              await el.git.unstageFile(wsPath, target)
+              const msg = await el.db.addMessage(sess.id, 'system', `Unstaged \`${target}\``)
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          } else {
+            // Stage a specific file
+            const filePath = args.trim()
+            await el.git.stageFile(wsPath, filePath)
+            const msg = await el.db.addMessage(sess.id, 'system', `Staged \`${filePath}\``)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'fetch': {
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /fetch <url> — Fetch web content from a URL.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const fetchUrl = args.trim()
+        if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://')) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Error:** URL must start with `http://` or `https://`.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const result = await el.ext.fetchUrl(fetchUrl)
+          if (!result.ok) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Fetch failed:** ${result.error}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const content = result.content || ''
+          const truncated = content.length >= 8000 ? '\n\n*[content truncated at 8000 chars]*' : ''
+          const display = content.length > 4000 ? content.slice(0, 4000) + truncated : content
+          const header = `**Fetched** \`${fetchUrl}\` (${result.length?.toLocaleString() || '?'} chars, ${result.contentType || 'unknown'})`
+          const msg = await el.db.addMessage(sess.id, 'system', `${header}\n\n${display}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'lint': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const lintMsg = await el.db.addMessage(sess.id, 'system', '**Running type check...**')
+        if (lintMsg) store.appendMessage(parseMessage(lintMsg))
+        try {
+          const result = await el.lint.run(wsPath)
+          if (result.ok) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Lint clean** — ${result.output}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const summary = result.errors > 0 ? `${result.errors} error${result.errors === 1 ? '' : 's'} found` : 'Check completed with issues'
+            const output = result.output.length > 3000 ? result.output.slice(0, 3000) + '\n\n[truncated]' : result.output
+            const msg = await el.db.addMessage(sess.id, 'system', `**Lint: ${summary}**\n\n${output}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Lint error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'task': {
+        const sub = args.trim().toLowerCase()
+        if (!sub || sub === 'list') {
+          const todos = useAppStore.getState().todos
+          if (todos.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No tasks. Use `/task add <text>` to create one.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const lines = ['**Tasks**\n']
+            for (const t of todos) {
+              const check = t.completed ? '✅' : '⬜'
+              lines.push(`${check} ${t.text}`)
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+        if (sub.startsWith('add ')) {
+          const text = args.trim().slice(4).trim()
+          if (!text) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/task add <text>`')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const todo = await el.db.addTodo(sess.id, text)
+          if (todo) store.addTodo(todo)
+          const msg = await el.db.addMessage(sess.id, 'system', `**Task added:** ${text}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (sub.startsWith('done ')) {
+          const index = parseInt(args.trim().slice(5).trim(), 10)
+          const todos = useAppStore.getState().todos
+          if (isNaN(index) || index < 1 || index > todos.length) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Usage: \`/task done <number>\` (1–${todos.length})`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const todo = todos[index - 1]
+          await el.db.updateTodo(todo.id, { completed: true })
+          store.updateTodo(todo.id, { completed: true })
+          const msg = await el.db.addMessage(sess.id, 'system', `**Task completed:** ${todo.text}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (sub.startsWith('remove ')) {
+          const index = parseInt(args.trim().slice(7).trim(), 10)
+          const todos = useAppStore.getState().todos
+          if (isNaN(index) || index < 1 || index > todos.length) {
+            const msg = await el.db.addMessage(sess.id, 'system', `Usage: \`/task remove <number>\` (1–${todos.length})`)
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const todo = todos[index - 1]
+          await el.db.deleteTodo(todo.id)
+          store.removeTodo(todo.id)
+          const msg = await el.db.addMessage(sess.id, 'system', `**Task removed:** ${todo.text}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const msg = await el.db.addMessage(sess.id, 'system', '**Usage:**\n- `/task` or `/task list` — show all tasks\n- `/task add <text>` — add a new task\n- `/task done <n>` — mark task n as complete\n- `/task remove <n>` — remove task n')
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'agents': {
+        const { sessions } = useAppStore.getState()
+        const filter = args.trim().toLowerCase()
+        const subAgents = sessions.filter((s: Session) => s.parentId)
+        const filtered = filter === 'running'
+          ? subAgents.filter((s: Session) => s.agentStatus === 'running')
+          : subAgents
+        if (filtered.length === 0) {
+          const hint = filter === 'running'
+            ? 'No running sub-agents. Use `/agents` to see all sub-agents.'
+            : 'No sub-agents found. Use `spawnAgent` or `spawnAgents` to create them.'
+          const msg = await el.db.addMessage(sess.id, 'system', hint)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const statusIcon = (status?: string) => {
+          switch (status) {
+            case 'running': return '🟢'
+            case 'done': return '✅'
+            case 'error': return '❌'
+            default: return '⚪'
+          }
+        }
+        const elapsed = (createdAt: number) => {
+          const ms = Date.now() - createdAt
+          const s = Math.floor(ms / 1000)
+          if (s < 60) return `${s}s`
+          const m = Math.floor(s / 60)
+          return `${m}m ${s % 60}s`
+        }
+        const lines = [`**🤖 Sub-Agents** (${filtered.length})\n`]
+        for (const sa of filtered) {
+          const parent = sessions.find((s: Session) => s.id === sa.parentId)
+          const parentLabel = parent ? parent.title : 'unknown'
+          lines.push(
+            `${statusIcon(sa.agentStatus)} **${sa.title}** — ${sa.agentStatus || 'idle'}`,
+            `   Parent: ${parentLabel} · Msgs: ${sa.messageCount} · Age: ${elapsed(sa.createdAt)}`,
+          )
+        }
+        if (filter !== 'running') {
+          lines.push(`\nFilter: \`/agents running\` to show only active agents.`)
+        }
+        const agentsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (agentsMsg) store.appendMessage(parseMessage(agentsMsg))
+        break
+      }
+      case 'kill': {
+        const { sessions } = useAppStore.getState()
+        const subAgents = sessions.filter((s: Session) => s.parentId && s.agentStatus === 'running')
+        if (!args.trim()) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/kill <name or number>` — stop a running sub-agent.\n\nUse `/agents running` to see active agents.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (subAgents.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No running sub-agents to kill.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const query = args.trim().toLowerCase()
+        const numIdx = parseInt(query, 10)
+        let target: Session | undefined
+        if (!isNaN(numIdx) && numIdx >= 1 && numIdx <= subAgents.length) {
+          target = subAgents[numIdx - 1]
+        } else {
+          target = subAgents.find((s) => s.title.toLowerCase().includes(query))
+        }
+        if (!target) {
+          const list = subAgents.map((s, i) => `${i + 1}. ${s.title}`).join('\n')
+          const msg = await el.db.addMessage(sess.id, 'system', `No sub-agent matching \`${args.trim()}\`.\n\nRunning agents:\n${list}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        el.pi.abort(target.id)
+        store.updateSession(target.id, { agentStatus: 'done' })
+        const msg = await el.db.addMessage(sess.id, 'system', `**Stopped:** ${target.title}`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'search': {
+        if (!args.trim()) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/search <query>` — search messages in the current session.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const query = args.trim().toLowerCase()
+        const msgs = useAppStore.getState().messages
+        const matches: { idx: number; role: string; snippet: string }[] = []
+        for (let i = 0; i < msgs.length; i++) {
+          const m = msgs[i]
+          const lowerContent = m.content.toLowerCase()
+          const matchIdx = lowerContent.indexOf(query)
+          if (matchIdx !== -1) {
+            const start = Math.max(0, matchIdx - 30)
+            const end = Math.min(m.content.length, matchIdx + query.length + 50)
+            const prefix = start > 0 ? '...' : ''
+            const suffix = end < m.content.length ? '...' : ''
+            const snippet = `${prefix}${m.content.slice(start, end).replace(/\n/g, ' ')}${suffix}`
+            matches.push({ idx: i + 1, role: m.role, snippet })
+          }
+        }
+        if (matches.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', `No matches found for **"${args.trim()}"** in ${msgs.length} messages.`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const resultLines: string[] = [`**Search Results:** ${matches.length} match${matches.length === 1 ? '' : 'es'} for **"${args.trim()}"** (in ${msgs.length} messages)\n`]
+        for (const m of matches.slice(0, 20)) {
+          const roleLabel = m.role === 'user' ? '👤 User' : m.role === 'assistant' ? '🤖 Assistant' : m.role === 'system' ? '⚙️ System' : m.role
+          resultLines.push(`**#${m.idx}** ${roleLabel}: ${m.snippet}`)
+        }
+        if (matches.length > 20) {
+          resultLines.push(`\n*...and ${matches.length - 20} more matches*`)
+        }
+        const searchMsg = await el.db.addMessage(sess.id, 'system', resultLines.join('\n'))
+        if (searchMsg) store.appendMessage(parseMessage(searchMsg))
+        break
+      }
+      case 'export-all': {
+        const { sessions } = useAppStore.getState()
+        if (sessions.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No sessions to export.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const exportLines: string[] = []
+        exportLines.push('# Ares — All Sessions Export')
+        exportLines.push('')
+        exportLines.push(`*Exported ${new Date().toISOString().slice(0, 10)} · ${sessions.length} sessions*`)
+        exportLines.push('')
+        exportLines.push('---')
+        exportLines.push('')
+
+        let totalMessages = 0
+        for (const s of sessions) {
+          const rawMsgs = await el.db.getMessages(s.id)
+          const parsed = rawMsgs.map(parseMessage)
+          totalMessages += parsed.length
+          exportLines.push(`## ${s.title || 'Untitled Session'}`)
+          exportLines.push('')
+          exportLines.push(`*Created: ${new Date(s.createdAt).toLocaleString()} · Messages: ${parsed.length} · Model: ${s.model || 'default'}${s.notes ? ' · Notes: ' + s.notes : ''}*`)
+          exportLines.push('')
+          for (const m of parsed) {
+            const role = m.role === 'assistant' ? '**Assistant**' : m.role === 'user' ? '**User**' : m.role === 'system' ? '*System*' : `*${m.role}*`
+            exportLines.push(`### ${role}`)
+            exportLines.push('')
+            exportLines.push(m.content)
+            if (m.toolName) {
+              exportLines.push('')
+              exportLines.push(`*Tool: \`${m.toolName}\`*`)
+            }
+            exportLines.push('')
+            exportLines.push('---')
+            exportLines.push('')
+          }
+        }
+
+        const md = exportLines.join('\n')
+        const blob = new Blob([md], { type: 'text/markdown' })
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        a.download = `ares-all-sessions-${new Date().toISOString().slice(0, 10)}.md`
+        a.click()
+        URL.revokeObjectURL(url)
+
+        const exportMsg = await el.db.addMessage(sess.id, 'system', `**Exported** ${sessions.length} sessions (${totalMessages} total messages) as Markdown (${md.length.toLocaleString()} characters).`)
+        if (exportMsg) store.appendMessage(parseMessage(exportMsg))
+        break
+      }
+      case 'stats': {
+        const msgs = useAppStore.getState().messages
+        if (msgs.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to analyze.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const roleCounts: Record<string, number> = {}
+        let totalChars = 0
+        let toolCalls = 0
+        const toolNames: Record<string, number> = {}
+        const hourlyActivity: Record<number, number> = {}
+        let earliest = Infinity
+        let latest = 0
+
+        for (const m of msgs) {
+          roleCounts[m.role] = (roleCounts[m.role] || 0) + 1
+          totalChars += m.content.length
+          if (m.toolName) {
+            toolCalls++
+            toolNames[m.toolName] = (toolNames[m.toolName] || 0) + 1
+          }
+          const hour = new Date(m.createdAt).getHours()
+          hourlyActivity[hour] = (hourlyActivity[hour] || 0) + 1
+          if (m.createdAt < earliest) earliest = m.createdAt
+          if (m.createdAt > latest) latest = m.createdAt
+        }
+
+        const avgMsgLength = Math.round(totalChars / msgs.length)
+        const durationMs = latest - earliest
+        const durationMin = Math.round(durationMs / 60000)
+        const msgsPerMin = durationMin > 0 ? (msgs.length / durationMin).toFixed(1) : '∞'
+        const peakHour = Object.entries(hourlyActivity).sort(([, a], [, b]) => b - a)[0]
+
+        const lines: string[] = ['**Session Statistics**\n']
+        lines.push(`**Total messages:** ${msgs.length}`)
+        const roleParts = Object.entries(roleCounts).map(([r, c]) => `${r}: ${c}`)
+        lines.push(`**By role:** ${roleParts.join(', ')}`)
+        lines.push(`**Total characters:** ${totalChars.toLocaleString()}`)
+        lines.push(`**Avg message length:** ${avgMsgLength.toLocaleString()} chars`)
+        lines.push(`**Session duration:** ${durationMin} min`)
+        lines.push(`**Message rate:** ${msgsPerMin} msgs/min`)
+        if (toolCalls > 0) {
+          lines.push(`**Tool calls:** ${toolCalls}`)
+          const toolParts = Object.entries(toolNames).sort(([, a], [, b]) => b - a).map(([n, c]) => `\`${n}\`: ${c}`)
+          lines.push(`**Tool breakdown:** ${toolParts.join(', ')}`)
+        }
+        if (peakHour) {
+          lines.push(`**Peak activity hour:** ${peakHour[0]}:00 (${peakHour[1]} messages)`)
+        }
+
+        const statsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (statsMsg) store.appendMessage(parseMessage(statsMsg))
+        break
+      }
+    }
+  }, [activeSession, store])
+
+  // ── File system ──────────────────────────────────────────────────────────────
+  const refreshTree = useCallback(async () => {
+    const { workspacePath } = useAppStore.getState()
+    if (!workspacePath) return
+    const nodes = await el.fs.readDir(workspacePath)
+    store.setFileNodes(nodes)
+  }, [])
+
+  // ── Abort ────────────────────────────────────────────────────────────────────
+  const handleAbort = useCallback(() => {
+    const sess = useAppStore.getState().sessions.find(
+      (s) => s.id === useAppStore.getState().activeTabId
+    )
+    if (!sess) return
+    el.pi.abort(sess.id)
+    useAppStore.getState().setLoading(false)
+  }, [])
+
+  // ── Plan Preview: approve ─────────────────────────────────────────────────────
+  const handleApprovePlan = useCallback(async () => {
+    if (!pendingPlan) return
+    const { sessionId, expandedMessages, model, workspacePath, permissionMode, effort } = pendingPlan
+    setPendingPlan(null)
+    setPlanPreviewContent('')
+
+    const sess = useAppStore.getState().sessions.find((s) => s.id === sessionId)
+    if (!sess) return
+
+    // Add a system message indicating plan approved
+    const approvedMsg = await el.db.addMessage(sessionId, 'system', '**Plan approved.** Executing...')
+    if (approvedMsg) store.appendMessage(parseMessage(approvedMsg))
+
+    // Start the Pi SDK agent with the expanded messages
+    store.setLoading(true)
+    const streamingId = uuidv4()
+    const streamStartTime = Date.now()
+    let streamTotalChars = 0
+    let streamingMsg = {
+      id: streamingId, sessionId, role: 'assistant' as const,
+      content: '', thinking: undefined as string | undefined, isStreaming: true, createdAt: Date.now(),
+    }
+
+    await sendMessage(
+      model,
+      expandedMessages,
+      (chunk) => {
+        streamingMsg = { ...streamingMsg, content: chunk }
+        streamTotalChars = chunk.length
+        store.upsertMessage(streamingId, streamingMsg)
+      },
+      async (fullText, thinking, usage) => {
+        const duration = Date.now() - streamStartTime
+        const tokenCount = usage?.completionTokens ?? Math.round(fullText.length / 4)
+        const rawA = await el.db.addMessage(sessionId, 'assistant', fullText, { thinking })
+        const aMsg = rawA
+          ? { ...parseMessage(rawA), tokenCount, duration }
+          : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false, tokenCount, duration }
+        store.removeMessage(streamingId)
+        store.appendMessage(aMsg)
+        const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
+        store.updateSession(sessionId, { messageCount: (current?.messageCount ?? 0) + 1 })
+        store.setLoading(false)
+        refreshTree()
+      },
+      async (toolName, toolInput) => {
+        const rawT = await el.db.addMessage(sessionId, 'tool', '', { toolName, toolStatus: 'running', toolInput })
+        if (rawT) store.appendMessage(parseMessage(rawT))
+      },
+      async (toolOutput) => {
+        const runningTool = useAppStore.getState().messages.slice().reverse().find(
+          (m) => m.role === 'tool' && m.toolStatus === 'running'
         )
         store.updateRunningTool({ toolStatus: 'done', toolOutput })
         if (runningTool) {
@@ -478,1160 +2402,179 @@ export default function App(): React.ReactElement {
         store.appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
         store.setLoading(false)
       },
-      (sess.permissionMode ?? store.settings.permissionMode) as PermissionMode,
+      permissionMode as PermissionMode,
       onToolPermission,
       workspacePath,
-      sess.effort ?? 'medium',
+      effort,
       (thinkingChunk) => {
         streamingMsg = { ...streamingMsg, thinking: thinkingChunk }
         store.upsertMessage(streamingId, streamingMsg)
       },
-      agentMode,
+      'agent' as 'chat' | 'plan' | 'agent',
     )
-  }, [activeSession, replyTo, sendMessage, expandMentions, onToolPermission, refreshTree])
+  }, [pendingPlan, sendMessage, refreshTree, onToolPermission, store])
 
-  // ── Edit message ─────────────────────────────────────────────────────────────
-  const handleEditMessage = useCallback(async (id: string, content: string) => {
-    await el.db.updateMessage(id, { content })
-    store.upsertMessage(id, { ...useAppStore.getState().messages.find((m) => m.id === id)!, content })
-  }, [])
+  // ── Plan Preview: cancel ──────────────────────────────────────────────────────
+  const handleCancelPlan = useCallback(async () => {
+    if (!pendingPlan) return
+    // Delete the plan system message (last message, which is the plan)
+    const msgs = useAppStore.getState().messages
+    const planMsg = msgs[msgs.length - 1]
+    if (planMsg?.role === 'system' && planMsg.content.includes('🧠 Plan')) {
+      await el.db.deleteMessage(planMsg.id)
+      store.removeMessage(planMsg.id)
+    }
+    setPendingPlan(null)
+    setPlanPreviewContent('')
+  }, [pendingPlan])
 
-  // ── Regenerate assistant response ───────────────────────────────────────────
-  const handleRegenerate = useCallback(async (assistantMsg: Message) => {
-    const { messages, isLoading } = useAppStore.getState()
+  // ── Send message ─────────────────────────────────────────────────────────────
+  const handleSend = useCallback(async (text: string, attachments: FileAttachment[]) => {
+    const { isLoading, messages, workspacePath } = useAppStore.getState()
     const sess = activeSession
     if (!sess || isLoading) return
 
-    // Find the user message immediately before this assistant message
-    const assistantIdx = messages.findIndex((m) => m.id === assistantMsg.id)
-    if (assistantIdx <= 0) return
-    const userMsg = messages.slice(0, assistantIdx).reverse().find((m) => m.role === 'user')
-    if (!userMsg) return
+    // Build replyTo data for persistence
+    const replyToData = replyTo
+      ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role }
+      : undefined
 
-    // Remove all messages from the assistant message onward
-    const toDelete = messages.slice(assistantIdx)
-    for (const m of toDelete) {
-      await el.db.deleteMessage(m.id)
-    }
-    store.setMessages(messages.slice(0, assistantIdx))
-
-    // Re-send the user message
-    handleSend(userMsg.content, userMsg.attachments ?? [])
-  }, [activeSession, handleSend])
-
-  // ── Edit-then-resend (prefill input instead of auto-send) ──────────────────
-  const handleEditResend = useCallback(async (assistantMsg: Message) => {
-    const { messages, isLoading } = useAppStore.getState()
-    const sess = activeSession
-    if (!sess || isLoading) return
-
-    // Find the user message immediately before this assistant message
-    const assistantIdx = messages.findIndex((m) => m.id === assistantMsg.id)
-    if (assistantIdx <= 0) return
-    const userMsg = messages.slice(0, assistantIdx).reverse().find((m) => m.role === 'user')
-    if (!userMsg) return
-
-    // Remove all messages from the assistant message onward
-    const toDelete = messages.slice(assistantIdx)
-    for (const m of toDelete) {
-      await el.db.deleteMessage(m.id)
-    }
-    store.setMessages(messages.slice(0, assistantIdx))
-
-    // Prefill the input bar
-    setPrefillText(userMsg.content)
-  }, [activeSession])
-
-  // ── Delete message with undo ────────────────────────────────────────────────
-  const lastDeletedRef = useRef<Message | null>(null)
-
-  const handleDeleteMessage = useCallback(async (msg: Message) => {
-    lastDeletedRef.current = msg
-    await el.db.deleteMessage(msg.id)
-    store.removeMessage(msg.id)
-
-    toast('Message deleted', {
-      action: {
-        label: 'Undo',
-        onClick: () => {
-          const deleted = lastDeletedRef.current
-          if (!deleted) return
-          el.db.addMessage(deleted.sessionId, deleted.role, deleted.content, {
-            attachments: deleted.attachments,
-            toolName: deleted.toolName,
-            toolStatus: deleted.toolStatus,
-            toolInput: deleted.toolInput,
-            toolOutput: deleted.toolOutput,
-            thinking: deleted.thinking,
-            replyTo: deleted.replyTo ? { id: deleted.replyTo.id, content: deleted.replyTo.content, role: deleted.replyTo.role } : undefined,
-          }).then((raw) => {
-            const restored = parseMessage(raw)
-            store.appendMessage(restored)
-          })
-          lastDeletedRef.current = null
-        },
-      },
-      duration: 5000,
+    const rawUser = await el.db.addMessage(sess.id, 'user', text, {
+      attachments,
+      replyTo: replyToData,
     })
-  }, [])
-
-  // ── Message reactions ────────────────────────────────────────────────────────
-  const handleReact = useCallback(async (id: string, reactions: { up: boolean | null }) => {
-    const msg = useAppStore.getState().messages.find((m) => m.id === id)
-    if (!msg) return
-    const updated = { ...msg, reactions }
-    store.upsertMessage(id, updated)
-    await el.db.updateMessage(id, { reactions: JSON.stringify(reactions) })
-  }, [])
-
-  // ── Reply handler ────────────────────────────────────────────────────────────
-  const handleReply = useCallback((message: Message) => {
-    setReplyTo(message)
-  }, [])
-
-  const handleCancelReply = useCallback(() => {
-    setReplyTo(null)
-  }, [])
-
-  // ── File operations ──────────────────────────────────────────────────────────
-  const handleFsCreateFile = useCallback(async (parentPath: string, name: string) => {
-    const fullPath = parentPath + '/' + name
-    await el.fs.createFile(fullPath)
-    await refreshTree()
-    store.openFileTab({ name, path: fullPath, type: 'file' })
-  }, [refreshTree])
-
-  const handleFsCreateFolder = useCallback(async (parentPath: string, name: string) => {
-    await el.fs.createFolder(parentPath + '/' + name)
-    await refreshTree()
-  }, [refreshTree])
-
-  const handleFsRename = useCallback(async (oldPath: string, newName: string) => {
-    const dir = oldPath.substring(0, oldPath.lastIndexOf('/'))
-    const newPath = dir + '/' + newName
-    await el.fs.rename(oldPath, newPath)
-    await refreshTree()
-    store.renameTabPaths(oldPath, newPath, newName)
-  }, [refreshTree])
-
-  const handleFsDelete = useCallback(async (node: FileNode) => {
-    await el.fs.delete(node.path)
-    await refreshTree()
-    store.removeTabsByPath(node.path, node.type === 'directory')
-  }, [refreshTree])
-
-  const handleSaveSettings = useCallback(async (s: typeof store.settings) => {
-    await el.settings.set(s)
-    store.setSettings(s)
-    applyTheme(s.themeId)
-    applyColorMode(s.colorMode)
-  }, [])
-
-  const handleToggleColorMode = useCallback(async () => {
-    const settings = useAppStore.getState().settings
-    const next = { ...settings, colorMode: settings.colorMode === 'dark' ? 'light' as const : 'dark' as const }
-    await el.settings.set(next)
-    useAppStore.getState().setSettings(next)
-    applyColorMode(next.colorMode)
-  }, [])
-
-  const handleDeleteAllSessions = useCallback(async () => {
-    const sessions = useAppStore.getState().sessions
-    await Promise.all(sessions.map((s) => handleDeleteSession(s.id)))
-  }, [handleDeleteSession])
-
-  const handleOpenFolder = useCallback(async () => {
-    const p = await el.dialog.openFolder()
-    if (!p) return
-    await el.workspace.setPath(p)
-    const nodes = await el.fs.readDir(p)
-    store.setWorkspace(p, nodes)
-    store.setActiveView('explorer')
-    el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
-    // Save workspace to current session
-    const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
-    if (sess) {
-      await el.db.updateSession(sess.id, { workspace_path: p })
-      store.updateSession(sess.id, { workspacePath: p })
-    }
-  }, [activeSession])
-
-  const handleSelectProject = useCallback(async (path: string) => {
-    await el.workspace.setPath(path)
-    const nodes = await el.fs.readDir(path)
-    store.setWorkspace(path, nodes)
-    store.setActiveView('explorer')
-    el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
-    // Save workspace to current session
-    const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
-    if (sess) {
-      await el.db.updateSession(sess.id, { workspace_path: path })
-      store.updateSession(sess.id, { workspacePath: path })
-    }
-  }, [activeSession])
-
-  // Wraps store.selectTab to also switch workspace when clicking a session tab
-  const handleSelectTab = useCallback((id: string) => {
-    const tab = useAppStore.getState().tabs.find((t) => tabKey(t) === id)
-    store.selectTab(id)
-    if (tab?.type === 'session') handleSelectSession(tab.id)
-  }, [handleSelectSession])
-
-  // ── Side Chat operations ──────────────────────────────────────────────────────
-  const handleOpenSideChat = useCallback(async () => {
-    const currentSess = useAppStore.getState().sessions.find(
-      (s) => s.id === useAppStore.getState().activeTabId
-    )
-    if (!currentSess) return
-
-    const currentWp = useAppStore.getState().workspacePath
-    const raw = await el.db.createSession(
-      'Side chat',
-      currentSess.model || store.settings.defaultModel,
-      null,
-      true
-    )
-    const session = parseSession(raw)
-    if (currentWp) {
-      await el.db.updateSession(session.id, { workspace_path: currentWp })
-      session.workspacePath = currentWp
-    }
-    store.addSession(session)
-    store.setSideChat(session.id)
-    store.setSideChatMessages([])
-    store.setSideChatLoading(false)
-    // Load side chat messages (empty for new session)
-    el.db.getMessages(session.id).then((raw) => {
-      store.setSideChatMessages(raw.map(parseMessage))
-    })
-  }, [store])
-
-  const handleCloseSideChat = useCallback(() => {
-    store.setSideChat(null)
-    store.setSideChatMessages([])
-    store.setSideChatLoading(false)
-  }, [store])
-
-  // Side chat runs in plain chat mode — no tools, just streaming Q&A next to the main session.
-  const handleSendSideChat = useCallback(async (text: string) => {
-    const { sideChatSessionId, sideChatIsLoading, sideChatMessages, settings } = useAppStore.getState()
-    if (!sideChatSessionId || sideChatIsLoading || !text.trim()) return
-
-    const sess = useAppStore.getState().sessions.find((s) => s.id === sideChatSessionId)
-    const rawUser = await el.db.addMessage(sideChatSessionId, 'user', text)
     if (!rawUser) return
     const userMsg = parseMessage(rawUser)
-    store.appendSideChatMessage(userMsg)
+    store.appendMessage(userMsg)
 
-    if (sideChatMessages.length === 0 && text.trim()) {
-      const title = text.slice(0, 60).trim()
-      await el.db.updateSession(sideChatSessionId, { title })
-      store.updateSession(sideChatSessionId, { title })
+    // Clear reply after sending
+    setReplyTo(null)
+
+    if (messages.length === 0 && text.trim()) {
+      const title = text.slice(0, 100).replace(/@\S+\s*/g, '').trim() || text.slice(0, 40)
+      await el.db.updateSession(sess.id, { title })
+      store.updateSession(sess.id, { title })
     }
 
-    const sideModel = sess?.model || settings.defaultModel || 'gpt-4o-mini'
-    let sideHistory = [...sideChatMessages, userMsg]
-    if (needsCompaction(sideHistory, sideModel) && hasProvider(settings)) {
+    const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+
+    // Compact when the conversation nears the model's context limit
+    let history = [...messages, userMsg]
+    if (needsCompaction(history, model) && hasProvider(store.settings)) {
       try {
-        const result = await compactConversation(sideChatSessionId, sideHistory, settings, sideModel)
+        const result = await compactConversation(sess.id, history, store.settings, model)
         if (result.compacted > 0) {
-          sideHistory = result.messages
-          store.setSideChatMessages(sideHistory)
+          history = result.messages
+          store.setMessages(history)
+          toast('Context compacted', {
+            description: `${result.compacted} earlier messages summarized to stay within the context window`,
+          })
         }
-      } catch { /* send uncompacted */ }
+      } catch {
+        // Summarization failed — send uncompacted and let the provider complain if it must
+      }
     }
 
-    store.setSideChatLoading(true)
+    const expandedMessages = await expandMentions(history, workspacePath)
+
+    // ── Plan Preview: generate plan before agent execution ──
+    if (agentMode === 'agent' && store.settings.planPreviewEnabled && !pendingPlan) {
+      store.setLoading(true)
+
+      // Generate plan via chat completion
+      const planMessages = expandedMessages.map((m) => ({
+        role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+        content: m.content,
+      }))
+      const planSystemPrompt = 'You are about to execute a task. Before executing, produce a focused plan covering:\n\n1. What you will do (3-7 concise bullet points)\n2. Which files will be created, modified, or read\n\nFormat: concise markdown. Do NOT write code — only describe what you will do.'
+
+      try {
+        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const response = await fetch(`${baseUrl}/chat/completions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: modelId,
+            messages: [
+              { role: 'system', content: planSystemPrompt },
+              ...planMessages.slice(-10),
+            ],
+            stream: false,
+          }),
+        })
+
+        if (response.ok) {
+          const json = await response.json()
+          const planContent = json.choices?.[0]?.message?.content ?? 'Plan could not be generated.'
+
+          // Save plan as a system message
+          const planContentFormatted = `**🧠 Plan**\n\n${planContent}\n\n*Review the plan above, then click "Execute this plan" to proceed or "Cancel" to stop.*`
+          const planRaw = await el.db.addMessage(sess.id, 'system', planContentFormatted)
+          if (planRaw) store.appendMessage(parseMessage(planRaw))
+
+          // Store pending plan state
+          setPendingPlan({
+            sessionId: sess.id,
+            expandedMessages,
+            model: modelId,
+            originalText: text,
+            workspacePath,
+            permissionMode: sess.permissionMode ?? store.settings.permissionMode,
+            effort: sess.effort ?? 'medium',
+          })
+          setPlanPreviewContent(planContent)
+          store.setLoading(false)
+          return // Don't start agent yet
+        }
+      } catch {
+        // Plan generation failed — fall through to normal agent execution
+      }
+
+      store.setLoading(false)
+    }
+
+    store.setLoading(true)
     const streamingId = uuidv4()
-    let streamingMsg: Message = {
-      id: streamingId, sessionId: sideChatSessionId, role: 'assistant',
-      content: '', isStreaming: true, createdAt: Date.now(),
+    const streamStartTime = Date.now()
+    let streamTotalChars = 0
+    let streamingMsg = {
+      id: streamingId, sessionId: sess.id, role: 'assistant' as const,
+      content: '', thinking: undefined as string | undefined, isStreaming: true, createdAt: Date.now(),
     }
 
     await sendMessage(
-      sideModel,
-      sideHistory,
+      model,
+      expandedMessages,
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
-        store.upsertSideChatMessage(streamingId, streamingMsg)
+        streamTotalChars = chunk.length
+        store.upsertMessage(streamingId, streamingMsg)
       },
-      async (_fullText, _thinking, usage) => {
+      async (fullText, thinking, usage) => {
         const duration = Date.now() - streamStartTime
-        const tokenCount = usage?.completionTokens ?? Math.round(_fullText.length / 4)
-        const rawA = await el.db.addMessage(sideChatSessionId, 'assistant', _fullText)
-        store.removeSideChatMessage(streamingId)
+        const tokenCount = usage?.completionTokens ?? Math.round(fullText.length / 4)
+        const rawA = await el.db.addMessage(sess.id, 'assistant', fullText, { thinking })
         const aMsg = rawA
           ? { ...parseMessage(rawA), tokenCount, duration }
-          : { ...streamingMsg, id: uuidv4(), isStreaming: false, tokenCount, duration }
-        store.appendSideChatMessage(aMsg)
-        store.setSideChatLoading(false)
+          : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false, tokenCount, duration }
+        store.removeMessage(streamingId)
+        store.appendMessage(aMsg)
+        const current = useAppStore.getState().sessions.find((s) => s.id === sess.id)
+        store.updateSession(sess.id, { messageCount: (current?.messageCount ?? 0) + 1 })
+        store.setLoading(false)
+        refreshTree()
       },
-      undefined,
-      undefined,
-      (err) => {
-        store.removeSideChatMessage(streamingId)
-        store.appendSideChatMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
-        store.setSideChatLoading(false)
+      async (toolName, toolInput) => {
+        const rawT = await el.db.addMessage(sess.id, 'tool', '', { toolName, toolStatus: 'running', toolInput })
+        if (rawT) store.appendMessage(parseMessage(rawT))
       },
-      undefined,
-      undefined,
-      null,
-      undefined,
-      undefined,
-      'chat',
-    )
-  }, [sendMessage, store])
-
-  const handleAbortSideChat = useCallback(() => {
-    const id = useAppStore.getState().sideChatSessionId
-    if (id) el.pi.abort(id)
-    useAppStore.getState().setSideChatLoading(false)
-  }, [])
-
-  const handlePromoteSideChat = useCallback(async () => {
-    const sideChatId = useAppStore.getState().sideChatSessionId
-    if (!sideChatId) return
-
-    const session = useAppStore.getState().sessions.find((s) => s.id === sideChatId)
-    if (!session) return
-
-    await el.db.updateSession(sideChatId, { is_side_chat: false })
-    store.updateSession(sideChatId, { isSideChat: false })
-    store.openSessionTab(session)
-    await el.db.getMessages(sideChatId).then((raw) => {
-      store.setMessages(raw.map(parseMessage))
-    })
-    store.setSideChat(null)
-    store.setSideChatMessages([])
-    store.setSideChatLoading(false)
-  }, [store])
-
-  // ── Render ───────────────────────────────────────────────────────────────────
-  return (
-    <div className={cn('flex flex-col h-screen w-screen overflow-hidden bg-background', store.zenMode && 'zen-mode')}>
-      {!store.zenMode && (
-        <div className="drag-region relative flex h-10 shrink-0 items-center justify-center border-b border-border">
-          {/* HUD readouts — left offset clears the macOS traffic lights */}
-          <span className="pointer-events-none absolute left-20 flex select-none items-center gap-2 font-mono text-[9px] tracking-[0.2em] text-muted-foreground/60">
-            <span className="size-1 bg-primary" />
-            SYS // ARES 0.1.0
-          </span>
-          <span className="no-drag pointer-events-none select-none font-display text-[11px] font-black tracking-[0.5em] text-foreground/40">
-            ARES
-          </span>
-          <span className="pointer-events-none absolute right-4 select-none">
-            <HudClock />
-          </span>
-        </div>
-      )}
-
-      <div className="flex flex-1 overflow-hidden">
-        {!store.zenMode && (<>
-          <ActivityBar
-            activeView={store.activeView}
-            onChangeView={store.setActiveView}
-            terminalOpen={store.terminalOpen}
-            onToggleTerminal={store.toggleTerminal}
-            gitBadge={gitBadge}
-            agentBadge={store.sessions.filter((s) => s.agentStatus === 'running').length}
-          />
-
-          {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
-            <Sidebar
-              mode={store.activeView}
-              sessions={store.sessions}
-              activeSessionId={activeSessionTab?.id ?? null}
-              onNewSession={handleNewSession}
-              onSelectSession={handleSelectSession}
-              onDeleteSession={handleDeleteSession}
-              onTogglePinSession={handleTogglePinSession}
-              onArchiveSession={handleArchiveSession}
-              fileNodes={store.fileNodes}
-              workspacePath={store.workspacePath}
-              selectedFilePath={store.activeTabId}
-              onOpenFile={store.openFileTab}
-              onOpenFolder={handleOpenFolder}
-              onFsCreateFile={handleFsCreateFile}
-              onFsCreateFolder={handleFsCreateFolder}
-              onFsRename={handleFsRename}
-              onFsDelete={handleFsDelete}
-            />
-          )}
-        </>)}
-
-        <div className="flex flex-1 flex-col overflow-hidden">
-          {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
-            <TabBar
-              tabs={store.tabs}
-              activeTabId={store.activeTabId}
-              onSelectTab={handleSelectTab}
-              onCloseTab={handleCloseTab}
-              onNewSession={handleNewSession}
-            />
-          )}
-
-          <div className="flex flex-1 flex-col overflow-hidden min-h-0">
-          <Suspense fallback={<PanelFallback />}>
-           {store.activeView === 'settings' ? (
-              <SettingsPanel
-                settings={store.settings}
-                onSave={handleSaveSettings}
-                sessionCount={store.sessions.length}
-                onDeleteAllSessions={handleDeleteAllSessions}
-              />
-            ) : store.activeView === 'extensions' ? (
-              <ExtensionsPanel />
-            ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (
-              <ErrorBoundary key="commit-detail"><CommitDetail /></ErrorBoundary>
-            ) : activeTab?.type === 'file' ? (
-              <FileEditor
-                path={activeTab.path}
-                onDirtyChange={(dirty) => store.setTabDirty(activeTab.path, dirty)}
-                onClose={(p) => { store.closeTab(p); store.removeTabsByPath(p, false) }}
-              />
-            ) : activeTab?.type === 'session' && activeSession ? (
-              <div className="flex flex-1 flex-col min-h-0">
-                <ChatTabBar
-                  tabs={[
-                    { id: activeSession.id, title: activeSession.title, isSideChat: false },
-                    ...(store.sideChatSessionId
-                      ? [{
-                          id: store.sideChatSessionId,
-                          title: store.sessions.find((s) => s.id === store.sideChatSessionId)?.title ?? 'Side chat',
-                          isSideChat: true,
-                        }]
-                      : []),
-                  ]}
-                  activeTabId={store.activeTabId}
-                  sideChatSessionId={store.sideChatSessionId}
-                  onSelectTab={(id) => {
-                    if (id === store.sideChatSessionId) {
-                      // Activating side chat tab - promote to main
-                      handlePromoteSideChat()
-                    } else {
-                      handleSelectTab(id)
-                    }
-                  }}
-                  onCloseTab={(id) => {
-                    if (id === store.sideChatSessionId) {
-                      handleCloseSideChat()
-                    }
-                  }}
-                  onNewSideChat={handleOpenSideChat}
-                />
-                <div className={cn('flex flex-1 overflow-hidden min-h-0', store.sideChatSessionId && 'divide-x divide-border')}>
-                  <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
-                    <ChatView
-                      messages={store.messages}
-                      sessionTitle={activeSession.title}
-                      modelName={activeSession.model}
-                      isLoading={store.isLoading}
-                      onSuggestion={(text) => handleSend(text, [])}
-                      todos={store.todos}
-                      onReply={handleReply}
-                      onEdit={handleEditMessage}
-                      onDelete={handleDeleteMessage}
-                      onRegenerate={handleRegenerate}
-                      onReact={handleReact}
-                      onEditResend={handleEditResend}
-                    />
-                    {pendingPerm && (
-                      <PermissionPrompt
-                        toolName={pendingPerm.toolName}
-                        toolArgs={pendingPerm.toolArgs}
-                        onApprove={handlePermApprove}
-                        onDeny={handlePermDeny}
-                      />
-                    )}
-                    {pendingQuestion?.sessionId === activeSession.id && (
-                      <AgentQuestionCard
-                        questions={pendingQuestion.questions}
-                        onSubmit={handleQuestionSubmit}
-                      />
-                    )}
-                    {/* ── Plan Preview ─────────────────────────────── */}
-                    {planPreviewContent && pendingPlan && (
-                      <PlanPreview
-                        content={planPreviewContent}
-                        onApprove={handleApprovePlan}
-                        onCancel={handleCancelPlan}
-                      />
-                    )}
-                    <InputBar
-                      onSend={handleSend}
-                      onCommand={handleCommand}
-                      onRevealInExplorer={() => {
-                        if (store.workspacePath) {
-                          store.setActiveView('explorer')
-                        } else {
-                          handleOpenFolder()
-                        }
-                      }}
-                      disabled={store.isLoading}
-                      placeholder={`Ask ${displayModel(activeSession.model || store.settings.defaultModel)}…`}
-                      workspacePath={store.workspacePath}
-                      fileNodes={store.fileNodes}
-                      apiBaseUrl={store.settings.apiBaseUrl}
-                      apiKey={store.settings.apiKey}
-                      providers={store.settings.providers}
-                      recentProjects={store.recentProjects}
-                      onSelectProject={handleSelectProject}
-                      onOpenFinder={handleOpenFolder}
-                      currentModel={activeSession.model || store.settings.defaultModel}
-                      messages={store.messages}
-                      effort={activeSession.effort ?? 'medium'}
-                      onEffortChange={(e) => {
-                        store.updateSession(activeSession.id, { effort: e as EffortLevel })
-                        el.db.updateSession(activeSession.id, { effort: e })
-                      }}
-                      permissionMode={activeSession.permissionMode ?? store.settings.permissionMode}
-                      onPermissionModeChange={(m) => {
-                        store.updateSession(activeSession.id, { permissionMode: m })
-                        el.db.updateSession(activeSession.id, { permissionMode: m })
-                      }}
-                      agentMode={agentMode}
-                      onAgentModeChange={setAgentMode}
-                      colorMode={store.settings.colorMode}
-                      onToggleColorMode={handleToggleColorMode}
-                      pluginSkills={agentSkills}
-                      pluginCommands={agentCommands}
-                      replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
-                      onCancelReply={handleCancelReply}
-                      prefillText={prefillText}
-                      onPrefillConsumed={() => setPrefillText(null)}
-                    />
-                  </div>
-
-                  {/* ── Side Chat Pane ──────────────────────────────────────────── */}
-                  {store.sideChatSessionId && (() => {
-                    const sideSession = store.sessions.find((s) => s.id === store.sideChatSessionId)
-                    if (!sideSession) return null
-                    return (
-                      <div className="flex flex-1 flex-col min-w-0 overflow-hidden border-l border-border bg-background/50">
-                        <div className="flex items-center gap-1 px-2 py-1.5 text-[11px] text-muted-foreground border-b border-border bg-card/30">
-                          <span className="font-medium text-primary/80">Side Chat</span>
-                          <button
-                            onClick={handleCloseSideChat}
-                            className="ml-auto flex size-4 items-center justify-center rounded hover:bg-accent"
-                            aria-label="Close side chat"
-                            title="Close side chat"
-                          >
-                            <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5">
-                              <path d="M4 4l8 8M12 4l-8 8" />
-                            </svg>
-                          </button>
-                        </div>
-                        <ChatView
-                          messages={store.sideChatMessages}
-                          sessionTitle={sideSession.title}
-                          modelName={sideSession.model}
-                          isLoading={store.sideChatIsLoading}
-                          onSuggestion={handleSendSideChat}
-                        />
-                        <SideChatInput
-                          onSend={handleSendSideChat}
-                          disabled={store.sideChatIsLoading}
-                          onCancel={handleAbortSideChat}
-                          placeholder={`Ask ${displayModel(sideSession.model || store.settings.defaultModel)}…`}
-                        />
-                      </div>
-                    )
-                  })()}
-                </div>
-              </div>
-            ) : (
-              <EmptyMain onNewSession={handleNewSession} onOpenFolder={handleOpenFolder} />
-            )}
-          </Suspense>
-          </div>
-
-          {store.terminalOpen && (
-            <div
-              className="shrink-0 border-t border-border"
-              style={{ height: store.terminalHeight }}
-            >
-              <Suspense fallback={<PanelFallback />}>
-              <TerminalView
-                cwd={store.workspacePath}
-                onClose={store.toggleTerminal}
-                onHeightChange={(h) => store.setTerminalHeight(h)}
-              />
-              </Suspense>
-            </div>
-          )}
-        </div>
-      </div>
-      <StatusBar
-        workspacePath={store.workspacePath}
-        currentModel={displayModel(activeSession?.model ?? store.settings.defaultModel)}
-        sessionCount={store.sessions.length}
-        messages={store.messages}
-      />
-      <Toaster />
-
-      {/* ── Modal overlays ──────────────────────────────────────────────────────── */}
-      <CommandPalette
-        open={commandPaletteOpen}
-        onClose={() => setCommandPaletteOpen(false)}
-        commands={paletteCommands}
-      />
-      <TabSwitcher
-        open={tabSwitcherOpen}
-        onClose={() => setTabSwitcherOpen(false)}
-        tabs={store.tabs}
-        activeTabId={store.activeTabId}
-        onSelectTab={handleSelectTab}
-      />
-      <QuickFileOpen
-        open={quickFileOpenOpen}
-        onClose={() => setQuickFileOpenOpen(false)}
-        workspacePath={store.workspacePath}
-        onOpenFile={(path) => {
-          const node = findFileNode(store.fileNodes, path)
-          if (node) store.openFileTab(node)
-        }}
-      />
-      <SessionSearchOverlay
-        open={searchOverlayOpen}
-        onClose={() => setSearchOverlayOpen(false)}
-        onSelectSession={handleSelectSession}
-      />
-    </div>
-  )
-}
-
-// ── Command palette entries ───────────────────────────────────────────────────
-function usePaletteCommands(store: ReturnType<typeof useAppStore.getState>): CommandEntry[] {
-  return [
-    { id: 'new-session', label: 'New session', description: 'Create a new chat session', category: 'General', action: () => store.openSessionTab({ id: crypto.randomUUID(), title: 'New session', model: store.settings.defaultModel, createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 }) },
-    { id: 'toggle-terminal', label: 'Toggle terminal', description: 'Open or close the terminal panel', shortcut: 'Ctrl+`', category: 'View', action: () => store.toggleTerminal() },
-    { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => store.toggleZenMode() },
-    { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => store.setActiveView('settings') },
-    { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => store.setActiveView('explorer') },
-    { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => store.setActiveView('git') },
-    { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => store.setActiveView('extensions') },
-  ]
-}
-
-// ── File tree helpers ─────────────────────────────────────────────────────────
-function findFileNode(nodes: import('@/types').FileNode[], path: string): import('@/types').FileNode | null {
-  for (const n of nodes) {
-    if (n.path === path) return n
-    if (n.children) {
-      const found = findFileNode(n.children, path)
-      if (found) return found
-    }
-  }
-  return null
-}
-
-function HudClock(): React.ReactElement {
-  const [now, setNow] = useState(() => new Date().toISOString().slice(11, 19))
-  useEffect(() => {
-    const id = setInterval(() => setNow(new Date().toISOString().slice(11, 19)), 1000)
-    return () => clearInterval(id)
-  }, [])
-  return (
-    <span className="font-mono text-[9px] tracking-[0.2em] text-muted-foreground/60">
-      {now} UTC
-    </span>
-  )
-}
-
-function EmptyMain({
-  onNewSession, onOpenFolder
-}: {
-  onNewSession: () => void
-  onOpenFolder: () => void
-}): React.ReactElement {
-  return (
-    <div className="hud-grid flex flex-1 flex-col items-center justify-center gap-4 text-center px-8">
-      <p className="text-sm text-muted-foreground">Nothing open yet.</p>
-      <div className="flex gap-2">
-        <button
-          onClick={onNewSession}
-          className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors"
-        >
-          New session
-        </button>
-        <button
-          onClick={onOpenFolder}
-          className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-foreground hover:bg-accent transition-colors"
-        >
-          Open folder
-        </button>
-      </div>
-    </div>
-  )
-pense, useCallback, useEffect, useState, useRef } from 'react'
-import { v4 as uuidv4 } from 'uuid'
-import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion, Session } from '@/types'
-import { ActivityBar } from '@/components/ActivityBar'
-import { Sidebar } from '@/components/Sidebar'
-import { TabBar } from '@/components/TabBar'
-import { ChatTabBar, type ChatTab } from '@/components/ChatTabBar'
-import { ChatView } from '@/components/ChatView'
-import { CommandPalette, type CommandEntry } from '@/components/CommandPalette'
-import { TabSwitcher } from '@/components/TabSwitcher'
-import { QuickFileOpen } from '@/components/QuickFileOpen'
-import { InputBar } from '@/components/InputBar'
-const FileEditor = React.lazy(() => import('@/components/FileEditor').then(m => ({ default: m.FileEditor })))
-const SettingsPanel = React.lazy(() => import('@/components/SettingsPanel').then(m => ({ default: m.SettingsPanel })))
-const ExtensionsPanel = React.lazy(() => import('@/components/ExtensionsPanel').then(m => ({ default: m.ExtensionsPanel })))
-const TerminalView = React.lazy(() => import('@/components/TerminalView').then(m => ({ default: m.TerminalView })))
-const CommitDetail = React.lazy(() => import('@/components/CommitDetail').then(m => ({ default: m.CommitDetail })))
-import { StatusBar } from '@/components/StatusBar'
-import { ErrorBoundary } from '@/components/ErrorBoundary'
-import { PermissionPrompt } from '@/components/PermissionPrompt'
-import { AgentQuestionCard } from '@/components/AgentQuestionCard'
-import { SessionSearchOverlay } from '@/components/SessionSearchOverlay'
-import { useAI } from '@/hooks/useAI'
-import { useAppStore } from '@/store/useAppStore'
-import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
-import { applyTheme, applyColorMode, THEMES, type ColorMode } from '@/lib/theme'
-import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
-import { estimateCost } from '@/lib/pricing'
-import { hasProvider, displayModel } from '@/lib/providers'
-import { SideChatInput } from '@/components/SideChatInput'
-import { PlanPreview } from '@/components/PlanPreview'
-import { cn } from '@/lib/utils'
-import { Toaster } from '@/components/ui/toaster'
-import { toast } from 'sonner'
-
-const el = window.electron
-
-function PanelFallback() {
-  return (
-    <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">
-      <span className="animate-pulse">Loading…</span>
-    </div>
-  )
-}
-
-function tabKey(t: Tab): string {
-  return t.type === 'session' ? t.id : t.path
-}
-
-export default function App(): React.ReactElement {
-  const store = useAppStore()
-  const { sendMessage } = useAI(store.settings)
-  const [gitBadge, setGitBadge] = useState(0)
-  const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
-  const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
-
-  // ── Agent mode (chat vs agent) ──────────────────────────────────────────────
-  const [agentMode, setAgentMode] = useState<import('@/types').AgentMode>('agent')
-
-  // ── Reply-to state ───────────────────────────────────────────────────────────
-  const [replyTo, setReplyTo] = useState<Message | null>(null)
-
-  // ── Edit-resend prefill ───────────────────────────────────────────────────
-  const [prefillText, setPrefillText] = useState<string | null>(null)
-
-  // ── Modal overlays ────────────────────────────────────────────────────────────
-  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
-  const [quickFileOpenOpen, setQuickFileOpenOpen] = useState(false)
-  const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false)
-  const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
-
-  const paletteCommands = React.useMemo(() => usePaletteCommands(store), [store])
-
-  // ── Plan preview ──────────────────────────────────────────────────
-  const [pendingPlan, setPendingPlan] = useState<{
-    sessionId: string
-    expandedMessages: Message[]
-    model: string
-    originalText: string
-    workspacePath: string | null
-    permissionMode: PermissionMode
-    effort: string
-  } | null>(null)
-  const [planPreviewContent, setPlanPreviewContent] = useState('')
-
-  // ── Agent question prompt ───────────────────────────────────────────────────
-  const [pendingQuestion, setPendingQuestion] = useState<{
-    sessionId: string
-    questionId: string
-    questions: AgentQuestion[]
-  } | null>(null)
-
-  const handleQuestionSubmit = useCallback((answers: Record<string, string>) => {
-    if (!pendingQuestion) return
-    el.pi.sendUserAnswer(pendingQuestion.questionId, answers)
-    setPendingQuestion(null)
-  }, [pendingQuestion])
-
-  // ── Permission prompt ───────────────────────────────────────────────────────
-  const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
-  const permResolver = useRef<((allow: boolean) => void) | null>(null)
-  const regenerateRef = useRef<(msg: Message) => void>(() => {})
-
-  const handlePermApprove = useCallback(() => {
-    permResolver.current?.(true)
-    permResolver.current = null
-    setPendingPerm(null)
-  }, [])
-
-  const handlePermDeny = useCallback(() => {
-    permResolver.current?.(false)
-    permResolver.current = null
-    setPendingPerm(null)
-  }, [])
-
-  const onToolPermission = useCallback(async (name: string, args: string): Promise<boolean> => {
-    return new Promise((resolve) => {
-      permResolver.current = resolve
-      setPendingPerm({ toolName: name, toolArgs: args })
-    })
-  }, [])
-
-  // ── Derived selectors ────────────────────────────────────────────────────────
-  const activeSessionTab = React.useMemo(
-    () => store.tabs.find(
-      (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
-    ),
-    [store.tabs, store.activeTabId]
-  )
-  const activeTab = React.useMemo(
-    () => store.tabs.find((t) =>
-      t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
-    ),
-    [store.tabs, store.activeTabId]
-  )
-  const activeSession = React.useMemo(
-    () => store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null,
-    [store.sessions, activeSessionTab?.id]
-  )
-
-  // ── Bootstrap ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    Promise.all([el.settings.get(), el.db.getSessions(true), el.workspace.getPath(), el.workspace.getRecent().catch(() => [])])
-      .then(([rawSettings, rawSessions, wp, recents]) => {
-        const settings = parseSettings(rawSettings)
-        store.setSettings(settings)
-        applyTheme(settings.themeId)
-        applyColorMode(settings.colorMode)
-
-        const sessions = rawSessions.map(parseSession)
-        store.setSessions(sessions)
-        store.setRecentProjects(Array.isArray(recents) ? recents : [])
-
-        if (wp) {
-          el.fs.readDir(wp).then((nodes) => store.setWorkspace(wp, nodes))
-        }
-
-        if (sessions.length > 0) store.openSessionTab(sessions[0])
-      })
-
-    const refreshAgentConfig = (cfg: import('@/types').AgentConfig | null) => {
-      if (!cfg) return
-      setAgentSkills(cfg.skills ?? [])
-      setAgentCommands(cfg.commands ?? [])
-    }
-
-    el.agentConfig.get().then(refreshAgentConfig)
-
-    const offScan = el.agentConfig.onScanResult(({ skills, extensions, mcpServers, commands }) => {
-      const total = skills + extensions + mcpServers + commands
-      if (total === 0) return
-      const parts: string[] = []
-      if (skills > 0) parts.push(`${skills} skill${skills !== 1 ? 's' : ''}`)
-      if (commands > 0) parts.push(`${commands} slash command${commands !== 1 ? 's' : ''}`)
-      if (extensions > 0) parts.push(`${extensions} extension${extensions !== 1 ? 's' : ''}`)
-      if (mcpServers > 0) parts.push(`${mcpServers} MCP server${mcpServers !== 1 ? 's' : ''}`)
-      toast(`${total} plugin${total !== 1 ? 's' : ''} found and loaded`, {
-        description: parts.join(', '),
-        duration: 5000,
-      })
-      el.agentConfig.get().then(refreshAgentConfig)
-    })
-
-    const offTodos = el.pi.onTodosUpdate((sessionId, raw) => {
-      const activeTabId = useAppStore.getState().activeTabId
-      const parsed = (raw as any[]).map(parseTodo)
-      // Only auto-set todos if they match the active session, otherwise store but don't display
-      if (sessionId === activeTabId) {
-        useAppStore.getState().setTodos(parsed)
-      }
-    })
-
-    const offAskUser = el.pi.onAskUser((sessionId, questionId, questionsJson) => {
-      try {
-        const questions = JSON.parse(questionsJson) as AgentQuestion[]
-        setPendingQuestion({ sessionId, questionId, questions })
-      } catch { /* ignore malformed */ }
-    })
-
-    const offAgentSpawned = el.pi.onAgentSpawned((rawSession) => {
-      const session = parseSession(rawSession)
-      useAppStore.getState().addSession(session)
-    })
-
-    const offAgentStatus = el.pi.onAgentStatus((sessionId, status) => {
-      const store = useAppStore.getState()
-      store.updateSession(sessionId, { agentStatus: status as import('@/types').AgentStatus })
-      // Auto-remove finished child sessions after a brief delay
-      if (status === 'done' || status === 'error') {
-        const session = store.sessions.find((s) => s.id === sessionId)
-        if (session?.parentId) {
-          setTimeout(() => {
-            const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
-            if (current && (current.agentStatus === 'done' || current.agentStatus === 'error')) {
-              el.db.deleteSession(sessionId).catch(() => {})
-              useAppStore.getState().removeSession(sessionId)
-            }
-          }, 3000)
-        }
-      }
-    })
-
-    const offCompaction = el.pi.onCompaction((_sessionId, phase) => {
-      if (phase === 'end') {
-        toast('Context compacted', {
-          description: 'Older agent conversation was summarized to stay within the context window',
-        })
-      }
-    })
-
-    const offSessionComplete = el.pi.onSessionComplete((_, title, summary, childIds) => {
-      for (const id of childIds) {
-        el.db.deleteSession(id).catch(() => {})
-        useAppStore.getState().removeSession(id)
-      }
-      toast.success(title, { description: summary, duration: 10_000 })
-    })
-
-    const offFlushError = el.dbEvents.onFlushError((msg) => {
-      toast.warning('Disk write error', { description: msg, duration: 10_000 })
-    })
-
-    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete(); offFlushError() }
-  }, [])
-
-  // Load messages and todos when active session changes
-  useEffect(() => {
-    if (!activeSessionTab) { store.setMessages([]); store.setTodos([]); return }
-    el.db.getMessages(activeSessionTab.id).then((raw) => {
-      const msgs = raw.map(parseMessage)
-      // Any tool message still 'running' is orphaned from a previous session —
-      // the Pi agent is gone so they can never complete. Fix them now.
-      const stale = msgs.filter((m) => m.role === 'tool' && m.toolStatus === 'running')
-      for (const m of stale) el.db.updateMessage(m.id, { tool_status: 'done' })
-      store.setMessages(msgs.map((m) =>
-        m.role === 'tool' && m.toolStatus === 'running' ? { ...m, toolStatus: 'done' } : m
-      ))
-    })
-    el.db.getTodos(activeSessionTab.id).then((raw) => {
-      store.setTodos(raw.map(parseTodo))
-    })
-  }, [activeSessionTab?.id])
-
-  // Load side chat messages when side chat session changes
-  useEffect(() => {
-    const scId = store.sideChatSessionId
-    if (!scId) { store.setSideChatMessages([]); return }
-    el.db.getMessages(scId).then((raw) => {
-      const msgs = raw.map(parseMessage)
-      const stale = msgs.filter((m) => m.role === 'tool' && m.toolStatus === 'running')
-      for (const m of stale) el.db.updateMessage(m.id, { tool_status: 'done' })
-      store.setSideChatMessages(msgs.map((m) =>
-        m.role === 'tool' && m.toolStatus === 'running' ? { ...m, toolStatus: 'done' } : m
-      ))
-    })
-  }, [store.sideChatSessionId])
-
-  // Git badge — poll status every 30s to show pending changes/ahead count
-  useEffect(() => {
-    const wp = store.workspacePath
-    if (!wp) { setGitBadge(0); return }
-    const poll = (): void => {
-      el.git.status(wp).then((s) => {
-        if (!s.hasRepo) { setGitBadge(0); return }
-        setGitBadge(s.ahead + s.staged.length + s.unstaged.length + s.untracked.length)
-      }).catch(() => setGitBadge(0))
-    }
-    poll()
-    const id = setInterval(poll, 30_000)
-    return () => clearInterval(id)
-  }, [store.workspacePath])
-
-  // ── Session operations ───────────────────────────────────────────────────────
-  const handleNewSession = useCallback(async () => {
-    const currentWp = useAppStore.getState().workspacePath
-    const raw = await el.db.createSession('New session', useAppStore.getState().settings.defaultModel)
-    const session = parseSession(raw)
-    // Inherit current workspace and persist it
-    if (currentWp) {
-      await el.db.updateSession(session.id, { workspace_path: currentWp })
-      session.workspacePath = currentWp
-    }
-    store.addSession(session)
-    store.openSessionTab(session)
-    store.setMessages([])
-  }, [])
-
-  const handleSelectSession = useCallback((id: string) => {
-    const session = useAppStore.getState().sessions.find((s) => s.id === id)
-    if (!session) return
-    store.openSessionTab(session)
-    if (session.workspacePath) {
-      el.workspace.setPath(session.workspacePath)
-      el.fs.readDir(session.workspacePath).then((nodes) => store.setWorkspace(session.workspacePath!, nodes))
-    } else if (useAppStore.getState().workspacePath) {
-      // Session has no workspace — clear it
-      el.workspace.setPath(null)
-      store.setWorkspace(null, [])
-    }
-  }, [])
-
-  const handleDeleteSession = useCallback(async (id: string) => {
-    await el.db.deleteSession(id)
-    store.removeSession(id)
-    store.closeTab(id)
-  }, [])
-
-  const handleTogglePinSession = useCallback(async (id: string) => {
-    const s = useAppStore.getState().sessions.find((s) => s.id === id)
-    if (!s) return
-    await el.db.updateSession(id, { pinned: !s.pinned })
-    store.togglePinSession(id)
-  }, [])
-
-  const handleArchiveSession = useCallback(async (id: string) => {
-    const s = useAppStore.getState().sessions.find((s) => s.id === id)
-    if (!s) return
-    await el.db.updateSession(id, { archived: !s.archived })
-    store.toggleArchiveSession(id)
-  }, [])
-
-  const handleRenameSession = useCallback(async (id: string, title: string) => {
-    await el.db.updateSession(id, { title })
-    store.updateSession(id, { title })
-  }, [])
-
-  const handleDuplicateSession = useCallback(async (session: Session) => {
-    const msgs = await el.db.getMessages(session.id)
-    const raw = await el.db.createSession(`${session.title} (copy)`, session.model)
-    const newSession = parseSession(raw)
-    for (const m of msgs) {
-      await el.db.addMessage(newSession.id, m.role, m.content, {
-        toolName: m.tool_name ?? undefined,
-        toolInput: m.tool_input ?? undefined,
-        toolOutput: m.tool_output ?? undefined,
-        thinking: m.thinking ?? undefined,
-      })
-    }
-    store.addSession(newSession)
-    store.openSessionTab(newSession)
-  }, [])
-
-  const handleExportSession = useCallback(async (session: Session) => {
-    const msgs = await el.db.getMessages(session.id)
-    const result = await el.session.export(session.title, session.id, msgs)
-    if (result) toast.success(`Session exported to ${result}`)
-  }, [])
-
-
-  // Close a tab: session tabs also remove from sidebar + delete from DB.
-  const handleCloseTab = useCallback(async (id: string) => {
-    const { tabs } = useAppStore.getState()
-    const tab = tabs.find((t) => tabKey(t) === id)
-    if (tab?.type === 'session') {
-      await handleDeleteSession(tab.id)
-    } else {
-      useAppStore.getState().closeTab(id)
-    }
-  }, [handleDeleteSession])
-
-  // Keyboard shortcuts — reads store state directly to avoid stale closures
-  useEffect(() => {
-    const handler = (e: KeyboardEvent): void => {
-      // Don't fire shortcuts when the user is typing in an input or textarea
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
-
-      // Abort: Escape or Ctrl+C when agent is running
-      if (e.key === 'Escape' && useAppStore.getState().isLoading) { e.preventDefault(); handleAbort(); return }
-      // Close tab on Escape when not loading
-      if (e.key === 'Escape') {
-        const { activeTabId } = useAppStore.getState()
-        if (activeTabId) { e.preventDefault(); handleCloseTab(activeTabId); return }
-      }
-      if (e.ctrlKey && e.key === 'c' && useAppStore.getState().isLoading) { e.preventDefault(); handleAbort(); return }
-
-      if (!(e.metaKey || e.ctrlKey)) return
-      const { tabs, activeTabId } = useAppStore.getState()
-
-      if (e.shiftKey && e.key === 'P') { e.preventDefault(); setCommandPaletteOpen(true); return }
-      if (e.shiftKey && e.key === 'O') { e.preventDefault(); setTabSwitcherOpen(true); return }
-      if (e.shiftKey && e.key === 'F') { e.preventDefault(); setSearchOverlayOpen(true); return }
-      if (e.shiftKey && e.key === 'R') {
-        e.preventDefault()
-        const msgs = useAppStore.getState().messages
-        const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
-        if (lastAssistant) regenerateRef.current(lastAssistant)
-        return
-      }
-      if (!e.shiftKey && e.key === 'p') { e.preventDefault(); setQuickFileOpenOpen(true); return }
-
-      if (e.key === ',') { e.preventDefault(); useAppStore.getState().setActiveView('settings'); return }
-      if (e.key === 'n' || e.key === 't') { e.preventDefault(); handleNewSession(); return }
-      if (e.key === 'w') {
-        e.preventDefault()
-        if (activeTabId) handleCloseTab(activeTabId)
-        return
-      }
-      if (e.key === '`' || e.key === 'j') { e.preventDefault(); useAppStore.getState().toggleTerminal(); return }
-      if (e.key === 'Z' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); useAppStore.getState().toggleZenMode(); return }
-      if (e.key === '[') {
-        e.preventDefault()
-        if (!tabs.length) return
-        const idx = tabs.findIndex((t) => tabKey(t) === activeTabId)
-        const prev = tabs[idx <= 0 ? tabs.length - 1 : idx - 1]
-        if (prev) useAppStore.getState().selectTab(tabKey(prev))
-        return
-      }
-      if (e.key === ']') {
-        e.preventDefault()
-        if (!tabs.length) return
-        const idx = tabs.findIndex((t) => tabKey(t) === activeTabId)
-        const next = tabs[idx >= tabs.length - 1 ? 0 : idx + 1]
-        if (next) useAppStore.getState().selectTab(tabKey(next))
-        return
-      }
-      const num = parseInt(e.key, 10)
-      if (!isNaN(num) && num >= 1 && num <= 9) {
-        e.preventDefault()
-        const tab = tabs[num - 1]
-        if (tab) useAppStore.getState().selectTab(tabKey(tab))
-      }
-    }
-    window.addEventListener('keydown', handler)
-    return () => window.removeEventListener('keydown', handler)
-  }, [handleCloseTab])
-
-  // ── @mention expansion ───────────────────────────────────────────────────────
-  const expandMentions = useCallback(async (msgs: Message[], wp: string | null): Promise<Message[]> => {
-    if (!wp) return msgs
-    const last = msgs[msgs.length - 1]
-    if (!last || last.role !== 'user') return msgs
-
-    const mentionRegex = /@([^\s\n]+)/g
-    const mentions = [...last.content.matchAll(mentionRegex)]
-    if (mentions.length === 0) return msgs
-
-    const fileContexts: string[] = []
-    for (const m of mentions) {
-      const relPath = m[1]
-      const absPath = wp + '/' + relPath
-      try {
-        const content = await el.tools.readFile(absPath)
-        fileContexts.push(`\`${relPath}\`:\n\`\`\`\n${content}\n\`\`\``)
-      } catch {
-        // file doesn't exist or ca
-
-... [OUTPUT TRUNCATED - 100,375 chars omitted out of 150,300 total] ...
-
- === 'tool' && m.toolStatus === 'running'
+      async (toolOutput) => {
+        const runningTool = useAppStore.getState().messages.slice().reverse().find(
+          (m) => m.role === 'tool' && m.toolStatus === 'running'
         )
         store.updateRunningTool({ toolStatus: 'done', toolOutput })
         if (runningTool) {

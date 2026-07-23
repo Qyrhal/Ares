@@ -32,6 +32,7 @@ import {
 import { getDiagnostics, hasLspSupport } from './lsp'
 import { getHooks, setHooks } from './hooks'
 import { exportSession, importSession } from './session-store'
+import { sanitizeEnv } from './env-filter'
 
 // E2E tests point this at a temp dir so runs never touch real app data
 if (process.env.ARES_USER_DATA) {
@@ -259,14 +260,16 @@ function validatePath(p: string): void {
     throw new Error(`Access denied: path outside workspace (${real})`)
   }
 
-  // Deny access to sensitive directories within home
+  // Deny access to sensitive directories and credential files within home
   const deniedDirs = ['.ssh', '.gnupg', '.aws', '.config/chromium', '.config/google-chrome', '.config/BraveSoftware']
+  const deniedFiles = ['.env', '.netrc', '.npmrc', '.pgpass', '.password-store']
   const homeSep = home + nodePath.sep
   if (real.startsWith(homeSep)) {
     const rel = real.slice(homeSep.length)
     const topDir = rel.split(nodePath.sep)[0]
-    if (deniedDirs.includes(topDir)) {
-      throw new Error(`Access denied: sensitive directory (${topDir})`)
+    const fileName = nodePath.basename(real)
+    if (deniedDirs.includes(topDir) || deniedFiles.includes(fileName)) {
+      throw new Error(`Access denied: sensitive path (${topDir || fileName})`)
     }
   }
 }
@@ -587,7 +590,7 @@ function registerIpcHandlers(): void {
       const pty = nodePty.spawn(shellBin, [], {
         name: 'xterm-256color',
         cwd: cwd || process.env.HOME || '/',
-        env: { ...process.env } as Record<string, string>,
+        env: sanitizeEnv(),
         cols: 80,
         rows: 24,
       })

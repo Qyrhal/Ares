@@ -11,6 +11,7 @@ import { createCheckpoint } from './checkpoints'
 import { buildAutoAnswerMessages, parseAutoAnswerResponse, findRootSessionId, briefWithTeamNotes } from './orchestration'
 import { ARES_PROMPT } from '../shared/ares-prompt'
 import { contextWindow } from '../shared/context-window'
+import { sanitizeEnv } from './env-filter'
 
 // Pi's bundled undici does `const { markAsUncloneable } = require('node:worker_threads')`.
 // markAsUncloneable was added in Node.js 22; Electron 33 ships Node.js 20.
@@ -232,7 +233,7 @@ async function buildMcpTools(win?: BrowserWindow): Promise<{ tools: any[]; clien
       const transport = new StdioClientTransport({
         command: server.command,
         args: server.args,
-        env: { ...process.env, ...server.env },
+        env: sanitizeEnv(server.env),
         stderr: 'pipe',
       })
       const client = new Client({ name: 'ares', version: '1.0.0' }, { capabilities: {} })

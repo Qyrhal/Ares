@@ -38,7 +38,7 @@ interface PickerItem {
 }
 
 export const BUILTIN_COMMANDS: PickerItem[] = [
-  { kind: 'builtin', name: 'model',        description: 'Change the model for this session' },
+  { kind: 'builtin', name: 'model',        description: 'List or change the model for this session' },
   { kind: 'builtin', name: 'folder',       description: 'Open or switch workspace folder' },
   { kind: 'builtin', name: 'overview',     description: 'Get an AI-generated summary of the current project' },
   { kind: 'builtin', name: 'clear',        description: 'Clear messages (--hard: full session reset)' },
@@ -67,7 +67,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },
   { kind: 'builtin', name: 'config',        description: 'View or change settings from chat' },
   { kind: 'builtin', name: 'rewind',        description: 'Rewind conversation to an earlier point' },
->  { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
+  { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
 function expandTemplate(prompt: string, args: string): string {
@@ -382,7 +382,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
     setModelLoading(true)
     setModelError('')
     try {
-      const provs = effectiveProviders({ providers, apiBaseUrl: apiBaseUrl || '', apiKey: *** || '' })
+      const provs = effectiveProviders({ providers, apiBaseUrl: apiBaseUrl || '', apiKey: apiKey || '' })
       if (provs.length === 0) { setModelError('No API endpoint configured'); setModelLoading(false); return }
       const multi = provs.length > 1
       const results = await Promise.allSettled(provs.map(async (p) => {
@@ -453,11 +453,48 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           return
         case 'help':
           setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
-          onComma
+          onCommand?.('help', '')
+          return
+        case 'commit':
+        case 'helpful':
+        case 'not-helpful':
+        case 'pr':
+        case 'fork':
+          setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
+          onCommand?.(item.name, '')
+          return
+      }
+    }
 
-... [OUTPUT TRUNCATED - 1,396 chars omitted out of 51,324 total] ...
+    if (item.kind === 'skill') {
+      // Skills show as attachment chips instead of pasting raw content
+      const existing = skillAttachments.find((s) => s.name === item.name)
+      if (existing) return // already attached
+      setSkillAttachments((prev) => [...prev, { id: uuidv4(), name: item.name, content: item.content ?? '' }])
+      return
+    }
 
-onst ta = e.target
+    if (item.kind === 'command') {
+      if (item.hint) {
+        // Has argument-hint — put /name  so user types args
+        insertCommand(item.name)
+      } else if (item.content) {
+        setTextAndResize(expandTemplate(item.content, ''))
+      }
+    }
+  }, [onCommand, onRevealInExplorer, fetchModels, closeCommands, insertCommand, setTextAndResize])
+
+  const handleModelSelect = useCallback((modelId: string) => {
+    setShowModelPicker(false)
+    onCommand?.('model', modelId)
+    requestAnimationFrame(() => textareaRef.current?.focus())
+  }, [onCommand])
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const val = e.target.value
+    setText(val)
+    resetPromptHistoryIdx()
+    const ta = e.target
     ta.style.height = 'auto'
     ta.style.height = `${Math.min(ta.scrollHeight, 240)}px`
 
@@ -663,7 +700,7 @@ onst ta = e.target
     }
   }, [])
 
->  const anyDropdownOpen = showMentions || showCommands || showModelPicker || showEmoji
+  const anyDropdownOpen = showMentions || showCommands || showModelPicker || showEmoji
   useEffect(() => {
     if (!anyDropdownOpen) return
     const handleClick = (e: MouseEvent) => {
