@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo } from 'react'
+import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react'
 import { Loader2, ArrowDown } from 'lucide-react'
 import { Message, Todo } from '@/types'
 import { MessageItem } from './MessageItem'
@@ -63,6 +63,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
   const [verbIdx, setVerbIdx] = useState(() => Math.floor(Math.random() * SHIMMER_VERBS.length))
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [showScrollButton, setShowScrollButton] = useState(false)
+  const [jumpedMessageId, setJumpedMessageId] = useState<string | null>(null)
   const streamStartRef = useRef<number | null>(null)
 
   // Auto-scroll when new messages arrive (if user is at bottom)
@@ -119,6 +120,68 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
     setShowScrollButton(false)
   }
 
+  const handleJumpComplete = useCallback(() => {
+    setJumpedMessageId(null)
+  }, [])
+
+  const handleJumpToMessage = useCallback((direction: 'up' | 'down') => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const userMessages = messages.filter((m) => m.role === 'user')
+    if (userMessages.length === 0) return
+
+    const viewportTop = viewport.scrollTop
+    const viewportHeight = viewport.clientHeight
+    const viewportMid = viewportTop + viewportHeight / 2
+
+    let closestIdx = -1
+    let closestDist = Infinity
+    for (let i = 0; i < userMessages.length; i++) {
+      const el = viewport.querySelector(`[data-message-id="${userMessages[i].id}"]`) as HTMLElement | null
+      if (!el) continue
+      const elMid = el.offsetTop + el.offsetHeight / 2
+      const dist = Math.abs(elMid - viewportMid)
+      if (dist < closestDist) { closestDist = dist; closestIdx = i }
+    }
+
+    let targetIdx: number
+    if (closestIdx === -1) {
+      targetIdx = direction === 'up' ? userMessages.length - 1 : 0
+    } else {
+      targetIdx = direction === 'up' ? closestIdx - 1 : closestIdx + 1
+    }
+
+    if (targetIdx < 0 || targetIdx >= userMessages.length) return
+
+    const target = userMessages[targetIdx]
+    const el = viewport.querySelector(`[data-message-id="${target.id}"]`) as HTMLElement | null
+    if (!el) return
+
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    setJumpedMessageId(target.id)
+    clearTimeout(handleJumpToMessage._timer)
+    handleJumpToMessage._timer = setTimeout(() => setJumpedMessageId(null), 1500)
+  }, [messages])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  handleJumpToMessage._timer = 0 as any
+
+  useEffect(() => {
+    const viewport = viewportRef.current
+    if (!viewport) return
+
+    const handler = (e: KeyboardEvent): void => {
+      const mod = e.metaKey || e.ctrlKey
+      if (!mod) return
+      if (e.key === 'ArrowUp') { e.preventDefault(); handleJumpToMessage('up') }
+      if (e.key === 'ArrowDown') { e.preventDefault(); handleJumpToMessage('down') }
+    }
+
+    viewport.addEventListener('keydown', handler)
+    return () => viewport.removeEventListener('keydown', handler)
+  }, [handleJumpToMessage])
+
   if (messages.length === 0 && !isLoading) {
     return (
       <div className="flex flex-1 flex-col min-h-0 overflow-y-auto">
@@ -167,7 +230,7 @@ export function ChatView({ messages, sessionTitle, isLoading, onSuggestion, todo
     <ScrollArea className="flex-1" viewportRef={viewportRef}>
       <div className="py-4">
          {messages.filter((m) => !m.isStreaming).map((msg) => (
-          <MessageItem key={msg.id} message={msg} modelName={modelName} onReply={onReply} onEdit={onEdit} onDelete={onDelete} onRegenerate={onRegenerate} onReact={onReact} onEditResend={onEditResend} />
+          <MessageItem key={msg.id} message={msg} modelName={modelName} onReply={onReply} onEdit={onEdit} onDelete={onDelete} onRegenerate={onRegenerate} onReact={onReact} onEditResend={onEditResend} data-message-id={msg.id} isJumped={jumpedMessageId === msg.id} onJumpComplete={handleJumpComplete} />
          ))}
         {isLoading && (
           <div className="px-4 py-2">

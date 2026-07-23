@@ -48,6 +48,9 @@ interface MessageItemProps {
   onRegenerate?: (message: Message) => void
   onReact?: (id: string, reactions: { up: boolean | null }) => void
   onEditResend?: (message: Message) => void
+  isJumped?: boolean
+  onJumpComplete?: () => void
+  'data-message-id'?: string
 }
 
 function formatMessageTime(createdAt: number): string {
@@ -406,9 +409,15 @@ function EditMode({
 
 // ── Main MessageItem ──────────────────────────────────────────────────────────
 
-export const MessageItem = React.memo(function MessageItem({ message, modelName, onReply, onEdit, onDelete, onRegenerate, onReact, onEditResend }: MessageItemProps): React.ReactElement {
+export const MessageItem = React.memo(function MessageItem({ message, modelName, onReply, onEdit, onDelete, onRegenerate, onReact, onEditResend, isJumped, onJumpComplete, 'data-message-id': dataMessageId }: MessageItemProps): React.ReactElement {
   const [isEditing, setIsEditing] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
+
+  React.useEffect(() => {
+    if (!isJumped || !onJumpComplete) return
+    const timer = setTimeout(onJumpComplete, 1500)
+    return () => clearTimeout(timer)
+  }, [isJumped, onJumpComplete])
 
   const isUser = message.role === 'user'
   const isAssistant = message.role === 'assistant'
@@ -455,7 +464,7 @@ export const MessageItem = React.memo(function MessageItem({ message, modelName,
   }
 
   return (
-    <div className={cn('group flex gap-3 px-4 py-3', isUser ? 'flex-row-reverse' : 'flex-row')}>
+    <div data-message-id={dataMessageId} className={cn('group flex gap-3 px-4 py-3 transition-colors duration-700', isUser ? 'flex-row-reverse' : 'flex-row', isJumped && 'bg-primary/10')}>
       {/* Avatar */}
       <div className={cn(
         'mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full',

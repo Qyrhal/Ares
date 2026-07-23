@@ -576,6 +576,7 @@ export default function App(): React.ReactElement {
           '· `Cmd/Ctrl + [` / `]` — Previous / next tab',
           '· `Cmd/Ctrl + 1–9` — Jump to tab by number',
           '· `ArrowUp` / `ArrowDown` in empty input — Recall prompt history',
+          '· `Cmd/Ctrl + ↑/↓` — Jump to previous/next user message',
           '',
           '**View**',
           '· `Ctrl + \\`` / `Ctrl + J` — Toggle terminal',
