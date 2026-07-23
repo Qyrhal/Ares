@@ -60,6 +60,9 @@ export default function App(): React.ReactElement {
   // ── Reply-to state ───────────────────────────────────────────────────────────
   const [replyTo, setReplyTo] = useState<Message | null>(null)
 
+  // ── Edit-resend prefill ───────────────────────────────────────────────────
+  const [prefillText, setPrefillText] = useState<string | null>(null)
+
   // ── Modal overlays ────────────────────────────────────────────────────────────
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [quickFileOpenOpen, setQuickFileOpenOpen] = useState(false)
@@ -2589,6 +2592,29 @@ export default function App(): React.ReactElement {
     handleSend(userMsg.content, userMsg.attachments ?? [])
   }, [activeSession, handleSend])
 
+  // ── Edit-then-resend (prefill input instead of auto-send) ──────────────────
+  const handleEditResend = useCallback(async (assistantMsg: Message) => {
+    const { messages, isLoading } = useAppStore.getState()
+    const sess = activeSession
+    if (!sess || isLoading) return
+
+    // Find the user message immediately before this assistant message
+    const assistantIdx = messages.findIndex((m) => m.id === assistantMsg.id)
+    if (assistantIdx <= 0) return
+    const userMsg = messages.slice(0, assistantIdx).reverse().find((m) => m.role === 'user')
+    if (!userMsg) return
+
+    // Remove all messages from the assistant message onward
+    const toDelete = messages.slice(assistantIdx)
+    for (const m of toDelete) {
+      await el.db.deleteMessage(m.id)
+    }
+    store.setMessages(messages.slice(0, assistantIdx))
+
+    // Prefill the input bar
+    setPrefillText(userMsg.content)
+  }, [activeSession])
+
   // ── Delete message with undo ────────────────────────────────────────────────
   const lastDeletedRef = useRef<Message | null>(null)
 
@@ -2980,6 +3006,7 @@ export default function App(): React.ReactElement {
                       onDelete={handleDeleteMessage}
                       onRegenerate={handleRegenerate}
                       onReact={handleReact}
+                      onEditResend={handleEditResend}
                     />
                     {pendingPerm && (
                       <PermissionPrompt
@@ -3043,6 +3070,8 @@ export default function App(): React.ReactElement {
                       pluginCommands={agentCommands}
                       replyTo={replyTo ? { id: replyTo.id, content: replyTo.content.slice(0, 200), role: replyTo.role } : null}
                       onCancelReply={handleCancelReply}
+                      prefillText={prefillText}
+                      onPrefillConsumed={() => setPrefillText(null)}
                     />
                   </div>
 

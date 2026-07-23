@@ -1,6 +1,6 @@
 import React from 'react'
 import DOMPurify from 'dompurify'
-import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown, RotateCw } from 'lucide-react'
+import { AlertCircle, BrainIcon, CheckCircle2, File, FileText, Image, Loader2, Reply, Pencil, Copy, Check, Trash2, ThumbsUp, ThumbsDown, RotateCw, SquarePen } from 'lucide-react'
 import { ChevronDownIcon, ChevronRightIcon, TerminalIcon, XIcon } from '@animateicons/react/lucide'
 import { cn, formatBytes, isMermaidCodeBlock, looksLikeJson } from '@/lib/utils'
 import { Message } from '@/types'
@@ -47,6 +47,7 @@ interface MessageItemProps {
   onDelete?: (message: Message) => void
   onRegenerate?: (message: Message) => void
   onReact?: (id: string, reactions: { up: boolean | null }) => void
+  onEditResend?: (message: Message) => void
 }
 
 function formatMessageTime(createdAt: number): string {
@@ -405,7 +406,7 @@ function EditMode({
 
 // ── Main MessageItem ──────────────────────────────────────────────────────────
 
-export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onRegenerate, onReact }: MessageItemProps): React.ReactElement {
+export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onRegenerate, onReact, onEditResend }: MessageItemProps): React.ReactElement {
   const [isEditing, setIsEditing] = React.useState(false)
   const [copied, setCopied] = React.useState(false)
 
@@ -535,6 +536,19 @@ export function MessageItem({ message, modelName, onReply, onEdit, onDelete, onR
                 aria-label="Regenerate response"
               >
                 <RotateCw className="size-3" />
+              </button>
+            </Tooltip>
+          )}
+
+          {/* Edit & Resend button (assistant messages only) */}
+          {isAssistant && onEditResend && (
+            <Tooltip content="Edit & resend">
+              <button
+                onClick={() => onEditResend(message)}
+                className="flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
+                aria-label="Edit and resend"
+              >
+                <SquarePen className="size-3" />
               </button>
             </Tooltip>
           )}
