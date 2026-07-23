@@ -26,7 +26,7 @@ import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme, applyColorMode, THEMES, type ColorMode } from '@/lib/theme'
 import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
 import { estimateCost } from '@/lib/pricing'
-import { hasProvider, displayModel } from '@/lib/providers'
+import { hasProvider, displayModel, effectiveProviders, makeModelRef } from '@/lib/providers'
 import { SideChatInput } from '@/components/SideChatInput'
 import { PlanPreview } from '@/components/PlanPreview'
 import { cn } from '@/lib/utils'
@@ -471,15 +471,47 @@ export default function App(): React.ReactElement {
     cmd = cmd.toLowerCase()
     switch (cmd) {
       case 'model': {
-        if (!args) {
+        if (!args || args === 'list') {
           const cur = sess.model || store.settings.defaultModel
-          const msg = await el.db.addMessage(sess.id, 'system', `Current model: ${cur}. Use /model <name> to switch.`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          const provs = effectiveProviders(store.settings)
+          if (provs.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured. Add a provider in Settings → Providers.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            return
+          }
+          const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Fetching available models...')
+          if (startMsg) store.appendMessage(parseMessage(startMsg))
+          const multi = provs.length > 1
+          Promise.allSettled(provs.map(async (p) => {
+            const json = await el.ext.fetchModels(p.baseUrl.replace(/\/$/, ''), p.apiKey)
+            return ((json.data ?? []) as { id: string }[])
+              .map((m) => multi ? makeModelRef(p.id, m.id) : m.id)
+              .sort()
+          })).then(async (results) => {
+            const models = results.flatMap((r) => r.status === 'fulfilled' ? r.value : [])
+            let content = `**Current model:** ${displayModel(cur || 'none')}\n\n`
+            if (models.length === 0) {
+              content += 'No models found from configured providers.'
+            } else {
+              content += `**Available models** (${models.length}):\n`
+              for (const m of models) {
+                const display = displayModel(m)
+                const isCurrent = m === (sess.model || store.settings.defaultModel)
+                content += `${isCurrent ? '→ ' : '  '}${display}${isCurrent ? ' *(current)*' : ''}\n`
+              }
+              content += '\nUse `/model <name>` to switch.'
+            }
+            const msg = await el.db.addMessage(sess.id, 'system', content)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }).catch(async () => {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Failed to fetch models from providers.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          })
           return
         }
         await el.db.updateSession(sess.id, { model: args })
         store.updateSession(sess.id, { model: args })
-        const msg = await el.db.addMessage(sess.id, 'system', `Switched model to ${args}`)
+        const msg = await el.db.addMessage(sess.id, 'system', `Switched model to ${displayModel(args)}`)
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }

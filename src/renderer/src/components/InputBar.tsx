@@ -38,7 +38,7 @@ interface PickerItem {
 }
 
 export const BUILTIN_COMMANDS: PickerItem[] = [
-  { kind: 'builtin', name: 'model',        description: 'Change the model for this session' },
+  { kind: 'builtin', name: 'model',        description: 'List or change the model for this session' },
   { kind: 'builtin', name: 'folder',       description: 'Open or switch workspace folder' },
   { kind: 'builtin', name: 'overview',     description: 'Get an AI-generated summary of the current project' },
   { kind: 'builtin', name: 'clear',        description: 'Clear messages (--hard: full session reset)' },
