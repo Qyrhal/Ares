@@ -540,7 +540,7 @@ describe('InputBar — command picker sections', () => {
   it('shows command description in picker', () => {
     renderInputBar({ pluginSkills: [], pluginCommands: [] })
     fireEvent.change(screen.getByPlaceholderText(PLACEHOLDER), { target: { value: '/' } })
-    expect(screen.getByText('Change the model for this session')).toBeInTheDocument()
+    expect(screen.getByText('List or change the model for this session')).toBeInTheDocument()
   })
 
   it('shows hint badge for plugin commands with argumentHint', () => {
