@@ -2108,6 +2108,44 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'tree': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const nodes = await el.fs.readDir(wsPath)
+          if (!nodes || nodes.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Workspace is empty.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const folderName = wsPath.split(/[/\\]/).pop() || wsPath
+          const lines: string[] = [folderName + '/']
+          function renderTree(items: FileNode[], prefix: string) {
+            for (let i = 0; i < items.length; i++) {
+              const isLast = i === items.length - 1
+              const connector = isLast ? '└── ' : '├── '
+              const node = items[i]
+              lines.push(prefix + connector + node.name + (node.type === 'directory' ? '/' : ''))
+              if (node.type === 'directory' && node.children) {
+                renderTree(node.children, prefix + (isLast ? '    ' : '│   '))
+              }
+            }
+          }
+          renderTree(nodes, '')
+          const treeText = lines.join('\n')
+          const truncated = treeText.length > 4000 ? treeText.slice(0, 4000) + '\n\n[truncated]' : treeText
+          const msg = await el.db.addMessage(sess.id, 'system', '```\n' + truncated + '\n```')
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Tree error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'task': {
         const sub = args.trim().toLowerCase()
         if (!sub || sub === 'list') {
