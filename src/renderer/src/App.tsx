@@ -2108,6 +2108,32 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'build': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const buildMsg = await el.db.addMessage(sess.id, 'system', '**Running build...**')
+        if (buildMsg) store.appendMessage(parseMessage(buildMsg))
+        try {
+          const result = await el.build.run(wsPath)
+          if (result.ok) {
+            const output = result.output.length > 4000 ? result.output.slice(-4000) : result.output
+            const msg = await el.db.addMessage(sess.id, 'system', `**Build succeeded**\n\n${output || '(no output)'}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const output = result.output.length > 4000 ? result.output.slice(-4000) : result.output
+            const msg = await el.db.addMessage(sess.id, 'system', `**Build failed**\n\n${output}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Build error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'tree': {
         const wsPath = store.workspacePath
         if (!wsPath) {

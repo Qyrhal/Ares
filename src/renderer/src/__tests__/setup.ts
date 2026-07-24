@@ -150,6 +150,9 @@ const electronMock = {
   test: {
     run: vi.fn().mockResolvedValue({ ok: true, passed: 10, failed: 0, total: 10, output: '10 passed' }),
   },
+  build: {
+    run: vi.fn().mockResolvedValue({ ok: true, output: 'Build succeeded.' }),
+  },
   dbEvents: {
     onFlushError: vi.fn().mockReturnValue(() => {}),
   },
