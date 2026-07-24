@@ -13,6 +13,39 @@ let isDirty = false
 let flushTimer: ReturnType<typeof setInterval> | null = null
 const FLUSH_INTERVAL_MS = 1000
 
+// ── In-memory indexes (rebuilt on writeStore) ────────────────────────────────
+// getSessions() previously computed message_count by filtering all messages
+// for every session — O(s*m). searchMessages() did the same for substring
+// search. These indexes bring both down to O(s + m) build + O(m) query.
+
+let messageCountIndex: Map<string, number> | null = null
+
+interface SearchEntry {
+  id: string
+  sessionId: string
+  contentLower: string
+  contentSnippet: string
+  role: string
+}
+let searchIndex: SearchEntry[] | null = null
+
+function rebuildIndexes(store: Store): void {
+  const counts = new Map<string, number>()
+  const entries: SearchEntry[] = []
+  for (const m of store.messages) {
+    counts.set(m.session_id, (counts.get(m.session_id) ?? 0) + 1)
+    entries.push({
+      id: m.id,
+      sessionId: m.session_id,
+      contentLower: m.content?.toLowerCase() ?? '',
+      contentSnippet: m.content?.slice(0, 200) ?? '',
+      role: m.role,
+    })
+  }
+  messageCountIndex = counts
+  searchIndex = entries
+}
+
 // Disk write error callback — set by main process to notify renderer
 let flushErrorHandler: ((error: string) => void) | null = null
 
@@ -261,11 +294,13 @@ function readStore(): Store {
   } catch {
     cachedStore = { sessions: [], messages: [], todos: [], teamNotes: [], mcpProfiles: [], settings: DEFAULT_SETTINGS, workspacePath: null, recentProjects: [], agentConfig: DEFAULT_AGENT_CONFIG }
   }
-  return cachedStore
+  rebuildIndexes(cachedStore!)
+  return cachedStore!
 }
 
 function writeStore(data: Store): void {
   cachedStore = data
+  rebuildIndexes(data)
   isDirty = true
   // Immediate flush for critical paths — periodic timer handles the rest
 }
@@ -273,10 +308,11 @@ function writeStore(data: Store): void {
 // ── Sessions ────────────────────────────────────────────────────────────────
 
 export function getSessions(includeArchived = false): DbSession[] {
-  const { sessions, messages } = readStore()
+  const { sessions } = readStore()
+  const counts = messageCountIndex ?? new Map()
   return sessions
     .filter((s) => includeArchived || !s.archived)
-    .map((s) => ({ ...s, message_count: messages.filter((m) => m.session_id === s.id).length }))
+    .map((s) => ({ ...s, message_count: counts.get(s.id) ?? 0 }))
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1
       if (!a.pinned && b.pinned) return 1
@@ -337,19 +373,34 @@ export function searchMessages(query: string, filters?: { startDate?: number; en
   const startMs = filters?.startDate ?? 0
   const endMs = filters?.endDate ?? Infinity
 
+  // Pre-compute session metadata for O(1) lookups
+  const sessionMeta = new Map<string, { title: string; createdAt: number }>()
+  const dateFilteredIds = new Set<string>()
   for (const s of store.sessions) {
-    // Date filter: check session createdAt falls within the range
     const sessionTime = s.created_at ?? 0
-    if (sessionTime < startMs || sessionTime > endMs) continue
+    sessionMeta.set(s.id, { title: s.title, createdAt: sessionTime })
+    if (sessionTime >= startMs && sessionTime <= endMs) {
+      dateFilteredIds.add(s.id)
+    }
+  }
 
+  // Session title matches
+  for (const s of store.sessions) {
+    if (!dateFilteredIds.has(s.id)) continue
     if (q && s.title.toLowerCase().includes(q)) {
       results.push({ sessionId: s.id, sessionTitle: s.title, messageId: '', content: '(session title match)', role: '' })
     }
-    if (!q) continue // when no query, don't search messages
-    const sessionMessages = store.messages.filter((m) => m.session_id === s.id)
-    for (const m of sessionMessages) {
-      if (m.content?.toLowerCase().includes(q)) {
-        results.push({ sessionId: s.id, sessionTitle: s.title, messageId: m.id, content: m.content.slice(0, 200), role: m.role })
+  }
+
+  if (q) {
+    // Use the pre-computed search index — O(m) instead of O(s*m)
+    const idx = searchIndex ?? []
+    for (const entry of idx) {
+      if (!dateFilteredIds.has(entry.sessionId)) continue
+
+      if (entry.contentLower.includes(q)) {
+        const title = sessionMeta.get(entry.sessionId)?.title ?? ''
+        results.push({ sessionId: entry.sessionId, sessionTitle: title, messageId: entry.id, content: entry.contentSnippet, role: entry.role })
       }
     }
   }
