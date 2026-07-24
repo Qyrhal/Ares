@@ -24,6 +24,7 @@ import {
   discardFile, commit, push, pull,
   getBranches, checkoutBranch, createBranch, getFileDiff,
   getLog, initRepo,
+  stashList, stashPush, stashPop, stashDrop, stashClear,
 } from './git'
 import {
   createCheckpoint, listCheckpoints, restoreCheckpoint,
@@ -433,6 +434,13 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => { validatePath(cwd); validatePath(p); return getFileDiff(cwd, p, staged) })
   ipcMain.handle('git:log',            (_, cwd: string, limit?: number) => { validatePath(cwd); return getLog(cwd, limit) })
   ipcMain.handle('git:init',           (_, cwd: string) => { validatePath(cwd); return initRepo(cwd) })
+
+  // Git stash
+  ipcMain.handle('git:stashList',  (_, cwd: string) => { validatePath(cwd); return stashList(cwd) })
+  ipcMain.handle('git:stashPush',  (_, cwd: string, msg?: string) => { validatePath(cwd); return stashPush(cwd, msg) })
+  ipcMain.handle('git:stashPop',   (_, cwd: string) => { validatePath(cwd); return stashPop(cwd) })
+  ipcMain.handle('git:stashDrop',  (_, cwd: string, idx: number) => { validatePath(cwd); return stashDrop(cwd, idx) })
+  ipcMain.handle('git:stashClear', (_, cwd: string) => { validatePath(cwd); return stashClear(cwd) })
 
   // Checkpoints — git stash-backed undo snapshots (inspired by Claude Code)
   ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => { validatePath(cwd); return createCheckpoint(cwd, msg) })

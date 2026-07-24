@@ -666,6 +666,53 @@ export default function App(): React.ReactElement {
         if (logMsg) store.appendMessage(parseMessage(logMsg))
         break
       }
+      case 'stash': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Git Stash**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          const sub = args.trim().toLowerCase()
+          try {
+            if (sub === 'push' || sub === 'save') {
+              const result = await el.git.stashPush(workspacePath)
+              lines.push(result.ok ? `✅ ${result.message}` : `❌ ${result.message}`)
+            } else if (sub === 'pop' || sub === 'apply') {
+              const result = await el.git.stashPop(workspacePath)
+              lines.push(result.ok ? `✅ ${result.message}` : `❌ ${result.message}`)
+            } else if (sub.startsWith('drop ')) {
+              const idx = parseInt(sub.split(' ')[1], 10)
+              if (isNaN(idx)) {
+                lines.push('Usage: `/stash drop <n>` — drop stash by index')
+              } else {
+                const result = await el.git.stashDrop(workspacePath, idx)
+                lines.push(result.ok ? `✅ ${result.message}` : `❌ ${result.message}`)
+              }
+            } else if (sub === 'clear') {
+              const result = await el.git.stashClear(workspacePath)
+              lines.push(result.ok ? `✅ ${result.message}` : `❌ ${result.message}`)
+            } else {
+              // List stashes
+              const stashes = await el.git.stashList(workspacePath)
+              if (stashes.length === 0) {
+                lines.push('No stashes.')
+              } else {
+                for (const s of stashes) {
+                  const msg = s.message.length > 60 ? s.message.slice(0, 57) + '...' : s.message
+                  lines.push(`· \`stash@{${s.index}}\` — ${msg}`)
+                }
+                lines.push('\nUsage: `/stash push`, `/stash pop`, `/stash drop <n>`, `/stash clear`')
+              }
+            }
+          } catch (err) {
+            lines.push(`Error: ${(err as Error).message}`)
+          }
+        }
+        const stashMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (stashMsg) store.appendMessage(parseMessage(stashMsg))
+        break
+      }
       case 'review': {
         const msgs = await el.db.getMessages(sess.id)
         if (!msgs || msgs.length === 0) {

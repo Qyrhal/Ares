@@ -98,6 +98,11 @@ declare global {
         diff(cwd: string, path: string, staged: boolean): Promise<string>
         log(cwd: string, limit?: number): Promise<{ hash: string; shortHash: string; parents: string[]; author: string; date: string; message: string }[]>
         init(cwd: string): Promise<void>
+        stashList(cwd: string): Promise<{ index: number; branch: string; message: string }[]>
+        stashPush(cwd: string, message?: string): Promise<{ ok: boolean; message: string }>
+        stashPop(cwd: string): Promise<{ ok: boolean; message: string }>
+        stashDrop(cwd: string, index: number): Promise<{ ok: boolean; message: string }>
+        stashClear(cwd: string): Promise<{ ok: boolean; message: string }>
       }
       checkpoint: {
         create(cwd: string, msg: string): Promise<Checkpoint | null>
