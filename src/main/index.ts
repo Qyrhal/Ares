@@ -463,6 +463,22 @@ function registerIpcHandlers(): void {
     }
   })
 
+  // Exec — run arbitrary shell command
+  ipcMain.handle('exec:run', async (_, cwd: string, command: string) => {
+    validatePath(cwd)
+    const execAsync = promisify(execCb)
+    try {
+      const { stdout, stderr } = await execAsync(command, { cwd, timeout: 60_000 })
+      const output = (stdout + stderr).trim()
+      return { ok: true, output: output.slice(-4000) }
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; message: string }
+      const output = ((err.stdout || '') + (err.stderr || '')).trim()
+      if (output) return { ok: false, output: output.slice(-4000) }
+      return { ok: false, output: err.message }
+    }
+  })
+
   // Checkpoints — git stash-backed undo snapshots (inspired by Claude Code)
   ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => { validatePath(cwd); return createCheckpoint(cwd, msg) })
   ipcMain.handle('checkpoint:list',    (_, cwd: string) => { validatePath(cwd); return listCheckpoints(cwd) })
