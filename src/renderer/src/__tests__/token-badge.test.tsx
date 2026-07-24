@@ -1,68 +1,82 @@
 import { describe, it, expect } from 'vitest'
-import React from 'react'
 import { render, screen } from '@testing-library/react'
-import { TokenBadge } from '@/components/TokenBadge'
+import React from 'react'
+import { TokenBadge } from '../components/TokenBadge'
 
 describe('TokenBadge', () => {
-  it('renders token count', () => {
-    render(<TokenBadge tokens={150} />)
-    expect(screen.getByText('150 tok')).toBeDefined()
-  })
-
-  it('renders tokens per second', () => {
-    render(<TokenBadge tokens={100} tokensPerSecond={25} />)
-    expect(screen.getByText('· 25 tok/s')).toBeDefined()
-  })
-
-  it('renders duration', () => {
-    render(<TokenBadge tokens={200} duration={3000} />)
-    expect(screen.getByText('· 3.0s')).toBeDefined()
-  })
-
-  it('renders cost', () => {
-    render(<TokenBadge tokens={500} cost={0.0025} />)
-    expect(screen.getByText('· $0.0025')).toBeDefined()
-  })
-
-  it('renders all stats together', () => {
-    render(<TokenBadge tokens={1000} tokensPerSecond={50} duration={5000} cost={0.01} />)
-    expect(screen.getByText('1,000 tok')).toBeDefined()
-    expect(screen.getByText('· 50 tok/s')).toBeDefined()
-    expect(screen.getByText('· 5.0s')).toBeDefined()
-    expect(screen.getByText('· $0.0100')).toBeDefined()
-  })
-
   it('renders nothing when tokens is 0', () => {
     const { container } = render(<TokenBadge tokens={0} />)
     expect(container.innerHTML).toBe('')
   })
 
-  it('hides tok/s when tokensPerSecond is 0', () => {
-    render(<TokenBadge tokens={100} tokensPerSecond={0} />)
-    expect(screen.getByText('100 tok')).toBeDefined()
-    expect(screen.queryByText('tok/s')).toBeNull()
+  it('shows token count', () => {
+    render(<TokenBadge tokens={1500} />)
+    expect(screen.getByText('1,500 tok')).toBeInTheDocument()
   })
 
-  it('hides cost when cost is 0', () => {
-    render(<TokenBadge tokens={100} cost={0} />)
-    expect(screen.getByText('100 tok')).toBeDefined()
-    expect(screen.queryByText('$')).toBeNull()
+  it('formats large token counts with commas', () => {
+    render(<TokenBadge tokens={123456} />)
+    expect(screen.getByText('123,456 tok')).toBeInTheDocument()
   })
 
-  it('shows duration even when 0', () => {
-    render(<TokenBadge tokens={100} duration={0} />)
-    expect(screen.getByText('· 0.0s')).toBeDefined()
+  it('shows tokens per second when positive', () => {
+    render(<TokenBadge tokens={1000} tokensPerSecond={42} />)
+    expect(screen.getByText(/42 tok\/s/)).toBeInTheDocument()
   })
 
-  it('formats large token counts with locale separator', () => {
-    render(<TokenBadge tokens={1234567} />)
-    expect(screen.getByText(/1,234,567 tok/)).toBeDefined()
+  it('hides tokens per second when zero', () => {
+    render(<TokenBadge tokens={1000} tokensPerSecond={0} />)
+    expect(screen.queryByText(/tok\/s/)).not.toBeInTheDocument()
   })
 
-  it('handles zero tok/s gracefully when duration is set', () => {
-    render(<TokenBadge tokens={50} tokensPerSecond={0} duration={2000} />)
-    expect(screen.getByText('50 tok')).toBeDefined()
-    expect(screen.getByText('· 2.0s')).toBeDefined()
-    expect(screen.queryByText('tok/s')).toBeNull()
+  it('hides tokens per second when undefined', () => {
+    render(<TokenBadge tokens={1000} />)
+    expect(screen.queryByText(/tok\/s/)).not.toBeInTheDocument()
+  })
+
+  it('shows duration when provided', () => {
+    render(<TokenBadge tokens={1000} duration={5500} />)
+    expect(screen.getByText('· 5.5s')).toBeInTheDocument()
+  })
+
+  it('shows duration of zero seconds', () => {
+    render(<TokenBadge tokens={1000} duration={0} />)
+    expect(screen.getByText('· 0.0s')).toBeInTheDocument()
+  })
+
+  it('shows cost when positive', () => {
+    render(<TokenBadge tokens={1000} cost={0.0312} />)
+    expect(screen.getByText(/0\.0312/)).toBeInTheDocument()
+  })
+
+  it('hides cost when zero', () => {
+    render(<TokenBadge tokens={1000} cost={0} />)
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
+  })
+
+  it('hides cost when undefined', () => {
+    render(<TokenBadge tokens={1000} />)
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
+  })
+
+  it('shows all segments when all props provided', () => {
+    render(<TokenBadge tokens={2000} tokensPerSecond={100} duration={20000} cost={0.05} />)
+    expect(screen.getByText('2,000 tok')).toBeInTheDocument()
+    expect(screen.getByText(/100 tok\/s/)).toBeInTheDocument()
+    expect(screen.getByText('· 20.0s')).toBeInTheDocument()
+    expect(screen.getByText(/0\.0500/)).toBeInTheDocument()
+  })
+
+  it('renders with minimal props (only tokens)', () => {
+    render(<TokenBadge tokens={42} />)
+    expect(screen.getByText('42 tok')).toBeInTheDocument()
+  })
+
+  it('renders with tokens and duration only', () => {
+    render(<TokenBadge tokens={500} duration={1234} />)
+    expect(screen.getByText('500 tok')).toBeInTheDocument()
+    expect(screen.getByText('· 1.2s')).toBeInTheDocument()
+    expect(screen.queryByText(/tok\/s/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
   })
 })

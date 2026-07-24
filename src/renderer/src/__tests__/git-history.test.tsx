@@ -1,117 +1,168 @@
-import React from 'react'
 import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
+import React from 'react'
 import { GitHistory } from '../components/GitHistory'
 import type { GitCommit } from '@/types'
 
-const commits: GitCommit[] = [
-  { hash: 'aaa', shortHash: 'aaa', parents: [], author: 'Alice', date: '2024-01-01', message: 'Initial commit' },
-  { hash: 'bbb', shortHash: 'bbb', parents: ['aaa'], author: 'Bob', date: '2024-02-01', message: 'Second commit' },
-  { hash: 'ccc', shortHash: 'ccc', parents: ['bbb'], author: 'Alice', date: '2024-03-01', message: 'Third commit via PR' },
-]
+function mkCommit(overrides: Partial<GitCommit> = {}): GitCommit {
+  return {
+    hash: 'abc123',
+    shortHash: 'abc123',
+    parents: [],
+    author: 'Test',
+    date: new Date().toISOString(),
+    message: 'Initial commit',
+    ...overrides,
+  }
+}
 
 describe('GitHistory', () => {
   it('renders empty state when no commits', () => {
-    render(
-      <GitHistory commits={[]} activeCommit={null} onSelectCommit={vi.fn()} />
-    )
+    render(<GitHistory commits={[]} activeCommit={null} onSelectCommit={vi.fn()} />)
     expect(screen.getByText('No commits yet')).toBeInTheDocument()
   })
 
-  it('renders all commits', () => {
+  it('renders a single commit with message', () => {
     render(
-      <GitHistory commits={commits} activeCommit={null} onSelectCommit={vi.fn()} />
+      <GitHistory
+        commits={[mkCommit({ shortHash: 'abc123', message: 'Add feature' })]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
     )
-    expect(screen.getByText('Initial commit')).toBeInTheDocument()
-    expect(screen.getByText('Second commit')).toBeInTheDocument()
-    expect(screen.getByText('Third commit via PR')).toBeInTheDocument()
+    expect(screen.getByText('Add feature')).toBeInTheDocument()
+    expect(screen.getByText('abc123')).toBeInTheDocument()
   })
 
-  it('shows commit short hashes', () => {
+  it('renders multiple commits', () => {
     render(
-      <GitHistory commits={commits} activeCommit={null} onSelectCommit={vi.fn()} />
+      <GitHistory
+        commits={[
+          mkCommit({ hash: 'a', shortHash: 'aaa', message: 'First' }),
+          mkCommit({ hash: 'b', shortHash: 'bbb', message: 'Second', parents: ['a'] }),
+        ]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
     )
-    // Short hashes are shown as monospace elements
-    expect(screen.getByText('aaa')).toBeInTheDocument()
-    expect(screen.getByText('bbb')).toBeInTheDocument()
-    expect(screen.getByText('ccc')).toBeInTheDocument()
+    expect(screen.getByText('First')).toBeInTheDocument()
+    expect(screen.getByText('Second')).toBeInTheDocument()
   })
 
-  it('calls onSelectCommit when a commit row is clicked', () => {
+  it('calls onSelectCommit when commit is clicked', () => {
     const onSelect = vi.fn()
     render(
-      <GitHistory commits={commits} activeCommit={null} onSelectCommit={onSelect} />
+      <GitHistory
+        commits={[mkCommit({ hash: 'abc', message: 'Click me' })]}
+        activeCommit={null}
+        onSelectCommit={onSelect}
+      />
     )
-    fireEvent.click(screen.getByText('Initial commit'))
-    expect(onSelect).toHaveBeenCalledWith('aaa')
-  })
-
-  it('shows short hashes', () => {
-    render(
-      <GitHistory commits={commits} activeCommit={null} onSelectCommit={vi.fn()} />
-    )
-    // Short hashes are shown as code elements
-    expect(screen.getByText('aaa')).toBeInTheDocument()
-    expect(screen.getByText('bbb')).toBeInTheDocument()
-    expect(screen.getByText('ccc')).toBeInTheDocument()
+    fireEvent.click(screen.getByText('Click me'))
+    expect(onSelect).toHaveBeenCalledWith('abc')
   })
 
   it('highlights the active commit', () => {
     render(
-      <GitHistory commits={commits} activeCommit="bbb" onSelectCommit={vi.fn()} />
+      <GitHistory
+        commits={[mkCommit({ hash: 'abc', message: 'Active' })]}
+        activeCommit="abc"
+        onSelectCommit={vi.fn()}
+      />
     )
-    // Commit rows are divs with onClick, not button elements
-    const rows = screen.getAllByText('Second commit').map(
-      (el) => el.closest('[role="button"]') || el.closest('.cursor-pointer') || el.parentElement
-    )
-    // The parent element that has cursor-pointer class should include bg-primary
-    const row = screen.getByText('Second commit').closest('.cursor-pointer') as HTMLElement
-    expect(row.className).toContain('bg-accent')
+    const row = screen.getByText('Active').closest('div[class*="cursor-pointer"]')!
+    expect(row.className).toContain('bg-accent/60')
   })
 
-  it('renders svg graph elements for parent relationships', () => {
-    const { container } = render(
-      <GitHistory commits={commits} activeCommit={null} onSelectCommit={vi.fn()} />
+  it('does not highlight non-active commits', () => {
+    render(
+      <GitHistory
+        commits={[mkCommit({ hash: 'abc', message: 'Inactive' })]}
+        activeCommit="xyz"
+        onSelectCommit={vi.fn()}
+      />
     )
-    // SVG graph is rendered
+    const row = screen.getByText('Inactive').closest('div[class*="cursor-pointer"]')!
+    expect(row.className).not.toContain('bg-accent/60')
+  })
+
+  it('renders SVG graph layer', () => {
+    const { container } = render(
+      <GitHistory
+        commits={[mkCommit()]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
+    )
     const svg = container.querySelector('svg')
     expect(svg).toBeInTheDocument()
-    // Should have line/polyline elements for edges
-    const lines = svg?.querySelectorAll('line, polyline')
-    expect(lines!.length).toBeGreaterThan(0)
   })
 
-  it('handles single commit gracefully', () => {
-    const single = [commits[0]]
-    render(
-      <GitHistory commits={single} activeCommit={null} onSelectCommit={vi.fn()} />
+  it('renders SVG circles for commits', () => {
+    const { container } = render(
+      <GitHistory
+        commits={[mkCommit()]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
     )
-    expect(screen.getByText('Initial commit')).toBeInTheDocument()
-    expect(screen.getByText('aaa')).toBeInTheDocument()
-    const svg = document.querySelector('svg')
-    expect(svg).toBeInTheDocument()
+    const circles = container.querySelectorAll('circle')
+    expect(circles.length).toBe(1)
   })
 
-  it('handles merge commit with two parents', () => {
-    const mergeCommit: GitCommit = {
-      hash: 'merge', shortHash: 'merge',
-      parents: ['aaa', 'bbb'],
-      author: 'Merged', date: '2024-04-01', message: 'Merge branch',
-    }
-    render(
-      <GitHistory commits={[...commits, mergeCommit]} activeCommit={null} onSelectCommit={vi.fn()} />
+  it('renders SVG connections for parent relationships', () => {
+    const { container } = render(
+      <GitHistory
+        commits={[
+          mkCommit({ hash: 'parent', shortHash: 'parent' }),
+          mkCommit({ hash: 'child', shortHash: 'child', parents: ['parent'] }),
+        ]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
     )
-    expect(screen.getByText('Merge branch')).toBeInTheDocument()
-    // SVG should have polyline for the merge edge
-    const svg = document.querySelector('svg')
-    const polylines = svg?.querySelectorAll('polyline')
-    expect(polylines!.length).toBeGreaterThan(0)
+    const lines = container.querySelectorAll('line')
+    const polylines = container.querySelectorAll('polyline')
+    expect(lines.length + polylines.length).toBeGreaterThanOrEqual(1)
   })
 
-  it('does not crash when commits array is null-like empty', () => {
-    render(
-      <GitHistory commits={[]} activeCommit={null} onSelectCommit={vi.fn()} />
+  it('renders polyline for cross-column parent connections', () => {
+    const { container } = render(
+      <GitHistory
+        commits={[
+          mkCommit({ hash: 'a', shortHash: 'aaa' }),
+          mkCommit({ hash: 'b', shortHash: 'bbb', parents: [] }),
+          mkCommit({ hash: 'merge', shortHash: 'mmm', parents: ['a', 'b'] }),
+        ]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
     )
-    expect(screen.getByText('No commits yet')).toBeInTheDocument()
+    const polylines = container.querySelectorAll('polyline')
+    expect(polylines.length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('renders commit short hashes as monospace', () => {
+    render(
+      <GitHistory
+        commits={[mkCommit({ shortHash: 'd3adbeef' })]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
+    )
+    const hashEl = screen.getByText('d3adbeef')
+    expect(hashEl.className).toContain('font-mono')
+  })
+
+  it('sets commit message as title attribute', () => {
+    render(
+      <GitHistory
+        commits={[mkCommit({ message: 'Fix the bug' })]}
+        activeCommit={null}
+        onSelectCommit={vi.fn()}
+      />
+    )
+    const row = screen.getByText('Fix the bug').closest('[title="Fix the bug"]')!
+    expect(row).toBeInTheDocument()
   })
 })

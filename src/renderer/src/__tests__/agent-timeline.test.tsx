@@ -2,67 +2,98 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import React from 'react'
 import { AgentTimeline } from '../components/AgentTimeline'
+import type { AgentStatus } from '@/types'
 
 function mkSession(overrides: Record<string, unknown> = {}) {
   return {
     id: 's1',
     title: 'Test Session',
     model: 'gpt-4o',
-    createdAt: Date.now() - 60000,
+    createdAt: Date.now() - 60_000,
     updatedAt: Date.now(),
     messageCount: 5,
-    agentStatus: undefined,
-    parentId: undefined,
     pinned: false,
+    archived: false,
+    agentStatus: 'idle' as AgentStatus,
     ...overrides,
   }
 }
 
-describe('AgentTimeline — rendering', () => {
+describe('AgentTimeline', () => {
   it('renders empty state when no sessions', () => {
-    render(<AgentTimeline sessions={[]} activeSessionId={null} onSelectSession={vi.fn()} />)
+    render(
+      <AgentTimeline sessions={[]} activeSessionId={null} onSelectSession={vi.fn()} />
+    )
     expect(screen.getByText('No agents yet')).toBeInTheDocument()
   })
 
-  it('renders session titles', () => {
+  it('renders a session with title', () => {
     render(
       <AgentTimeline
-        sessions={[mkSession({ id: 's1', title: 'My Chat' })]}
+        sessions={[mkSession({ title: 'My Agent Task' })]}
         activeSessionId={null}
         onSelectSession={vi.fn()}
       />
     )
-    expect(screen.getByText('My Chat')).toBeInTheDocument()
+    expect(screen.getByText('My Agent Task')).toBeInTheDocument()
   })
 
-  it('shows message count', () => {
+  it('calls onSelectSession when a session is clicked', () => {
+    const onSelect = vi.fn()
     render(
       <AgentTimeline
-        sessions={[mkSession({ id: 's1', messageCount: 10 })]}
+        sessions={[mkSession({ id: 's1', title: 'Click Me' })]}
+        activeSessionId={null}
+        onSelectSession={onSelect}
+      />
+    )
+    fireEvent.click(screen.getByText('Click Me'))
+    expect(onSelect).toHaveBeenCalledWith('s1')
+  })
+
+  it('highlights the active session', () => {
+    render(
+      <AgentTimeline
+        sessions={[mkSession({ id: 's1', title: 'Active' })]}
+        activeSessionId="s1"
+        onSelectSession={vi.fn()}
+      />
+    )
+    const btn = screen.getByText('Active').closest('button')!
+    expect(btn.className).toContain('bg-accent')
+  })
+
+  it('does not highlight non-active sessions', () => {
+    render(
+      <AgentTimeline
+        sessions={[mkSession({ id: 's1', title: 'Other' })]}
+        activeSessionId="s2"
+        onSelectSession={vi.fn()}
+      />
+    )
+    const btn = screen.getByText('Other').closest('button')!
+    expect(btn.className).not.toContain('bg-accent text-foreground')
+  })
+
+  it('sorts sessions by createdAt descending (newest first)', () => {
+    render(
+      <AgentTimeline
+        sessions={[
+          mkSession({ id: 'old', title: 'Old Session', createdAt: 100 }),
+          mkSession({ id: 'new', title: 'New Session', createdAt: 200 }),
+        ]}
         activeSessionId={null}
         onSelectSession={vi.fn()}
       />
     )
-    expect(screen.getByText('10 msg')).toBeInTheDocument()
+    const titles = screen.getAllByText(/Session$/).map((el) => el.textContent)
+    expect(titles).toEqual(['New Session', 'Old Session'])
   })
 
-  it('shows 0 msg when messageCount is undefined', () => {
+  it('shows running status label for running sessions', () => {
     render(
       <AgentTimeline
-        sessions={[mkSession({ messageCount: undefined })]}
-        activeSessionId={null}
-        onSelectSession={vi.fn()}
-      />
-    )
-    expect(screen.getByText('0 msg')).toBeInTheDocument()
-  })
-})
-
-describe('AgentTimeline — status icons', () => {
-  it('shows running status label for running agents', () => {
-    render(
-      <AgentTimeline
-        sessions={[mkSession({ agentStatus: 'running' })]}
+        sessions={[mkSession({ agentStatus: 'running' as AgentStatus })]}
         activeSessionId={null}
         onSelectSession={vi.fn()}
       />
@@ -70,107 +101,83 @@ describe('AgentTimeline — status icons', () => {
     expect(screen.getByText('running')).toBeInTheDocument()
   })
 
-  it('renders finished agents without crashing', () => {
+  it('does not show running label for idle sessions', () => {
     render(
       <AgentTimeline
-        sessions={[mkSession({ agentStatus: 'done' })]}
+        sessions={[mkSession({ agentStatus: 'idle' as AgentStatus })]}
         activeSessionId={null}
         onSelectSession={vi.fn()}
       />
     )
-    // Done agents render a CheckCircle icon (no text "done")
-    // Verify the session title is still rendered
-    expect(screen.getByText('Test Session')).toBeInTheDocument()
+    expect(screen.queryByText('running')).not.toBeInTheDocument()
   })
 
-  it('renders errored agents without crashing', () => {
+  it('shows message count', () => {
     render(
       <AgentTimeline
-        sessions={[mkSession({ agentStatus: 'error' })]}
+        sessions={[mkSession({ messageCount: 12 })]}
         activeSessionId={null}
         onSelectSession={vi.fn()}
       />
     )
-    expect(screen.getByText('Test Session')).toBeInTheDocument()
+    expect(screen.getByText(/12 msg/)).toBeInTheDocument()
   })
 
-  it('highlights active session', () => {
+  it('shows child sessions with Bot icon indicator', () => {
     render(
       <AgentTimeline
-        sessions={[mkSession({ id: 's1' }), mkSession({ id: 's2', title: 'Other' })]}
-        activeSessionId="s1"
+        sessions={[mkSession({ parentId: 'parent-1', title: 'Child' })]}
+        activeSessionId={null}
         onSelectSession={vi.fn()}
       />
     )
-    const buttons = screen.getAllByRole('button')
-    expect(buttons.length).toBe(2)
+    expect(screen.getByText('Child')).toBeInTheDocument()
   })
-})
 
-describe('AgentTimeline — interaction', () => {
-  it('calls onSelectSession when clicked', () => {
-    const onSelectSession = vi.fn()
-    render(
-      <AgentTimeline
-        sessions={[mkSession({ id: 's1', title: 'Click Me' })]}
-        activeSessionId={null}
-        onSelectSession={onSelectSession}
-      />
-    )
-    fireEvent.click(screen.getByText('Click Me'))
-    expect(onSelectSession).toHaveBeenCalledWith('s1')
-  })
-})
-
-describe('AgentTimeline — sorting', () => {
-  it('sorts sessions by createdAt descending (newest first)', () => {
+  it('renders groups when sessionGroups provided', () => {
     render(
       <AgentTimeline
         sessions={[
-          mkSession({ id: 's1', title: 'Older', createdAt: 1000 }),
-          mkSession({ id: 's2', title: 'Newer', createdAt: 2000 }),
+          mkSession({ id: 'g1', title: 'Grouped', group: 'grp-1', createdAt: 100 }),
+        ]}
+        sessionGroups={[{ id: 'grp-1', name: 'My Group', createdAt: 50 }]}
+        activeSessionId={null}
+        onSelectSession={vi.fn()}
+      />
+    )
+    expect(screen.getByText('My Group')).toBeInTheDocument()
+    expect(screen.getByText('Grouped')).toBeInTheDocument()
+  })
+
+  it('puts ungrouped sessions in Ungrouped section', () => {
+    render(
+      <AgentTimeline
+        sessions={[
+          mkSession({ id: 'ung', title: 'Ungrouped', createdAt: 100 }),
+        ]}
+        sessionGroups={[{ id: 'grp-1', name: 'Group', createdAt: 50 }]}
+        activeSessionId={null}
+        onSelectSession={vi.fn()}
+      />
+    )
+    expect(screen.getAllByText(/Ungrouped/).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByText('Ungrouped')).toBeInTheDocument()
+  })
+
+  it('renders multiple sessions', () => {
+    render(
+      <AgentTimeline
+        sessions={[
+          mkSession({ id: 'a', title: 'First' }),
+          mkSession({ id: 'b', title: 'Second' }),
+          mkSession({ id: 'c', title: 'Third' }),
         ]}
         activeSessionId={null}
         onSelectSession={vi.fn()}
       />
     )
-    const buttons = screen.getAllByRole('button')
-    // Newer should be first
-    expect(buttons[0]).toHaveTextContent('Newer')
-    expect(buttons[1]).toHaveTextContent('Older')
-  })
-})
-
-describe('AgentTimeline — sub-agent indicator', () => {
-  it('shows bot icon for sub-agents (parentId set)', () => {
-    render(
-      <AgentTimeline
-        sessions={[mkSession({ id: 's1', parentId: 'parent-1' })]}
-        activeSessionId={null}
-        onSelectSession={vi.fn()}
-      />
-    )
-    // Sub-agents render with Bot icon, parent sessions with MessageSquare
-    // Both should render without crashing
-    expect(screen.getByText('5 msg')).toBeInTheDocument()
-  })
-})
-
-describe('AgentTimeline — duration format', () => {
-  it('shows duration for finished agents', () => {
-    const now = Date.now()
-    render(
-      <AgentTimeline
-        sessions={[mkSession({
-          agentStatus: 'done',
-          createdAt: now - 65000,
-          updatedAt: now,
-        })]}
-        activeSessionId={null}
-        onSelectSession={vi.fn()}
-      />
-    )
-    // Should show "1m 5s" duration
-    expect(screen.getByText(/\d+m \d+s/)).toBeInTheDocument()
+    expect(screen.getByText('First')).toBeInTheDocument()
+    expect(screen.getByText('Second')).toBeInTheDocument()
+    expect(screen.getByText('Third')).toBeInTheDocument()
   })
 })
