@@ -125,6 +125,7 @@ declare global {
       lint: { run(cwd: string): Promise<{ ok: boolean; errors: number; output: string }> }
       test: { run(cwd: string): Promise<{ ok: boolean; passed: number; failed: number; total: number; output: string }> }
       build: { run(cwd: string): Promise<{ ok: boolean; output: string }> }
+      recent: { files(cwd: string, limit?: number): Promise<{ ok: boolean; files: string[] }> }
       dbEvents: {
         onFlushError(cb: (msg: string) => void): () => void
       }

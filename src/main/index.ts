@@ -442,6 +442,27 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:stashDrop',  (_, cwd: string, idx: number) => { validatePath(cwd); return stashDrop(cwd, idx) })
   ipcMain.handle('git:stashClear', (_, cwd: string) => { validatePath(cwd); return stashClear(cwd) })
 
+  // Recent files — recently modified files in workspace
+  ipcMain.handle('recent:files', async (_, cwd: string, limit = 20) => {
+    validatePath(cwd)
+    const execAsync = promisify(execCb)
+    try {
+      const { stdout } = await execAsync(
+        `git log --diff-filter=ACMR --name-only --pretty=format: -n ${limit} 2>/dev/null`,
+        { cwd, timeout: 10_000 }
+      )
+      const seen = new Set<string>()
+      const files: string[] = []
+      for (const line of stdout.split('\n')) {
+        const f = line.trim()
+        if (f && !seen.has(f)) { seen.add(f); files.push(f) }
+      }
+      return { ok: true, files }
+    } catch {
+      return { ok: false, files: [] }
+    }
+  })
+
   // Checkpoints — git stash-backed undo snapshots (inspired by Claude Code)
   ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => { validatePath(cwd); return createCheckpoint(cwd, msg) })
   ipcMain.handle('checkpoint:list',    (_, cwd: string) => { validatePath(cwd); return listCheckpoints(cwd) })
