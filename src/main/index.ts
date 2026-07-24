@@ -525,6 +525,20 @@ function registerIpcHandlers(): void {
     }
   })
 
+  ipcMain.handle('build:run', async (_, cwd: string) => {
+    const execAsync = promisify(execCb)
+    try {
+      const { stdout, stderr } = await execAsync('npm run build 2>&1', { cwd, timeout: 120_000 })
+      const output = (stdout + stderr).trim()
+      return { ok: true, output: output.slice(-4000) }
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; message: string }
+      const output = ((err.stdout || '') + (err.stderr || '')).trim()
+      if (output) return { ok: false, output: output.slice(-4000) }
+      return { ok: false, output: err.message }
+    }
+  })
+
   // API — proxy fetch through main process to avoid CORS
   ipcMain.handle('api:fetchModels', async (_, baseUrl: string, apiKey: string | undefined) => {
     const parsed = validateFetchUrl(baseUrl.replace(/\/$/, '') + '/models')

@@ -69,6 +69,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'config',        description: 'View or change settings from chat' },
   { kind: 'builtin', name: 'rewind',        description: 'Rewind conversation to an earlier point' },
   { kind: 'builtin', name: 'test',          description: 'Run the test suite and show results' },
+  { kind: 'builtin', name: 'build',         description: 'Run the project build and show results' },
   { kind: 'builtin', name: 'tree',          description: 'Show workspace directory tree' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
