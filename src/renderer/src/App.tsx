@@ -48,8 +48,15 @@ function tabKey(t: Tab): string {
 }
 
 export default function App(): React.ReactElement {
-  const store = useAppStore()
-  const { sendMessage } = useAI(store.settings)
+  // ── State selectors (only re-render App when these change) ─────────────
+  const tabs = useAppStore(s => s.tabs)
+  const activeTabId = useAppStore(s => s.activeTabId)
+  const sessions = useAppStore(s => s.sessions)
+  const sideChatSessionId = useAppStore(s => s.sideChatSessionId)
+  const workspacePath = useAppStore(s => s.workspacePath)
+  const settings = useAppStore(s => s.settings)
+  const activeView = useAppStore(s => s.activeView)
+  const { sendMessage } = useAI(settings)
   const [gitBadge, setGitBadge] = useState(0)
   const [agentSkills, setAgentSkills] = useState<import('@/types').PiSkill[]>([])
   const [agentCommands, setAgentCommands] = useState<import('@/types').SlashCommand[]>([])
@@ -69,7 +76,7 @@ export default function App(): React.ReactElement {
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false)
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
 
-  const paletteCommands = React.useMemo(() => usePaletteCommands(store), [store])
+  const paletteCommands = React.useMemo(() => usePaletteCommands(settings), [settings])
 
   // ── Plan preview ──────────────────────────────────────────────────
   const [pendingPlan, setPendingPlan] = useState<{
@@ -121,32 +128,32 @@ export default function App(): React.ReactElement {
   }, [])
 
   // ── Derived selectors ────────────────────────────────────────────────────────
-  const activeSessionTab = store.tabs.find(
-    (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === store.activeTabId
+  const activeSessionTab = tabs.find(
+    (t): t is Tab & { type: 'session' } => t.type === 'session' && t.id === activeTabId
   )
-  const activeTab = store.tabs.find((t) =>
-    t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
+  const activeTab = tabs.find((t) =>
+    t.type === 'session' ? t.id === activeTabId : t.path === activeTabId
   )
-  const activeSession = store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null
+  const activeSession = sessions.find((s) => s.id === activeSessionTab?.id) ?? null
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
     Promise.all([el.settings.get(), el.db.getSessions(true), el.workspace.getPath(), el.workspace.getRecent().catch(() => [])])
       .then(([rawSettings, rawSessions, wp, recents]) => {
         const settings = parseSettings(rawSettings)
-        store.setSettings(settings)
+        useAppStore.getState().setSettings(settings)
         applyTheme(settings.themeId)
         applyColorMode(settings.colorMode)
 
         const sessions = rawSessions.map(parseSession)
-        store.setSessions(sessions)
-        store.setRecentProjects(Array.isArray(recents) ? recents : [])
+        useAppStore.getState().setSessions(sessions)
+        useAppStore.getState().setRecentProjects(Array.isArray(recents) ? recents : [])
 
         if (wp) {
-          el.fs.readDir(wp).then((nodes) => store.setWorkspace(wp, nodes))
+          el.fs.readDir(wp).then((nodes) => useAppStore.getState().setWorkspace(wp, nodes))
         }
 
-        if (sessions.length > 0) store.openSessionTab(sessions[0])
+        if (sessions.length > 0) useAppStore.getState().openSessionTab(sessions[0])
       })
 
     const refreshAgentConfig = (cfg: import('@/types').AgentConfig | null) => {
@@ -195,10 +202,10 @@ export default function App(): React.ReactElement {
 
     const offAgentStatus = el.pi.onAgentStatus((sessionId, status) => {
       const store = useAppStore.getState()
-      store.updateSession(sessionId, { agentStatus: status as import('@/types').AgentStatus })
+      useAppStore.getState().updateSession(sessionId, { agentStatus: status as import('@/types').AgentStatus })
       // Auto-remove finished child sessions after a brief delay
       if (status === 'done' || status === 'error') {
-        const session = store.sessions.find((s) => s.id === sessionId)
+        const session = useAppStore.getState().sessions.find((s) => s.id === sessionId)
         if (session?.parentId) {
           setTimeout(() => {
             const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
@@ -236,39 +243,39 @@ export default function App(): React.ReactElement {
 
   // Load messages and todos when active session changes
   useEffect(() => {
-    if (!activeSessionTab) { store.setMessages([]); store.setTodos([]); return }
+    if (!activeSessionTab) { useAppStore.getState().setMessages([]); useAppStore.getState().setTodos([]); return }
     el.db.getMessages(activeSessionTab.id).then((raw) => {
       const msgs = raw.map(parseMessage)
       // Any tool message still 'running' is orphaned from a previous session —
       // the Pi agent is gone so they can never complete. Fix them now.
       const stale = msgs.filter((m) => m.role === 'tool' && m.toolStatus === 'running')
       for (const m of stale) el.db.updateMessage(m.id, { tool_status: 'done' })
-      store.setMessages(msgs.map((m) =>
+      useAppStore.getState().setMessages(msgs.map((m) =>
         m.role === 'tool' && m.toolStatus === 'running' ? { ...m, toolStatus: 'done' } : m
       ))
     })
     el.db.getTodos(activeSessionTab.id).then((raw) => {
-      store.setTodos(raw.map(parseTodo))
+      useAppStore.getState().setTodos(raw.map(parseTodo))
     })
   }, [activeSessionTab?.id])
 
   // Load side chat messages when side chat session changes
   useEffect(() => {
-    const scId = store.sideChatSessionId
-    if (!scId) { store.setSideChatMessages([]); return }
+    const scId = useAppStore.getState().sideChatSessionId
+    if (!scId) { useAppStore.getState().setSideChatMessages([]); return }
     el.db.getMessages(scId).then((raw) => {
       const msgs = raw.map(parseMessage)
       const stale = msgs.filter((m) => m.role === 'tool' && m.toolStatus === 'running')
       for (const m of stale) el.db.updateMessage(m.id, { tool_status: 'done' })
-      store.setSideChatMessages(msgs.map((m) =>
+      useAppStore.getState().setSideChatMessages(msgs.map((m) =>
         m.role === 'tool' && m.toolStatus === 'running' ? { ...m, toolStatus: 'done' } : m
       ))
     })
-  }, [store.sideChatSessionId])
+  }, [sideChatSessionId])
 
   // Git badge — poll status every 30s to show pending changes/ahead count
   useEffect(() => {
-    const wp = store.workspacePath
+    const wp = useAppStore.getState().workspacePath
     if (!wp) { setGitBadge(0); return }
     const poll = (): void => {
       el.git.status(wp).then((s) => {
@@ -279,7 +286,7 @@ export default function App(): React.ReactElement {
     poll()
     const id = setInterval(poll, 30_000)
     return () => clearInterval(id)
-  }, [store.workspacePath])
+  }, [workspacePath])
 
   // ── Session operations ───────────────────────────────────────────────────────
   const handleNewSession = useCallback(async () => {
@@ -291,48 +298,48 @@ export default function App(): React.ReactElement {
       await el.db.updateSession(session.id, { workspace_path: currentWp })
       session.workspacePath = currentWp
     }
-    store.addSession(session)
-    store.openSessionTab(session)
-    store.setMessages([])
+    useAppStore.getState().addSession(session)
+    useAppStore.getState().openSessionTab(session)
+    useAppStore.getState().setMessages([])
   }, [])
 
   const handleSelectSession = useCallback((id: string) => {
     const session = useAppStore.getState().sessions.find((s) => s.id === id)
     if (!session) return
-    store.openSessionTab(session)
+    useAppStore.getState().openSessionTab(session)
     if (session.workspacePath) {
       el.workspace.setPath(session.workspacePath)
-      el.fs.readDir(session.workspacePath).then((nodes) => store.setWorkspace(session.workspacePath!, nodes))
+      el.fs.readDir(session.workspacePath).then((nodes) => useAppStore.getState().setWorkspace(session.workspacePath!, nodes))
     } else if (useAppStore.getState().workspacePath) {
       // Session has no workspace — clear it
       el.workspace.setPath(null)
-      store.setWorkspace(null, [])
+      useAppStore.getState().setWorkspace(null, [])
     }
   }, [])
 
   const handleDeleteSession = useCallback(async (id: string) => {
     await el.db.deleteSession(id)
-    store.removeSession(id)
-    store.closeTab(id)
+    useAppStore.getState().removeSession(id)
+    useAppStore.getState().closeTab(id)
   }, [])
 
   const handleTogglePinSession = useCallback(async (id: string) => {
     const s = useAppStore.getState().sessions.find((s) => s.id === id)
     if (!s) return
     await el.db.updateSession(id, { pinned: !s.pinned })
-    store.togglePinSession(id)
+    useAppStore.getState().togglePinSession(id)
   }, [])
 
   const handleArchiveSession = useCallback(async (id: string) => {
     const s = useAppStore.getState().sessions.find((s) => s.id === id)
     if (!s) return
     await el.db.updateSession(id, { archived: !s.archived })
-    store.toggleArchiveSession(id)
+    useAppStore.getState().toggleArchiveSession(id)
   }, [])
 
   const handleRenameSession = useCallback(async (id: string, title: string) => {
     await el.db.updateSession(id, { title })
-    store.updateSession(id, { title })
+    useAppStore.getState().updateSession(id, { title })
   }, [])
 
   const handleDuplicateSession = useCallback(async (session: Session) => {
@@ -347,8 +354,8 @@ export default function App(): React.ReactElement {
         thinking: m.thinking ?? undefined,
       })
     }
-    store.addSession(newSession)
-    store.openSessionTab(newSession)
+    useAppStore.getState().addSession(newSession)
+    useAppStore.getState().openSessionTab(newSession)
   }, [])
 
   const handleExportSession = useCallback(async (session: Session) => {
@@ -472,15 +479,15 @@ export default function App(): React.ReactElement {
     switch (cmd) {
       case 'model': {
         if (!args || args === 'list') {
-          const cur = sess.model || store.settings.defaultModel
-          const provs = effectiveProviders(store.settings)
+          const cur = sess.model || useAppStore.getState().settings.defaultModel
+          const provs = effectiveProviders(useAppStore.getState().settings)
           if (provs.length === 0) {
             const msg = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured. Add a provider in Settings → Providers.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             return
           }
           const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Fetching available models...')
-          if (startMsg) store.appendMessage(parseMessage(startMsg))
+          if (startMsg) useAppStore.getState().appendMessage(parseMessage(startMsg))
           const multi = provs.length > 1
           Promise.allSettled(provs.map(async (p) => {
             const json = await el.ext.fetchModels(p.baseUrl.replace(/\/$/, ''), p.apiKey)
@@ -496,23 +503,23 @@ export default function App(): React.ReactElement {
               content += `**Available models** (${models.length}):\n`
               for (const m of models) {
                 const display = displayModel(m)
-                const isCurrent = m === (sess.model || store.settings.defaultModel)
+                const isCurrent = m === (sess.model || useAppStore.getState().settings.defaultModel)
                 content += `${isCurrent ? '→ ' : '  '}${display}${isCurrent ? ' *(current)*' : ''}\n`
               }
               content += '\nUse `/model <name>` to switch.'
             }
             const msg = await el.db.addMessage(sess.id, 'system', content)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }).catch(async () => {
             const msg = await el.db.addMessage(sess.id, 'system', 'Failed to fetch models from providers.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           })
           return
         }
         await el.db.updateSession(sess.id, { model: args })
-        store.updateSession(sess.id, { model: args })
+        useAppStore.getState().updateSession(sess.id, { model: args })
         const msg = await el.db.addMessage(sess.id, 'system', `Switched model to ${displayModel(args)}`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'clear': {
@@ -520,43 +527,43 @@ export default function App(): React.ReactElement {
         for (const m of msgs) {
           await el.db.deleteMessage(m.id)
         }
-        store.setMessages([])
+        useAppStore.getState().setMessages([])
         if (args === '--hard') {
-          const defaultModel = store.settings.defaultModel || 'gpt-4o-mini'
+          const defaultModel = useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
           await el.db.updateSession(sess.id, { model: defaultModel, pinned: false, workspace_path: null })
-          store.updateSession(sess.id, { model: defaultModel, pinned: false })
-          store.setWorkspace(null, [])
+          useAppStore.getState().updateSession(sess.id, { model: defaultModel, pinned: false })
+          useAppStore.getState().setWorkspace(null, [])
           const msg = await el.db.addMessage(sess.id, 'system', '**Session reset.** Messages cleared, model restored to default, workspace cleared, session unpinned.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
       case 'compact': {
         const msgs = useAppStore.getState().messages
-        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const model = sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
         if (msgs.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No messages to compact.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
-        if (!hasProvider(store.settings)) {
+        if (!hasProvider(useAppStore.getState().settings)) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured — cannot compact conversation.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         try {
-          const result = await compactConversation(sess.id, msgs, store.settings, model)
+          const result = await compactConversation(sess.id, msgs, useAppStore.getState().settings, model)
           if (result.compacted > 0) {
-            store.setMessages(result.messages)
+            useAppStore.getState().setMessages(result.messages)
             const msg = await el.db.addMessage(sess.id, 'system', `**Context compacted:** ${result.compacted} earlier messages were summarized to free up space in the context window.`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else {
             const msg = await el.db.addMessage(sess.id, 'system', 'No compaction needed — the conversation is short enough to fit in the context window.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Compaction failed:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
@@ -593,15 +600,15 @@ export default function App(): React.ReactElement {
           '· `Cmd/Ctrl + Shift + F` — Search all agent transcripts',
         ].join('\n')
         const msg = await el.db.addMessage(sess.id, 'system', shortcutsText)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'note': {
         if (args === '--clear') {
           await el.db.updateSession(sess.id, { notes: '' })
-          store.updateSession(sess.id, { notes: '' })
+          useAppStore.getState().updateSession(sess.id, { notes: '' })
           const msg = await el.db.addMessage(sess.id, 'system', 'Session notes cleared.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         if (!args) {
@@ -610,35 +617,35 @@ export default function App(): React.ReactElement {
             ? `**Session Notes:**\n\n${currentNotes}`
             : 'No notes on this session. Use `/note <text>` to add notes.'
           const msg = await el.db.addMessage(sess.id, 'system', display)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const existing = sess.notes || ''
         const separator = existing ? '\n\n' : ''
         const newNotes = `${existing}${separator}${args}`
         await el.db.updateSession(sess.id, { notes: newNotes })
-        store.updateSession(sess.id, { notes: newNotes })
+        useAppStore.getState().updateSession(sess.id, { notes: newNotes })
         const msg = await el.db.addMessage(sess.id, 'system', `**Notes updated.**\n\n${newNotes}`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'pin': {
-        store.togglePinSession(sess.id)
+        useAppStore.getState().togglePinSession(sess.id)
         const pinned = useAppStore.getState().sessions.find((s) => s.id === sess.id)?.pinned
         const pinMsg = await el.db.addMessage(sess.id, 'system', pinned ? '📌 Session pinned.' : 'Session unpinned.')
-        if (pinMsg) store.appendMessage(parseMessage(pinMsg))
+        if (pinMsg) useAppStore.getState().appendMessage(parseMessage(pinMsg))
         break
       }
       case 'rename': {
         if (!args) {
           const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /rename <new title>')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         await el.db.updateSession(sess.id, { title: args })
-        store.updateSession(sess.id, { title: args })
+        useAppStore.getState().updateSession(sess.id, { title: args })
         const msg = await el.db.addMessage(sess.id, 'system', `Session renamed to: ${args}`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'log': {
@@ -663,19 +670,19 @@ export default function App(): React.ReactElement {
           }
         }
         const logMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (logMsg) store.appendMessage(parseMessage(logMsg))
+        if (logMsg) useAppStore.getState().appendMessage(parseMessage(logMsg))
         break
       }
       case 'review': {
         const msgs = await el.db.getMessages(sess.id)
         if (!msgs || msgs.length === 0) {
           const noMsg = await el.db.addMessage(sess.id, 'system', 'No messages to review.')
-          if (noMsg) store.appendMessage(parseMessage(noMsg))
+          if (noMsg) useAppStore.getState().appendMessage(parseMessage(noMsg))
           break
         }
-        if (!hasProvider(store.settings)) {
+        if (!hasProvider(useAppStore.getState().settings)) {
           const noProv = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured.')
-          if (noProv) store.appendMessage(parseMessage(noProv))
+          if (noProv) useAppStore.getState().appendMessage(parseMessage(noProv))
           break
         }
         const reviewSystemPrompt = 'You are a code reviewer. Analyze the conversation below and provide: 1) A brief summary of what was discussed/accomplished. 2) Code quality observations (patterns, potential issues). 3) 2-3 specific suggestions for improvement. Be concise and actionable.'
@@ -685,15 +692,15 @@ export default function App(): React.ReactElement {
         }))
         // Show starting message immediately
         const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Starting review...')
-        if (startMsg) store.appendMessage(parseMessage(startMsg))
+        if (startMsg) useAppStore.getState().appendMessage(parseMessage(startMsg))
         // Fire API call in background — don't await
-        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
-        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const baseUrl = useAppStore.getState().settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
         fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+            ...(useAppStore.getState().settings.apiKey ? { Authorization: `Bearer ${useAppStore.getState().settings.apiKey}` } : {}),
           },
           body: JSON.stringify({
             model: modelId,
@@ -708,14 +715,14 @@ export default function App(): React.ReactElement {
             const json = await response.json()
             const reviewContent = json.choices?.[0]?.message?.content ?? 'No review generated.'
             const msg = await el.db.addMessage(sess.id, 'system', `**📝 Session Review**\n\n${reviewContent}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else {
             const msg = await el.db.addMessage(sess.id, 'system', `Review failed: ${response.status}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
         }).catch(async () => {
           const msg = await el.db.addMessage(sess.id, 'system', 'Review failed: network error')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         })
         break
       }
@@ -723,12 +730,12 @@ export default function App(): React.ReactElement {
         const msgs = await el.db.getMessages(sess.id)
         if (!msgs || msgs.length === 0) {
           const noMsg = await el.db.addMessage(sess.id, 'system', 'No messages to summarize.')
-          if (noMsg) store.appendMessage(parseMessage(noMsg))
+          if (noMsg) useAppStore.getState().appendMessage(parseMessage(noMsg))
           break
         }
-        if (!hasProvider(store.settings)) {
+        if (!hasProvider(useAppStore.getState().settings)) {
           const noProv = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured.')
-          if (noProv) store.appendMessage(parseMessage(noProv))
+          if (noProv) useAppStore.getState().appendMessage(parseMessage(noProv))
           break
         }
         const summarizeSystemPrompt = 'You are a helpful assistant. Summarize the conversation below. Include: 1) Key topics discussed, 2) Decisions made, 3) Code changes mentioned, 4) Open questions or next steps. Be concise but thorough.'
@@ -740,14 +747,14 @@ export default function App(): React.ReactElement {
             content: m.content,
           }))
         const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Generating summary...')
-        if (startMsg) store.appendMessage(parseMessage(startMsg))
-        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
-        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        if (startMsg) useAppStore.getState().appendMessage(parseMessage(startMsg))
+        const baseUrl = useAppStore.getState().settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
         fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+            ...(useAppStore.getState().settings.apiKey ? { Authorization: `Bearer ${useAppStore.getState().settings.apiKey}` } : {}),
           },
           body: JSON.stringify({
             model: modelId,
@@ -762,14 +769,14 @@ export default function App(): React.ReactElement {
             const json = await response.json()
             const summaryContent = json.choices?.[0]?.message?.content ?? 'No summary generated.'
             const msg = await el.db.addMessage(sess.id, 'system', `**📝 Session Summary**\n\n${summaryContent}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else {
             const msg = await el.db.addMessage(sess.id, 'system', `Summary failed: ${response.status}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
         }).catch(async () => {
           const msg = await el.db.addMessage(sess.id, 'system', 'Summary failed: network error')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         })
         break
       }
@@ -777,11 +784,11 @@ export default function App(): React.ReactElement {
         const { sessions } = useAppStore.getState()
         if (sessions.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No sessions to analyze.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
 
-        store.appendMessage({
+        useAppStore.getState().appendMessage({
           id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
           content: 'Calculating workspace costs...', isStreaming: false, createdAt: Date.now(),
         })
@@ -798,7 +805,7 @@ export default function App(): React.ReactElement {
             totalSessions++
             totalMsgs += msgs.length
 
-            const model = s.model || store.settings.defaultModel || 'gpt-4o-mini'
+            const model = s.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
             if (!modelStats[model]) {
               modelStats[model] = { input: 0, output: 0, sessions: 0, cost: 0 }
             }
@@ -835,12 +842,12 @@ export default function App(): React.ReactElement {
 
         lines.push('\n*Costs are estimates based on ~4 chars/token heuristic.*')
         const costMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (costMsg) store.appendMessage(parseMessage(costMsg))
+        if (costMsg) useAppStore.getState().appendMessage(parseMessage(costMsg))
         break
       }
       case 'context': {
         const msgs = useAppStore.getState().messages
-        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const model = sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
         const used = estimateTokens(msgs)
         const window = contextWindow(model)
         const pct = Math.min(100, Math.round((used / window) * 100))
@@ -857,7 +864,7 @@ export default function App(): React.ReactElement {
           `\n*${color === 'green' ? ' Plenty of room.' : color === 'yellow' ? ' Getting warm.' : color === 'orange' ? ' Getting full — consider /compact.' : ' Near capacity — run /compact soon.'}*`,
         ]
         const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'theme': {
@@ -866,31 +873,31 @@ export default function App(): React.ReactElement {
         if (!arg) {
           const themeList = THEMES.map((t) => t.id === settings.themeId ? `**${t.label}** (current)` : t.label).join(', ')
           const msg = await el.db.addMessage(sess.id, 'system', `**Current theme:** ${settings.colorMode} mode, accent: ${settings.themeId}\n\n**Accents:** ${themeList}\n**Modes:** dark, light\n\nUsage: /theme dark|light, /theme <accent>`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         if (arg === 'dark' || arg === 'light') {
           const next = { ...settings, colorMode: arg as ColorMode }
           await el.settings.set(next)
-          store.setSettings(next)
+          useAppStore.getState().setSettings(next)
           applyColorMode(arg as ColorMode)
           const msg = await el.db.addMessage(sess.id, 'system', `Switched to **${arg}** mode.`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const match = THEMES.find((t) => t.id === arg || t.label.toLowerCase() === arg)
         if (!match) {
           const ids = THEMES.map((t) => t.id).join(', ')
           const msg = await el.db.addMessage(sess.id, 'system', `Unknown theme: \`${arg}\`. Available: ${ids}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const next = { ...settings, themeId: match.id }
         await el.settings.set(next)
-        store.setSettings(next)
+        useAppStore.getState().setSettings(next)
         applyTheme(match.id)
         const msg = await el.db.addMessage(sess.id, 'system', `Accent changed to **${match.label}**.`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'config': {
@@ -916,7 +923,7 @@ export default function App(): React.ReactElement {
           }
           lines.push('\nUsage: `/config <key>` to view, `/config <key> <value>` to set')
           const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const parts = args.trim().split(/\s+/)
@@ -925,14 +932,14 @@ export default function App(): React.ReactElement {
         if (!meta) {
           const validKeys = Object.keys(CONFIG_KEYS).join(', ')
           const msg = await el.db.addMessage(sess.id, 'system', `Unknown setting: \`${key}\`\n\nValid keys: ${validKeys}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         if (parts.length === 1) {
           const val = (settings as unknown as Record<string, unknown>)[key]
           const display = val === undefined || val === '' ? '(default)' : String(val)
           const msg = await el.db.addMessage(sess.id, 'system', `**${meta.label}** (\`${key}\`): ${display}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const rawVal = parts.slice(1).join(' ')
@@ -942,14 +949,14 @@ export default function App(): React.ReactElement {
           else if (['false', '0', 'no', 'off'].includes(rawVal.toLowerCase())) newVal = false
           else {
             const msg = await el.db.addMessage(sess.id, 'system', `Invalid boolean value: \`${rawVal}\`. Use true/false.`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
         } else if (meta.type === 'number') {
           const n = Number(rawVal)
           if (isNaN(n)) {
             const msg = await el.db.addMessage(sess.id, 'system', `Invalid number: \`${rawVal}\``)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           newVal = n
@@ -957,7 +964,7 @@ export default function App(): React.ReactElement {
           const match = meta.enumValues.find((v) => v.toLowerCase() === rawVal.toLowerCase())
           if (!match) {
             const msg = await el.db.addMessage(sess.id, 'system', `Invalid value: \`${rawVal}\`. Options: ${meta.enumValues.join(', ')}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           newVal = match
@@ -966,22 +973,22 @@ export default function App(): React.ReactElement {
         }
         const next = { ...settings, [key]: newVal }
         await el.settings.set(next)
-        store.setSettings(next)
+        useAppStore.getState().setSettings(next)
         const msg = await el.db.addMessage(sess.id, 'system', `**${meta.label}** set to: \`${newVal}\``)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'rewind': {
         const msgs = useAppStore.getState().messages
         if (msgs.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No messages to rewind.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const userMsgs = msgs.filter((m) => m.role === 'user')
         if (userMsgs.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No user messages to rewind to.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         if (!args) {
@@ -992,13 +999,13 @@ export default function App(): React.ReactElement {
           })
           lines.push('\nUsage: `/rewind <n>` to go back to checkpoint n')
           const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const idx = parseInt(args, 10)
         if (isNaN(idx) || idx < 1 || idx > userMsgs.length) {
           const msg = await el.db.addMessage(sess.id, 'system', `Invalid checkpoint: \`${args}\`. Use a number between 1 and ${userMsgs.length}.`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const targetMsg = userMsgs[idx - 1]
@@ -1006,27 +1013,27 @@ export default function App(): React.ReactElement {
         const toDelete = msgs.slice(targetIdx + 1)
         if (toDelete.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'Already at the latest point — nothing to rewind.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         for (const m of toDelete) {
           await el.db.deleteMessage(m.id)
         }
-        store.setMessages(msgs.slice(0, targetIdx + 1))
+        useAppStore.getState().setMessages(msgs.slice(0, targetIdx + 1))
         const msg = await el.db.addMessage(sess.id, 'system', `Rewound to checkpoint ${idx}. Removed ${toDelete.length} message${toDelete.length !== 1 ? 's' : ''}.`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'help': {
         const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'status': {
         const lines: string[] = ['**Ares Status Report**\n']
         const { sessions, workspacePath } = useAppStore.getState()
-        const settings = store.settings
+        const settings = useAppStore.getState().settings
 
         // App version
         const appVersion = '__VERSION__'  // replaced at build time
@@ -1075,13 +1082,13 @@ export default function App(): React.ReactElement {
 
         lines.push('\nRun `/help` for all available commands.')
         const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'debug': {
         const lines: string[] = ['**🔍 Debug Info**\n']
         const { sessions, workspacePath, activeTabId, tabs, messages } = useAppStore.getState()
-        const settings = store.settings
+        const settings = useAppStore.getState().settings
 
         // Platform info
         lines.push(`**Platform:** ${navigator.platform}`)
@@ -1122,13 +1129,13 @@ export default function App(): React.ReactElement {
 
         lines.push('\nRun `/status` for system health check.')
         const dbgMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (dbgMsg) store.appendMessage(parseMessage(dbgMsg))
+        if (dbgMsg) useAppStore.getState().appendMessage(parseMessage(dbgMsg))
         break
       }
       case 'doctor': {
         const lines: string[] = ['**🩺 Ares Doctor — Environment Diagnostics**\n']
         const { sessions, workspacePath } = useAppStore.getState()
-        const settings = store.settings
+        const settings = useAppStore.getState().settings
         const checks: { label: string; ok: boolean; detail: string }[] = []
 
         // 1. Platform
@@ -1228,14 +1235,14 @@ export default function App(): React.ReactElement {
         lines.push('\nRun `/status` for a quick health check, or `/debug` for developer diagnostics.')
 
         const doctorMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (doctorMsg) store.appendMessage(parseMessage(doctorMsg))
+        if (doctorMsg) useAppStore.getState().appendMessage(parseMessage(doctorMsg))
         break
       }
       case 'history': {
         const { promptHistory } = useAppStore.getState()
         if (promptHistory.length === 0) {
           const noHist = await el.db.addMessage(sess.id, 'system', 'No prompt history yet. Start typing to build history.')
-          if (noHist) store.appendMessage(parseMessage(noHist))
+          if (noHist) useAppStore.getState().appendMessage(parseMessage(noHist))
           break
         }
         const limit = args ? Math.min(parseInt(args, 10) || 10, 50) : 10
@@ -1246,18 +1253,18 @@ export default function App(): React.ReactElement {
           lines.push(`${i + 1}. ${preview}`)
         }
         const histMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (histMsg) store.appendMessage(parseMessage(histMsg))
+        if (histMsg) useAppStore.getState().appendMessage(parseMessage(histMsg))
         break
       }
       case 'summary': {
         const msgs = useAppStore.getState().messages
         if (msgs.length === 0) {
           const em = await el.db.addMessage(sess.id, 'system', 'No messages in this session to summarize.')
-          if (em) store.appendMessage(parseMessage(em))
+          if (em) useAppStore.getState().appendMessage(parseMessage(em))
           break
         }
 
-        store.appendMessage({
+        useAppStore.getState().appendMessage({
           id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
           content: 'Generating session summary...', isStreaming: false, createdAt: Date.now(),
         })
@@ -1267,7 +1274,7 @@ export default function App(): React.ReactElement {
           `**${m.role === 'user' ? 'User' : 'Assistant'}**: ${m.content.slice(0, 2000)}`
         ).join('\n\n')
 
-        const apiBaseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const apiBaseUrl = useAppStore.getState().settings.apiBaseUrl.replace(/\/$/, '')
         if (apiBaseUrl.trim().length > 0) {
           try {
             const prompt = [
@@ -1286,10 +1293,10 @@ export default function App(): React.ReactElement {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+                ...(useAppStore.getState().settings.apiKey ? { Authorization: `Bearer ${useAppStore.getState().settings.apiKey}` } : {}),
               },
               body: JSON.stringify({
-                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                model: sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini',
                 messages: [{ role: 'user', content: prompt }],
                 stream: false,
               }),
@@ -1302,11 +1309,11 @@ export default function App(): React.ReactElement {
             const json = await response.json()
             const content = json.choices?.[0]?.message?.content ?? 'No summary generated.'
             const finalMsg = await el.db.addMessage(sess.id, 'system', `**Session Summary**\n\n${content}`)
-            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+            if (finalMsg) useAppStore.getState().appendMessage(parseMessage(finalMsg))
           } catch (err) {
             const errorMsg = `**Error generating summary:** ${(err as Error).message}`
             const finalMsg = await el.db.addMessage(sess.id, 'system', errorMsg)
-            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+            if (finalMsg) useAppStore.getState().appendMessage(parseMessage(finalMsg))
           }
         } else {
           // Fallback: basic stats without AI
@@ -1321,17 +1328,17 @@ export default function App(): React.ReactElement {
             '\nConfigure an API endpoint to get AI-powered summaries.',
           ].filter(Boolean).join('\n')
           const finalMsg = await el.db.addMessage(sess.id, 'system', stats)
-          if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+          if (finalMsg) useAppStore.getState().appendMessage(parseMessage(finalMsg))
         }
         break
       }
       case 'usage': {
         const msgs = useAppStore.getState().messages
-        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const model = sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
 
         if (msgs.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to analyze.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
 
@@ -1354,9 +1361,9 @@ export default function App(): React.ReactElement {
         const durMinutes = Math.floor((durationMs % 3600000) / 60000)
         const durationStr = durHours > 0 ? `${durHours}h ${durMinutes}m` : `${durMinutes}m`
 
-        const apiBaseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+        const apiBaseUrl = useAppStore.getState().settings.apiBaseUrl.replace(/\/$/, '')
         if (apiBaseUrl.trim().length > 0) {
-          store.appendMessage({
+          useAppStore.getState().appendMessage({
             id: crypto.randomUUID(), sessionId: sess.id, role: 'user',
             content: 'Generating session usage summary...', isStreaming: false, createdAt: Date.now(),
           })
@@ -1382,7 +1389,7 @@ export default function App(): React.ReactElement {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+                ...(useAppStore.getState().settings.apiKey ? { Authorization: `Bearer ${useAppStore.getState().settings.apiKey}` } : {}),
               },
               body: JSON.stringify({
                 model,
@@ -1398,11 +1405,11 @@ export default function App(): React.ReactElement {
             const json = await response.json()
             const content = json.choices?.[0]?.message?.content ?? 'No usage summary generated.'
             const finalMsg = await el.db.addMessage(sess.id, 'system', `**Session Usage**\n\n${content}`)
-            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+            if (finalMsg) useAppStore.getState().appendMessage(parseMessage(finalMsg))
           } catch (err) {
             const errorMsg = `**Error generating usage summary:** ${(err as Error).message}`
             const finalMsg = await el.db.addMessage(sess.id, 'system', errorMsg)
-            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+            if (finalMsg) useAppStore.getState().appendMessage(parseMessage(finalMsg))
           }
         } else {
           const stats = [
@@ -1417,18 +1424,18 @@ export default function App(): React.ReactElement {
             '\nConfigure an API endpoint to get AI-powered usage analysis.',
           ].filter(Boolean).join('\n')
           const msg = await el.db.addMessage(sess.id, 'system', stats)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
       case 'overview': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           return
         }
-        store.appendMessage({
+        useAppStore.getState().appendMessage({
           id: uuidv4(), sessionId: sess.id, role: 'user',
           content: 'Generating project overview...', isStreaming: false, createdAt: Date.now(),
         })
@@ -1451,7 +1458,7 @@ export default function App(): React.ReactElement {
           }
           const tree = formatTree(rootNodes)
 
-          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const baseUrl = useAppStore.getState().settings.apiBaseUrl.replace(/\/$/, '')
           const hasAi = baseUrl.trim().length > 0
 
           if (!hasAi) {
@@ -1463,7 +1470,7 @@ export default function App(): React.ReactElement {
               readmeContent ? `**README:**\n${readmeContent.slice(0, 1500)}\n` : '',
             ].filter(Boolean).join('\n')
             const msg = await el.db.addMessage(sess.id, 'system', overview)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else {
             // Build AI prompt
             const promptParts = [
@@ -1480,10 +1487,10 @@ export default function App(): React.ReactElement {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+                ...(useAppStore.getState().settings.apiKey ? { Authorization: `Bearer ${useAppStore.getState().settings.apiKey}` } : {}),
               },
               body: JSON.stringify({
-                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                model: sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini',
                 messages: [{ role: 'user', content: promptParts }],
                 stream: false,
               }),
@@ -1497,12 +1504,12 @@ export default function App(): React.ReactElement {
             const content = json.choices?.[0]?.message?.content ?? 'No overview generated.'
 
             const msg = await el.db.addMessage(sess.id, 'system', content)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
         } catch (err) {
           const errorMsg = `**Error generating overview:** ${(err as Error).message}`
           const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
@@ -1514,24 +1521,24 @@ export default function App(): React.ReactElement {
         const lastAssistant = msgs.filter((m) => m.role === 'assistant').at(-1)
         if (!lastAssistant) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No assistant response found to rate.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         await el.db.updateMessage(lastAssistant.id, { feedback: feedbackType })
-        store.upsertMessage(lastAssistant.id, { ...lastAssistant, feedback: feedbackType })
+        useAppStore.getState().upsertMessage(lastAssistant.id, { ...lastAssistant, feedback: feedbackType })
         const emoji = feedbackType === 'helpful' ? '👍' : '👎'
         const msg = await el.db.addMessage(sess.id, 'system', `Feedback recorded — marked as ${feedbackType} ${emoji}`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'pr': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           return
         }
-        store.appendMessage({
+        useAppStore.getState().appendMessage({
           id: uuidv4(), sessionId: sess.id, role: 'user',
           content: 'Generating pull request from session context...', isStreaming: false, createdAt: Date.now(),
         })
@@ -1569,7 +1576,7 @@ export default function App(): React.ReactElement {
               }).join('\n')
             : 'No uncommitted changes.'
 
-          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const baseUrl = useAppStore.getState().settings.apiBaseUrl.replace(/\/$/, '')
           const hasAi = baseUrl.trim().length > 0
 
           if (hasAi) {
@@ -1605,10 +1612,10 @@ export default function App(): React.ReactElement {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+                ...(useAppStore.getState().settings.apiKey ? { Authorization: `Bearer ${useAppStore.getState().settings.apiKey}` } : {}),
               },
               body: JSON.stringify({
-                model: sess.model || store.settings.defaultModel || 'gpt-4o-mini',
+                model: sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini',
                 messages: [{ role: 'user', content: prompt }],
                 stream: false,
               }),
@@ -1621,7 +1628,7 @@ export default function App(): React.ReactElement {
             const json = await response.json()
             const content = json.choices?.[0]?.message?.content ?? 'No PR generated.'
             const finalMsg = await el.db.addMessage(sess.id, 'system', `**Pull Request from Session**\n\n${content}`)
-            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+            if (finalMsg) useAppStore.getState().appendMessage(parseMessage(finalMsg))
           } else {
             // Structured PR from git data without AI
             const sessionStart = msgs.length > 0
@@ -1647,12 +1654,12 @@ export default function App(): React.ReactElement {
               '> Generated by Ares /pr command. Configure an API endpoint for AI-powered PR descriptions.',
             ].join('\n')
             const finalMsg = await el.db.addMessage(sess.id, 'system', prBody)
-            if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+            if (finalMsg) useAppStore.getState().appendMessage(parseMessage(finalMsg))
           }
         } catch (err) {
           const errorMsg = `**Error generating pull request:** ${(err as Error).message}`
           const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
@@ -1666,7 +1673,7 @@ export default function App(): React.ReactElement {
         const forkN = forks.length + 1
         const forkTitle = `${title} (fork ${forkN})`
 
-        store.appendMessage({
+        useAppStore.getState().appendMessage({
           id: uuidv4(), sessionId: sess.id, role: 'user',
           content: `Forking session as "${forkTitle}"...`,
           isStreaming: false, createdAt: Date.now(),
@@ -1693,15 +1700,15 @@ export default function App(): React.ReactElement {
               reactions: m.reactions ? { up: m.reactions.up } : undefined,
             })
           }
-          store.addSession(newSession)
-          store.openSessionTab(newSession)
+          useAppStore.getState().addSession(newSession)
+          useAppStore.getState().openSessionTab(newSession)
           // Load messages for the new session
           const rawMsgs = await el.db.getMessages(newSession.id)
-          store.setMessages(rawMsgs.map((r: import('@/types').RawMessage) => parseMessage(r)))
+          useAppStore.getState().setMessages(rawMsgs.map((r: import('@/types').RawMessage) => parseMessage(r)))
         } catch (err) {
           const errorMsg = `**Error forking session:** ${(err as Error).message}`
           const msg = await el.db.addMessage(sess.id, 'system', errorMsg)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
@@ -1754,27 +1761,27 @@ export default function App(): React.ReactElement {
           }
         }
         const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'diff': {
         const { workspacePath } = useAppStore.getState()
         if (!workspacePath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace folder is open.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         try {
           const status = await el.git.status(workspacePath)
           if (!status.hasRepo) {
             const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const allFiles = [...status.staged, ...status.unstaged]
           if (allFiles.length === 0) {
             const msg = await el.db.addMessage(sess.id, 'system', 'No changes in working tree.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const diffParts: string[] = []
@@ -1786,10 +1793,10 @@ export default function App(): React.ReactElement {
           if (allFiles.length > 30) diffParts.push(`\n*...and ${allFiles.length - 30} more files*`)
           const diffText = diffParts.length > 0 ? diffParts.join('\n\n') : 'No diff content available.'
           const msg = await el.db.addMessage(sess.id, 'system', `**Git Diff**\n\n${diffText}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
@@ -1797,14 +1804,14 @@ export default function App(): React.ReactElement {
         const msgs = useAppStore.getState().messages
         if (msgs.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to export.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
 
         const exportLines: string[] = []
         exportLines.push(`# ${sess.title || 'Untitled Session'}`)
         exportLines.push('')
-        exportLines.push(`*Exported ${new Date().toISOString().slice(0, 10)} · ${msgs.length} messages · Model: ${sess.model || store.settings.defaultModel || 'default'}*`)
+        exportLines.push(`*Exported ${new Date().toISOString().slice(0, 10)} · ${msgs.length} messages · Model: ${sess.model || useAppStore.getState().settings.defaultModel || 'default'}*`)
         exportLines.push('')
         exportLines.push('---')
         exportLines.push('')
@@ -1833,14 +1840,14 @@ export default function App(): React.ReactElement {
         URL.revokeObjectURL(url)
 
         const msg = await el.db.addMessage(sess.id, 'system', `**Exported** ${msgs.length} messages as Markdown (${md.length.toLocaleString()} characters).`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'branches': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           return
         }
         if (!args) {
@@ -1856,10 +1863,10 @@ export default function App(): React.ReactElement {
               }
             }
             const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } catch (err) {
             const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
           break
         }
@@ -1867,16 +1874,16 @@ export default function App(): React.ReactElement {
           const branchName = args.slice(6).trim()
           if (!branchName) {
             const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /branches --new <branch-name>')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           try {
             await el.git.createBranch(wsPath, branchName)
             const msg = await el.db.addMessage(sess.id, 'system', `Created and switched to branch \`${branchName}\``)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } catch (err) {
             const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
           break
         }
@@ -1884,45 +1891,45 @@ export default function App(): React.ReactElement {
         try {
           await el.git.checkout(wsPath, branchName)
           const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \`${branchName}\``)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
       case 'commit': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           return
         }
         if (!args) {
           const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /commit <message>')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           return
         }
         try {
           const status = await el.git.status(wsPath)
           if (!status.hasRepo) {
             const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           if (status.staged.length === 0) {
             const msg = await el.db.addMessage(sess.id, 'system', 'No staged changes to commit. Use /stage to stage files first.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const fileCount = status.staged.length
           await el.git.commit(wsPath, args)
           const branchName = status.branch || 'HEAD'
           const msg = await el.db.addMessage(sess.id, 'system', `**Committed** ${fileCount} file${fileCount === 1 ? '' : 's'} on \`${branchName}\`: "${args}"`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Commit failed:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
@@ -1932,7 +1939,7 @@ export default function App(): React.ReactElement {
         const lastUserIdx = msgs.findLastIndex((m) => m.role === 'user')
         if (lastUserIdx === -1) {
           const msg = await el.db.addMessage(sess.id, 'system', 'Nothing to undo — no user messages found.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         // Collect messages to remove: the last user message and everything after it
@@ -1941,23 +1948,23 @@ export default function App(): React.ReactElement {
           await el.db.deleteMessage(m.id)
         }
         const remaining = msgs.slice(0, lastUserIdx)
-        store.setMessages(remaining)
+        useAppStore.getState().setMessages(remaining)
         const undoMsg = await el.db.addMessage(sess.id, 'system', `**Undone.** Removed ${toRemove.length} message${toRemove.length === 1 ? '' : 's'} (last exchange).`)
-        if (undoMsg) store.appendMessage(parseMessage(undoMsg))
+        if (undoMsg) useAppStore.getState().appendMessage(parseMessage(undoMsg))
         break
       }
       case 'stage': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           return
         }
         try {
           const status = await el.git.status(wsPath)
           if (!status.hasRepo) {
             const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           if (!args) {
@@ -1988,60 +1995,60 @@ export default function App(): React.ReactElement {
               lines.push('Working tree clean — nothing to stage.')
             }
             const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else if (args === '--all') {
             // Stage all files
             await el.git.stageAll(wsPath)
             const msg = await el.db.addMessage(sess.id, 'system', 'Staged all files.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else if (args.startsWith('--unstage ')) {
             const target = args.slice(10).trim()
             if (!target) {
               const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /stage --unstage <file> or /stage --unstage --all')
-              if (msg) store.appendMessage(parseMessage(msg))
+              if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
               break
             }
             if (target === '--all') {
               // Unstage all files
               await el.git.unstageAll(wsPath)
               const msg = await el.db.addMessage(sess.id, 'system', 'Unstaged all files.')
-              if (msg) store.appendMessage(parseMessage(msg))
+              if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             } else {
               // Unstage a specific file
               await el.git.unstageFile(wsPath, target)
               const msg = await el.db.addMessage(sess.id, 'system', `Unstaged \`${target}\``)
-              if (msg) store.appendMessage(parseMessage(msg))
+              if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             }
           } else {
             // Stage a specific file
             const filePath = args.trim()
             await el.git.stageFile(wsPath, filePath)
             const msg = await el.db.addMessage(sess.id, 'system', `Staged \`${filePath}\``)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
       case 'fetch': {
         if (!args) {
           const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /fetch <url> — Fetch web content from a URL.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const fetchUrl = args.trim()
         if (!fetchUrl.startsWith('http://') && !fetchUrl.startsWith('https://')) {
           const msg = await el.db.addMessage(sess.id, 'system', '**Error:** URL must start with `http://` or `https://`.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         try {
           const result = await el.ext.fetchUrl(fetchUrl)
           if (!result.ok) {
             const msg = await el.db.addMessage(sess.id, 'system', `**Fetch failed:** ${result.error}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const content = result.content || ''
@@ -2049,77 +2056,77 @@ export default function App(): React.ReactElement {
           const display = content.length > 4000 ? content.slice(0, 4000) + truncated : content
           const header = `**Fetched** \`${fetchUrl}\` (${result.length?.toLocaleString() || '?'} chars, ${result.contentType || 'unknown'})`
           const msg = await el.db.addMessage(sess.id, 'system', `${header}\n\n${display}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
       case 'lint': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const lintMsg = await el.db.addMessage(sess.id, 'system', '**Running type check...**')
-        if (lintMsg) store.appendMessage(parseMessage(lintMsg))
+        if (lintMsg) useAppStore.getState().appendMessage(parseMessage(lintMsg))
         try {
           const result = await el.lint.run(wsPath)
           if (result.ok) {
             const msg = await el.db.addMessage(sess.id, 'system', `**Lint clean** — ${result.output}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else {
             const summary = result.errors > 0 ? `${result.errors} error${result.errors === 1 ? '' : 's'} found` : 'Check completed with issues'
             const output = result.output.length > 3000 ? result.output.slice(0, 3000) + '\n\n[truncated]' : result.output
             const msg = await el.db.addMessage(sess.id, 'system', `**Lint: ${summary}**\n\n${output}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Lint error:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
       case 'test': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const testMsg = await el.db.addMessage(sess.id, 'system', '**Running tests...**')
-        if (testMsg) store.appendMessage(parseMessage(testMsg))
+        if (testMsg) useAppStore.getState().appendMessage(parseMessage(testMsg))
         try {
           const result = await el.test.run(wsPath)
           if (result.ok) {
             const msg = await el.db.addMessage(sess.id, 'system', `**All tests passed** — ${result.passed} passed, ${result.total} total`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else {
             const summary = result.failed > 0 ? `${result.failed} failed, ${result.passed} passed, ${result.total} total` : 'Tests completed with issues'
             const output = result.output.length > 3000 ? result.output.slice(0, 3000) + '\n\n[truncated]' : result.output
             const msg = await el.db.addMessage(sess.id, 'system', `**Tests: ${summary}**\n\n${output}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Test error:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
       case 'tree': {
-        const wsPath = store.workspacePath
+        const wsPath = useAppStore.getState().workspacePath
         if (!wsPath) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         try {
           const nodes = await el.fs.readDir(wsPath)
           if (!nodes || nodes.length === 0) {
             const msg = await el.db.addMessage(sess.id, 'system', 'Workspace is empty.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const folderName = wsPath.split(/[/\\]/).pop() || wsPath
@@ -2139,10 +2146,10 @@ export default function App(): React.ReactElement {
           const treeText = lines.join('\n')
           const truncated = treeText.length > 4000 ? treeText.slice(0, 4000) + '\n\n[truncated]' : treeText
           const msg = await el.db.addMessage(sess.id, 'system', '```\n' + truncated + '\n```')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Tree error:** ${(err as Error).message}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         }
         break
       }
@@ -2152,7 +2159,7 @@ export default function App(): React.ReactElement {
           const todos = useAppStore.getState().todos
           if (todos.length === 0) {
             const msg = await el.db.addMessage(sess.id, 'system', 'No tasks. Use `/task add <text>` to create one.')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           } else {
             const lines = ['**Tasks**\n']
             for (const t of todos) {
@@ -2160,7 +2167,7 @@ export default function App(): React.ReactElement {
               lines.push(`${check} ${t.text}`)
             }
             const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           }
           break
         }
@@ -2168,13 +2175,13 @@ export default function App(): React.ReactElement {
           const text = args.trim().slice(4).trim()
           if (!text) {
             const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/task add <text>`')
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const todo = await el.db.addTodo(sess.id, text)
-          if (todo) store.addTodo(todo)
+          if (todo) useAppStore.getState().addTodo(todo)
           const msg = await el.db.addMessage(sess.id, 'system', `**Task added:** ${text}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         if (sub.startsWith('done ')) {
@@ -2182,14 +2189,14 @@ export default function App(): React.ReactElement {
           const todos = useAppStore.getState().todos
           if (isNaN(index) || index < 1 || index > todos.length) {
             const msg = await el.db.addMessage(sess.id, 'system', `Usage: \`/task done <number>\` (1–${todos.length})`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const todo = todos[index - 1]
           await el.db.updateTodo(todo.id, { completed: true })
-          store.updateTodo(todo.id, { completed: true })
+          useAppStore.getState().updateTodo(todo.id, { completed: true })
           const msg = await el.db.addMessage(sess.id, 'system', `**Task completed:** ${todo.text}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         if (sub.startsWith('remove ')) {
@@ -2197,18 +2204,18 @@ export default function App(): React.ReactElement {
           const todos = useAppStore.getState().todos
           if (isNaN(index) || index < 1 || index > todos.length) {
             const msg = await el.db.addMessage(sess.id, 'system', `Usage: \`/task remove <number>\` (1–${todos.length})`)
-            if (msg) store.appendMessage(parseMessage(msg))
+            if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
             break
           }
           const todo = todos[index - 1]
           await el.db.deleteTodo(todo.id)
-          store.removeTodo(todo.id)
+          useAppStore.getState().removeTodo(todo.id)
           const msg = await el.db.addMessage(sess.id, 'system', `**Task removed:** ${todo.text}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const msg = await el.db.addMessage(sess.id, 'system', '**Usage:**\n- `/task` or `/task list` — show all tasks\n- `/task add <text>` — add a new task\n- `/task done <n>` — mark task n as complete\n- `/task remove <n>` — remove task n')
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'agents': {
@@ -2223,7 +2230,7 @@ export default function App(): React.ReactElement {
             ? 'No running sub-agents. Use `/agents` to see all sub-agents.'
             : 'No sub-agents found. Use `spawnAgent` or `spawnAgents` to create them.'
           const msg = await el.db.addMessage(sess.id, 'system', hint)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const statusIcon = (status?: string) => {
@@ -2254,7 +2261,7 @@ export default function App(): React.ReactElement {
           lines.push(`\nFilter: \`/agents running\` to show only active agents.`)
         }
         const agentsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (agentsMsg) store.appendMessage(parseMessage(agentsMsg))
+        if (agentsMsg) useAppStore.getState().appendMessage(parseMessage(agentsMsg))
         break
       }
       case 'kill': {
@@ -2262,12 +2269,12 @@ export default function App(): React.ReactElement {
         const subAgents = sessions.filter((s: Session) => s.parentId && s.agentStatus === 'running')
         if (!args.trim()) {
           const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/kill <name or number>` — stop a running sub-agent.\n\nUse `/agents running` to see active agents.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         if (subAgents.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No running sub-agents to kill.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const query = args.trim().toLowerCase()
@@ -2281,19 +2288,19 @@ export default function App(): React.ReactElement {
         if (!target) {
           const list = subAgents.map((s, i) => `${i + 1}. ${s.title}`).join('\n')
           const msg = await el.db.addMessage(sess.id, 'system', `No sub-agent matching \`${args.trim()}\`.\n\nRunning agents:\n${list}`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         el.pi.abort(target.id)
-        store.updateSession(target.id, { agentStatus: 'done' })
+        useAppStore.getState().updateSession(target.id, { agentStatus: 'done' })
         const msg = await el.db.addMessage(sess.id, 'system', `**Stopped:** ${target.title}`)
-        if (msg) store.appendMessage(parseMessage(msg))
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
         break
       }
       case 'search': {
         if (!args.trim()) {
           const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/search <query>` or `/search --user|--assistant|--system|--tool <query>`')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
 
@@ -2316,7 +2323,7 @@ export default function App(): React.ReactElement {
 
         if (!queryStr) {
           const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/search <query>` or `/search --user|--assistant|--system|--tool <query>`')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
 
@@ -2340,7 +2347,7 @@ export default function App(): React.ReactElement {
         if (matches.length === 0) {
           const roleNote = roleFilter ? ` (role: ${roleFilter})` : ''
           const msg = await el.db.addMessage(sess.id, 'system', `No matches found for **"${queryStr}"** in ${msgs.length} messages${roleNote}.`)
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const roleNote = roleFilter ? ` (role: ${roleFilter})` : ''
@@ -2353,14 +2360,14 @@ export default function App(): React.ReactElement {
           resultLines.push(`\n*...and ${matches.length - 20} more matches*`)
         }
         const searchMsg = await el.db.addMessage(sess.id, 'system', resultLines.join('\n'))
-        if (searchMsg) store.appendMessage(parseMessage(searchMsg))
+        if (searchMsg) useAppStore.getState().appendMessage(parseMessage(searchMsg))
         break
       }
       case 'export-all': {
         const { sessions } = useAppStore.getState()
         if (sessions.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No sessions to export.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const exportLines: string[] = []
@@ -2405,14 +2412,14 @@ export default function App(): React.ReactElement {
         URL.revokeObjectURL(url)
 
         const exportMsg = await el.db.addMessage(sess.id, 'system', `**Exported** ${sessions.length} sessions (${totalMessages} total messages) as Markdown (${md.length.toLocaleString()} characters).`)
-        if (exportMsg) store.appendMessage(parseMessage(exportMsg))
+        if (exportMsg) useAppStore.getState().appendMessage(parseMessage(exportMsg))
         break
       }
       case 'stats': {
         const msgs = useAppStore.getState().messages
         if (msgs.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No messages in this session to analyze.')
-          if (msg) store.appendMessage(parseMessage(msg))
+          if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
           break
         }
         const roleCounts: Record<string, number> = {}
@@ -2460,18 +2467,18 @@ export default function App(): React.ReactElement {
         }
 
         const statsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
-        if (statsMsg) store.appendMessage(parseMessage(statsMsg))
+        if (statsMsg) useAppStore.getState().appendMessage(parseMessage(statsMsg))
         break
       }
     }
-  }, [activeSession, store])
+  }, [activeSession])
 
   // ── File system ──────────────────────────────────────────────────────────────
   const refreshTree = useCallback(async () => {
     const { workspacePath } = useAppStore.getState()
     if (!workspacePath) return
     const nodes = await el.fs.readDir(workspacePath)
-    store.setFileNodes(nodes)
+    useAppStore.getState().setFileNodes(nodes)
   }, [])
 
   // ── Abort ────────────────────────────────────────────────────────────────────
@@ -2496,10 +2503,10 @@ export default function App(): React.ReactElement {
 
     // Add a system message indicating plan approved
     const approvedMsg = await el.db.addMessage(sessionId, 'system', '**Plan approved.** Executing...')
-    if (approvedMsg) store.appendMessage(parseMessage(approvedMsg))
+    if (approvedMsg) useAppStore.getState().appendMessage(parseMessage(approvedMsg))
 
     // Start the Pi SDK agent with the expanded messages
-    store.setLoading(true)
+    useAppStore.getState().setLoading(true)
     const streamingId = uuidv4()
     const streamStartTime = Date.now()
     let streamTotalChars = 0
@@ -2514,7 +2521,7 @@ export default function App(): React.ReactElement {
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
         streamTotalChars = chunk.length
-        store.upsertMessage(streamingId, streamingMsg)
+        useAppStore.getState().upsertMessage(streamingId, streamingMsg)
       },
       async (fullText, thinking, usage) => {
         const duration = Date.now() - streamStartTime
@@ -2523,30 +2530,30 @@ export default function App(): React.ReactElement {
         const aMsg = rawA
           ? { ...parseMessage(rawA), tokenCount, duration }
           : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false, tokenCount, duration }
-        store.removeMessage(streamingId)
-        store.appendMessage(aMsg)
+        useAppStore.getState().removeMessage(streamingId)
+        useAppStore.getState().appendMessage(aMsg)
         const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
-        store.updateSession(sessionId, { messageCount: (current?.messageCount ?? 0) + 1 })
-        store.setLoading(false)
+        useAppStore.getState().updateSession(sessionId, { messageCount: (current?.messageCount ?? 0) + 1 })
+        useAppStore.getState().setLoading(false)
         refreshTree()
       },
       async (toolName, toolInput) => {
         const rawT = await el.db.addMessage(sessionId, 'tool', '', { toolName, toolStatus: 'running', toolInput })
-        if (rawT) store.appendMessage(parseMessage(rawT))
+        if (rawT) useAppStore.getState().appendMessage(parseMessage(rawT))
       },
       async (toolOutput) => {
         const runningTool = useAppStore.getState().messages.slice().reverse().find(
           (m) => m.role === 'tool' && m.toolStatus === 'running'
         )
-        store.updateRunningTool({ toolStatus: 'done', toolOutput })
+        useAppStore.getState().updateRunningTool({ toolStatus: 'done', toolOutput })
         if (runningTool) {
           await el.db.updateMessage(runningTool.id, { tool_status: 'done', tool_output: toolOutput })
         }
       },
       (err) => {
-        store.removeMessage(streamingId)
-        store.appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
-        store.setLoading(false)
+        useAppStore.getState().removeMessage(streamingId)
+        useAppStore.getState().appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
+        useAppStore.getState().setLoading(false)
       },
       permissionMode as PermissionMode,
       onToolPermission,
@@ -2554,11 +2561,11 @@ export default function App(): React.ReactElement {
       effort,
       (thinkingChunk) => {
         streamingMsg = { ...streamingMsg, thinking: thinkingChunk }
-        store.upsertMessage(streamingId, streamingMsg)
+        useAppStore.getState().upsertMessage(streamingId, streamingMsg)
       },
       'agent' as 'chat' | 'plan' | 'agent',
     )
-  }, [pendingPlan, sendMessage, refreshTree, onToolPermission, store])
+  }, [pendingPlan, sendMessage, refreshTree, onToolPermission])
 
   // ── Plan Preview: cancel ──────────────────────────────────────────────────────
   const handleCancelPlan = useCallback(async () => {
@@ -2568,7 +2575,7 @@ export default function App(): React.ReactElement {
     const planMsg = msgs[msgs.length - 1]
     if (planMsg?.role === 'system' && planMsg.content.includes('🧠 Plan')) {
       await el.db.deleteMessage(planMsg.id)
-      store.removeMessage(planMsg.id)
+      useAppStore.getState().removeMessage(planMsg.id)
     }
     setPendingPlan(null)
     setPlanPreviewContent('')
@@ -2591,7 +2598,7 @@ export default function App(): React.ReactElement {
     })
     if (!rawUser) return
     const userMsg = parseMessage(rawUser)
-    store.appendMessage(userMsg)
+    useAppStore.getState().appendMessage(userMsg)
 
     // Clear reply after sending
     setReplyTo(null)
@@ -2599,19 +2606,19 @@ export default function App(): React.ReactElement {
     if (messages.length === 0 && text.trim()) {
       const title = text.slice(0, 100).replace(/@\S+\s*/g, '').trim() || text.slice(0, 40)
       await el.db.updateSession(sess.id, { title })
-      store.updateSession(sess.id, { title })
+      useAppStore.getState().updateSession(sess.id, { title })
     }
 
-    const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+    const model = sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
 
     // Compact when the conversation nears the model's context limit
     let history = [...messages, userMsg]
-    if (needsCompaction(history, model) && hasProvider(store.settings)) {
+    if (needsCompaction(history, model) && hasProvider(useAppStore.getState().settings)) {
       try {
-        const result = await compactConversation(sess.id, history, store.settings, model)
+        const result = await compactConversation(sess.id, history, useAppStore.getState().settings, model)
         if (result.compacted > 0) {
           history = result.messages
-          store.setMessages(history)
+          useAppStore.getState().setMessages(history)
           toast('Context compacted', {
             description: `${result.compacted} earlier messages summarized to stay within the context window`,
           })
@@ -2624,8 +2631,8 @@ export default function App(): React.ReactElement {
     const expandedMessages = await expandMentions(history, workspacePath)
 
     // ── Plan Preview: generate plan before agent execution ──
-    if (agentMode === 'agent' && store.settings.planPreviewEnabled && !pendingPlan) {
-      store.setLoading(true)
+    if (agentMode === 'agent' && useAppStore.getState().settings.planPreviewEnabled && !pendingPlan) {
+      useAppStore.getState().setLoading(true)
 
       // Generate plan via chat completion
       const planMessages = expandedMessages.map((m) => ({
@@ -2635,13 +2642,13 @@ export default function App(): React.ReactElement {
       const planSystemPrompt = 'You are about to execute a task. Before executing, produce a focused plan covering:\n\n1. What you will do (3-7 concise bullet points)\n2. Which files will be created, modified, or read\n\nFormat: concise markdown. Do NOT write code — only describe what you will do.'
 
       try {
-        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
-        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const baseUrl = useAppStore.getState().settings.apiBaseUrl.replace(/\/$/, '')
+        const modelId = sess.model || useAppStore.getState().settings.defaultModel || 'gpt-4o-mini'
         const response = await fetch(`${baseUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+            ...(useAppStore.getState().settings.apiKey ? { Authorization: `Bearer ${useAppStore.getState().settings.apiKey}` } : {}),
           },
           body: JSON.stringify({
             model: modelId,
@@ -2660,7 +2667,7 @@ export default function App(): React.ReactElement {
           // Save plan as a system message
           const planContentFormatted = `**🧠 Plan**\n\n${planContent}\n\n*Review the plan above, then click "Execute this plan" to proceed or "Cancel" to stop.*`
           const planRaw = await el.db.addMessage(sess.id, 'system', planContentFormatted)
-          if (planRaw) store.appendMessage(parseMessage(planRaw))
+          if (planRaw) useAppStore.getState().appendMessage(parseMessage(planRaw))
 
           // Store pending plan state
           setPendingPlan({
@@ -2669,21 +2676,21 @@ export default function App(): React.ReactElement {
             model: modelId,
             originalText: text,
             workspacePath,
-            permissionMode: sess.permissionMode ?? store.settings.permissionMode,
+            permissionMode: sess.permissionMode ?? useAppStore.getState().settings.permissionMode,
             effort: sess.effort ?? 'medium',
           })
           setPlanPreviewContent(planContent)
-          store.setLoading(false)
+          useAppStore.getState().setLoading(false)
           return // Don't start agent yet
         }
       } catch {
         // Plan generation failed — fall through to normal agent execution
       }
 
-      store.setLoading(false)
+      useAppStore.getState().setLoading(false)
     }
 
-    store.setLoading(true)
+    useAppStore.getState().setLoading(true)
     const streamingId = uuidv4()
     const streamStartTime = Date.now()
     let streamTotalChars = 0
@@ -2698,7 +2705,7 @@ export default function App(): React.ReactElement {
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
         streamTotalChars = chunk.length
-        store.upsertMessage(streamingId, streamingMsg)
+        useAppStore.getState().upsertMessage(streamingId, streamingMsg)
       },
       async (fullText, thinking, usage) => {
         const duration = Date.now() - streamStartTime
@@ -2707,38 +2714,38 @@ export default function App(): React.ReactElement {
         const aMsg = rawA
           ? { ...parseMessage(rawA), tokenCount, duration }
           : { ...streamingMsg, id: uuidv4(), thinking, isStreaming: false, tokenCount, duration }
-        store.removeMessage(streamingId)
-        store.appendMessage(aMsg)
+        useAppStore.getState().removeMessage(streamingId)
+        useAppStore.getState().appendMessage(aMsg)
         const current = useAppStore.getState().sessions.find((s) => s.id === sess.id)
-        store.updateSession(sess.id, { messageCount: (current?.messageCount ?? 0) + 1 })
-        store.setLoading(false)
+        useAppStore.getState().updateSession(sess.id, { messageCount: (current?.messageCount ?? 0) + 1 })
+        useAppStore.getState().setLoading(false)
         refreshTree()
       },
       async (toolName, toolInput) => {
         const rawT = await el.db.addMessage(sess.id, 'tool', '', { toolName, toolStatus: 'running', toolInput })
-        if (rawT) store.appendMessage(parseMessage(rawT))
+        if (rawT) useAppStore.getState().appendMessage(parseMessage(rawT))
       },
       async (toolOutput) => {
         const runningTool = useAppStore.getState().messages.slice().reverse().find(
           (m) => m.role === 'tool' && m.toolStatus === 'running'
         )
-        store.updateRunningTool({ toolStatus: 'done', toolOutput })
+        useAppStore.getState().updateRunningTool({ toolStatus: 'done', toolOutput })
         if (runningTool) {
           await el.db.updateMessage(runningTool.id, { tool_status: 'done', tool_output: toolOutput })
         }
       },
       (err) => {
-        store.removeMessage(streamingId)
-        store.appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
-        store.setLoading(false)
+        useAppStore.getState().removeMessage(streamingId)
+        useAppStore.getState().appendMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
+        useAppStore.getState().setLoading(false)
       },
-      (sess.permissionMode ?? store.settings.permissionMode) as PermissionMode,
+      (sess.permissionMode ?? useAppStore.getState().settings.permissionMode) as PermissionMode,
       onToolPermission,
       workspacePath,
       sess.effort ?? 'medium',
       (thinkingChunk) => {
         streamingMsg = { ...streamingMsg, thinking: thinkingChunk }
-        store.upsertMessage(streamingId, streamingMsg)
+        useAppStore.getState().upsertMessage(streamingId, streamingMsg)
       },
       agentMode,
     )
@@ -2747,7 +2754,7 @@ export default function App(): React.ReactElement {
   // ── Edit message ─────────────────────────────────────────────────────────────
   const handleEditMessage = useCallback(async (id: string, content: string) => {
     await el.db.updateMessage(id, { content })
-    store.upsertMessage(id, { ...useAppStore.getState().messages.find((m) => m.id === id)!, content })
+    useAppStore.getState().upsertMessage(id, { ...useAppStore.getState().messages.find((m) => m.id === id)!, content })
   }, [])
 
   // ── Regenerate assistant response ───────────────────────────────────────────
@@ -2767,7 +2774,7 @@ export default function App(): React.ReactElement {
     for (const m of toDelete) {
       await el.db.deleteMessage(m.id)
     }
-    store.setMessages(messages.slice(0, assistantIdx))
+    useAppStore.getState().setMessages(messages.slice(0, assistantIdx))
 
     // Re-send the user message
     handleSend(userMsg.content, userMsg.attachments ?? [])
@@ -2790,7 +2797,7 @@ export default function App(): React.ReactElement {
     for (const m of toDelete) {
       await el.db.deleteMessage(m.id)
     }
-    store.setMessages(messages.slice(0, assistantIdx))
+    useAppStore.getState().setMessages(messages.slice(0, assistantIdx))
 
     // Prefill the input bar
     setPrefillText(userMsg.content)
@@ -2802,7 +2809,7 @@ export default function App(): React.ReactElement {
   const handleDeleteMessage = useCallback(async (msg: Message) => {
     lastDeletedRef.current = msg
     await el.db.deleteMessage(msg.id)
-    store.removeMessage(msg.id)
+    useAppStore.getState().removeMessage(msg.id)
 
     toast('Message deleted', {
       action: {
@@ -2820,7 +2827,7 @@ export default function App(): React.ReactElement {
             replyTo: deleted.replyTo ? { id: deleted.replyTo.id, content: deleted.replyTo.content, role: deleted.replyTo.role } : undefined,
           }).then((raw) => {
             const restored = parseMessage(raw)
-            store.appendMessage(restored)
+            useAppStore.getState().appendMessage(restored)
           })
           lastDeletedRef.current = null
         },
@@ -2834,7 +2841,7 @@ export default function App(): React.ReactElement {
     const msg = useAppStore.getState().messages.find((m) => m.id === id)
     if (!msg) return
     const updated = { ...msg, reactions }
-    store.upsertMessage(id, updated)
+    useAppStore.getState().upsertMessage(id, updated)
     await el.db.updateMessage(id, { reactions: JSON.stringify(reactions) })
   }, [])
 
@@ -2852,7 +2859,7 @@ export default function App(): React.ReactElement {
     const fullPath = parentPath + '/' + name
     await el.fs.createFile(fullPath)
     await refreshTree()
-    store.openFileTab({ name, path: fullPath, type: 'file' })
+    useAppStore.getState().openFileTab({ name, path: fullPath, type: 'file' })
   }, [refreshTree])
 
   const handleFsCreateFolder = useCallback(async (parentPath: string, name: string) => {
@@ -2865,18 +2872,18 @@ export default function App(): React.ReactElement {
     const newPath = dir + '/' + newName
     await el.fs.rename(oldPath, newPath)
     await refreshTree()
-    store.renameTabPaths(oldPath, newPath, newName)
+    useAppStore.getState().renameTabPaths(oldPath, newPath, newName)
   }, [refreshTree])
 
   const handleFsDelete = useCallback(async (node: FileNode) => {
     await el.fs.delete(node.path)
     await refreshTree()
-    store.removeTabsByPath(node.path, node.type === 'directory')
+    useAppStore.getState().removeTabsByPath(node.path, node.type === 'directory')
   }, [refreshTree])
 
-  const handleSaveSettings = useCallback(async (s: typeof store.settings) => {
+  const handleSaveSettings = useCallback(async (s: AppSettings) => {
     await el.settings.set(s)
-    store.setSettings(s)
+    useAppStore.getState().setSettings(s)
     applyTheme(s.themeId)
     applyColorMode(s.colorMode)
   }, [])
@@ -2899,35 +2906,35 @@ export default function App(): React.ReactElement {
     if (!p) return
     await el.workspace.setPath(p)
     const nodes = await el.fs.readDir(p)
-    store.setWorkspace(p, nodes)
-    store.setActiveView('explorer')
-    el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
+    useAppStore.getState().setWorkspace(p, nodes)
+    useAppStore.getState().setActiveView('explorer')
+    el.workspace.getRecent().then((r) => useAppStore.getState().setRecentProjects(r as string[]))
     // Save workspace to current session
     const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
     if (sess) {
       await el.db.updateSession(sess.id, { workspace_path: p })
-      store.updateSession(sess.id, { workspacePath: p })
+      useAppStore.getState().updateSession(sess.id, { workspacePath: p })
     }
   }, [activeSession])
 
   const handleSelectProject = useCallback(async (path: string) => {
     await el.workspace.setPath(path)
     const nodes = await el.fs.readDir(path)
-    store.setWorkspace(path, nodes)
-    store.setActiveView('explorer')
-    el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
+    useAppStore.getState().setWorkspace(path, nodes)
+    useAppStore.getState().setActiveView('explorer')
+    el.workspace.getRecent().then((r) => useAppStore.getState().setRecentProjects(r as string[]))
     // Save workspace to current session
     const sess = useAppStore.getState().sessions.find((s) => s.id === activeSession?.id)
     if (sess) {
       await el.db.updateSession(sess.id, { workspace_path: path })
-      store.updateSession(sess.id, { workspacePath: path })
+      useAppStore.getState().updateSession(sess.id, { workspacePath: path })
     }
   }, [activeSession])
 
   // Wraps store.selectTab to also switch workspace when clicking a session tab
   const handleSelectTab = useCallback((id: string) => {
     const tab = useAppStore.getState().tabs.find((t) => tabKey(t) === id)
-    store.selectTab(id)
+    useAppStore.getState().selectTab(id)
     if (tab?.type === 'session') handleSelectSession(tab.id)
   }, [handleSelectSession])
 
@@ -2941,7 +2948,7 @@ export default function App(): React.ReactElement {
     const currentWp = useAppStore.getState().workspacePath
     const raw = await el.db.createSession(
       'Side chat',
-      currentSess.model || store.settings.defaultModel,
+      currentSess.model || useAppStore.getState().settings.defaultModel,
       null,
       true
     )
@@ -2950,21 +2957,21 @@ export default function App(): React.ReactElement {
       await el.db.updateSession(session.id, { workspace_path: currentWp })
       session.workspacePath = currentWp
     }
-    store.addSession(session)
-    store.setSideChat(session.id)
-    store.setSideChatMessages([])
-    store.setSideChatLoading(false)
+    useAppStore.getState().addSession(session)
+    useAppStore.getState().setSideChat(session.id)
+    useAppStore.getState().setSideChatMessages([])
+    useAppStore.getState().setSideChatLoading(false)
     // Load side chat messages (empty for new session)
     el.db.getMessages(session.id).then((raw) => {
-      store.setSideChatMessages(raw.map(parseMessage))
+      useAppStore.getState().setSideChatMessages(raw.map(parseMessage))
     })
-  }, [store])
+  }, [])
 
   const handleCloseSideChat = useCallback(() => {
-    store.setSideChat(null)
-    store.setSideChatMessages([])
-    store.setSideChatLoading(false)
-  }, [store])
+    useAppStore.getState().setSideChat(null)
+    useAppStore.getState().setSideChatMessages([])
+    useAppStore.getState().setSideChatLoading(false)
+  }, [])
 
   // Side chat runs in plain chat mode — no tools, just streaming Q&A next to the main session.
   const handleSendSideChat = useCallback(async (text: string) => {
@@ -2975,12 +2982,12 @@ export default function App(): React.ReactElement {
     const rawUser = await el.db.addMessage(sideChatSessionId, 'user', text)
     if (!rawUser) return
     const userMsg = parseMessage(rawUser)
-    store.appendSideChatMessage(userMsg)
+    useAppStore.getState().appendSideChatMessage(userMsg)
 
     if (sideChatMessages.length === 0 && text.trim()) {
       const title = text.slice(0, 60).trim()
       await el.db.updateSession(sideChatSessionId, { title })
-      store.updateSession(sideChatSessionId, { title })
+      useAppStore.getState().updateSession(sideChatSessionId, { title })
     }
 
     const sideModel = sess?.model || settings.defaultModel || 'gpt-4o-mini'
@@ -2990,12 +2997,12 @@ export default function App(): React.ReactElement {
         const result = await compactConversation(sideChatSessionId, sideHistory, settings, sideModel)
         if (result.compacted > 0) {
           sideHistory = result.messages
-          store.setSideChatMessages(sideHistory)
+          useAppStore.getState().setSideChatMessages(sideHistory)
         }
       } catch { /* send uncompacted */ }
     }
 
-    store.setSideChatLoading(true)
+    useAppStore.getState().setSideChatLoading(true)
     const streamingId = uuidv4()
     let streamingMsg: Message = {
       id: streamingId, sessionId: sideChatSessionId, role: 'assistant',
@@ -3007,25 +3014,25 @@ export default function App(): React.ReactElement {
       sideHistory,
       (chunk) => {
         streamingMsg = { ...streamingMsg, content: chunk }
-        store.upsertSideChatMessage(streamingId, streamingMsg)
+        useAppStore.getState().upsertSideChatMessage(streamingId, streamingMsg)
       },
       async (_fullText, _thinking, usage) => {
         const duration = Date.now() - streamStartTime
         const tokenCount = usage?.completionTokens ?? Math.round(_fullText.length / 4)
         const rawA = await el.db.addMessage(sideChatSessionId, 'assistant', _fullText)
-        store.removeSideChatMessage(streamingId)
+        useAppStore.getState().removeSideChatMessage(streamingId)
         const aMsg = rawA
           ? { ...parseMessage(rawA), tokenCount, duration }
           : { ...streamingMsg, id: uuidv4(), isStreaming: false, tokenCount, duration }
-        store.appendSideChatMessage(aMsg)
-        store.setSideChatLoading(false)
+        useAppStore.getState().appendSideChatMessage(aMsg)
+        useAppStore.getState().setSideChatLoading(false)
       },
       undefined,
       undefined,
       (err) => {
-        store.removeSideChatMessage(streamingId)
-        store.appendSideChatMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
-        store.setSideChatLoading(false)
+        useAppStore.getState().removeSideChatMessage(streamingId)
+        useAppStore.getState().appendSideChatMessage({ ...streamingMsg, id: uuidv4(), content: `**Error:** ${err.message}`, isStreaming: false })
+        useAppStore.getState().setSideChatLoading(false)
       },
       undefined,
       undefined,
@@ -3034,7 +3041,7 @@ export default function App(): React.ReactElement {
       undefined,
       'chat',
     )
-  }, [sendMessage, store])
+  }, [sendMessage])
 
   const handleAbortSideChat = useCallback(() => {
     const id = useAppStore.getState().sideChatSessionId
@@ -3050,20 +3057,20 @@ export default function App(): React.ReactElement {
     if (!session) return
 
     await el.db.updateSession(sideChatId, { is_side_chat: false })
-    store.updateSession(sideChatId, { isSideChat: false })
-    store.openSessionTab(session)
+    useAppStore.getState().updateSession(sideChatId, { isSideChat: false })
+    useAppStore.getState().openSessionTab(session)
     await el.db.getMessages(sideChatId).then((raw) => {
-      store.setMessages(raw.map(parseMessage))
+      useAppStore.getState().setMessages(raw.map(parseMessage))
     })
-    store.setSideChat(null)
-    store.setSideChatMessages([])
-    store.setSideChatLoading(false)
-  }, [store])
+    useAppStore.getState().setSideChat(null)
+    useAppStore.getState().setSideChatMessages([])
+    useAppStore.getState().setSideChatLoading(false)
+  }, [])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
-    <div className={cn('flex flex-col h-screen w-screen overflow-hidden bg-background', store.zenMode && 'zen-mode')}>
-      {!store.zenMode && (
+    <div className={cn('flex flex-col h-screen w-screen overflow-hidden bg-background', useAppStore.getState().zenMode && 'zen-mode')}>
+      {!useAppStore.getState().zenMode && (
         <div className="drag-region relative flex h-10 shrink-0 items-center justify-center border-b border-border">
           {/* HUD readouts — left offset clears the macOS traffic lights */}
           <span className="pointer-events-none absolute left-20 flex select-none items-center gap-2 font-mono text-[9px] tracking-[0.2em] text-muted-foreground/60">
@@ -3080,30 +3087,30 @@ export default function App(): React.ReactElement {
       )}
 
       <div className="flex flex-1 overflow-hidden">
-        {!store.zenMode && (<>
+        {!useAppStore.getState().zenMode && (<>
           <ActivityBar
-            activeView={store.activeView}
-            onChangeView={store.setActiveView}
-            terminalOpen={store.terminalOpen}
-            onToggleTerminal={store.toggleTerminal}
+            activeView={useAppStore.getState().activeView}
+            onChangeView={useAppStore.getState().setActiveView}
+            terminalOpen={useAppStore.getState().terminalOpen}
+            onToggleTerminal={useAppStore.getState().toggleTerminal}
             gitBadge={gitBadge}
-            agentBadge={store.sessions.filter((s) => s.agentStatus === 'running').length}
+            agentBadge={useAppStore.getState().sessions.filter((s) => s.agentStatus === 'running').length}
           />
 
-          {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
+          {useAppStore.getState().activeView !== 'settings' && useAppStore.getState().activeView !== 'extensions' && (
             <Sidebar
-              mode={store.activeView}
-              sessions={store.sessions}
+              mode={useAppStore.getState().activeView}
+              sessions={useAppStore.getState().sessions}
               activeSessionId={activeSessionTab?.id ?? null}
               onNewSession={handleNewSession}
               onSelectSession={handleSelectSession}
               onDeleteSession={handleDeleteSession}
               onTogglePinSession={handleTogglePinSession}
               onArchiveSession={handleArchiveSession}
-              fileNodes={store.fileNodes}
-              workspacePath={store.workspacePath}
-              selectedFilePath={store.activeTabId}
-              onOpenFile={store.openFileTab}
+              fileNodes={useAppStore.getState().fileNodes}
+              workspacePath={useAppStore.getState().workspacePath}
+              selectedFilePath={useAppStore.getState().activeTabId}
+              onOpenFile={useAppStore.getState().openFileTab}
               onOpenFolder={handleOpenFolder}
               onFsCreateFile={handleFsCreateFile}
               onFsCreateFolder={handleFsCreateFolder}
@@ -3114,10 +3121,10 @@ export default function App(): React.ReactElement {
         </>)}
 
         <div className="flex flex-1 flex-col overflow-hidden">
-          {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
+          {useAppStore.getState().activeView !== 'settings' && useAppStore.getState().activeView !== 'extensions' && (
             <TabBar
-              tabs={store.tabs}
-              activeTabId={store.activeTabId}
+              tabs={useAppStore.getState().tabs}
+              activeTabId={useAppStore.getState().activeTabId}
               onSelectTab={handleSelectTab}
               onCloseTab={handleCloseTab}
               onNewSession={handleNewSession}
@@ -3126,40 +3133,40 @@ export default function App(): React.ReactElement {
 
           <div className="flex flex-1 flex-col overflow-hidden min-h-0">
           <Suspense fallback={<PanelFallback />}>
-           {store.activeView === 'settings' ? (
+           {useAppStore.getState().activeView === 'settings' ? (
               <SettingsPanel
-                settings={store.settings}
+                settings={useAppStore.getState().settings}
                 onSave={handleSaveSettings}
-                sessionCount={store.sessions.length}
+                sessionCount={useAppStore.getState().sessions.length}
                 onDeleteAllSessions={handleDeleteAllSessions}
               />
-            ) : store.activeView === 'extensions' ? (
+            ) : useAppStore.getState().activeView === 'extensions' ? (
               <ExtensionsPanel />
-            ) : store.activeView === 'git' && store.activeCommit && !activeTab ? (
+            ) : useAppStore.getState().activeView === 'git' && useAppStore.getState().activeCommit && !activeTab ? (
               <ErrorBoundary key="commit-detail"><CommitDetail /></ErrorBoundary>
             ) : activeTab?.type === 'file' ? (
               <FileEditor
                 path={activeTab.path}
-                onDirtyChange={(dirty) => store.setTabDirty(activeTab.path, dirty)}
-                onClose={(p) => { store.closeTab(p); store.removeTabsByPath(p, false) }}
+                onDirtyChange={(dirty) => useAppStore.getState().setTabDirty(activeTab.path, dirty)}
+                onClose={(p) => { useAppStore.getState().closeTab(p); useAppStore.getState().removeTabsByPath(p, false) }}
               />
             ) : activeTab?.type === 'session' && activeSession ? (
               <div className="flex flex-1 flex-col min-h-0">
                 <ChatTabBar
                   tabs={[
                     { id: activeSession.id, title: activeSession.title, isSideChat: false },
-                    ...(store.sideChatSessionId
+                    ...(useAppStore.getState().sideChatSessionId
                       ? [{
-                          id: store.sideChatSessionId,
-                          title: store.sessions.find((s) => s.id === store.sideChatSessionId)?.title ?? 'Side chat',
+                          id: useAppStore.getState().sideChatSessionId,
+                          title: useAppStore.getState().sessions.find((s) => s.id === useAppStore.getState().sideChatSessionId)?.title ?? 'Side chat',
                           isSideChat: true,
                         }]
                       : []),
                   ]}
-                  activeTabId={store.activeTabId}
-                  sideChatSessionId={store.sideChatSessionId}
+                  activeTabId={useAppStore.getState().activeTabId}
+                  sideChatSessionId={useAppStore.getState().sideChatSessionId}
                   onSelectTab={(id) => {
-                    if (id === store.sideChatSessionId) {
+                    if (id === useAppStore.getState().sideChatSessionId) {
                       // Activating side chat tab - promote to main
                       handlePromoteSideChat()
                     } else {
@@ -3167,21 +3174,21 @@ export default function App(): React.ReactElement {
                     }
                   }}
                   onCloseTab={(id) => {
-                    if (id === store.sideChatSessionId) {
+                    if (id === useAppStore.getState().sideChatSessionId) {
                       handleCloseSideChat()
                     }
                   }}
                   onNewSideChat={handleOpenSideChat}
                 />
-                <div className={cn('flex flex-1 overflow-hidden min-h-0', store.sideChatSessionId && 'divide-x divide-border')}>
+                <div className={cn('flex flex-1 overflow-hidden min-h-0', useAppStore.getState().sideChatSessionId && 'divide-x divide-border')}>
                   <div className="flex flex-1 flex-col min-w-0 overflow-hidden">
                     <ChatView
-                      messages={store.messages}
+                      messages={useAppStore.getState().messages}
                       sessionTitle={activeSession.title}
                       modelName={activeSession.model}
-                      isLoading={store.isLoading}
+                      isLoading={useAppStore.getState().isLoading}
                       onSuggestion={(text) => handleSend(text, [])}
-                      todos={store.todos}
+                      todos={useAppStore.getState().todos}
                       onReply={handleReply}
                       onEdit={handleEditMessage}
                       onDelete={handleDeleteMessage}
@@ -3215,37 +3222,37 @@ export default function App(): React.ReactElement {
                       onSend={handleSend}
                       onCommand={handleCommand}
                       onRevealInExplorer={() => {
-                        if (store.workspacePath) {
-                          store.setActiveView('explorer')
+                        if (useAppStore.getState().workspacePath) {
+                          useAppStore.getState().setActiveView('explorer')
                         } else {
                           handleOpenFolder()
                         }
                       }}
-                      disabled={store.isLoading}
-                      placeholder={`Ask ${displayModel(activeSession.model || store.settings.defaultModel)}…`}
-                      workspacePath={store.workspacePath}
-                      fileNodes={store.fileNodes}
-                      apiBaseUrl={store.settings.apiBaseUrl}
-                      apiKey={store.settings.apiKey}
-                      providers={store.settings.providers}
-                      recentProjects={store.recentProjects}
+                      disabled={useAppStore.getState().isLoading}
+                      placeholder={`Ask ${displayModel(activeSession.model || useAppStore.getState().settings.defaultModel)}…`}
+                      workspacePath={useAppStore.getState().workspacePath}
+                      fileNodes={useAppStore.getState().fileNodes}
+                      apiBaseUrl={useAppStore.getState().settings.apiBaseUrl}
+                      apiKey={useAppStore.getState().settings.apiKey}
+                      providers={useAppStore.getState().settings.providers}
+                      recentProjects={useAppStore.getState().recentProjects}
                       onSelectProject={handleSelectProject}
                       onOpenFinder={handleOpenFolder}
-                      currentModel={activeSession.model || store.settings.defaultModel}
-                      messages={store.messages}
+                      currentModel={activeSession.model || useAppStore.getState().settings.defaultModel}
+                      messages={useAppStore.getState().messages}
                       effort={activeSession.effort ?? 'medium'}
                       onEffortChange={(e) => {
-                        store.updateSession(activeSession.id, { effort: e as EffortLevel })
+                        useAppStore.getState().updateSession(activeSession.id, { effort: e as EffortLevel })
                         el.db.updateSession(activeSession.id, { effort: e })
                       }}
-                      permissionMode={activeSession.permissionMode ?? store.settings.permissionMode}
+                      permissionMode={activeSession.permissionMode ?? useAppStore.getState().settings.permissionMode}
                       onPermissionModeChange={(m) => {
-                        store.updateSession(activeSession.id, { permissionMode: m })
+                        useAppStore.getState().updateSession(activeSession.id, { permissionMode: m })
                         el.db.updateSession(activeSession.id, { permissionMode: m })
                       }}
                       agentMode={agentMode}
                       onAgentModeChange={setAgentMode}
-                      colorMode={store.settings.colorMode}
+                      colorMode={useAppStore.getState().settings.colorMode}
                       onToggleColorMode={handleToggleColorMode}
                       pluginSkills={agentSkills}
                       pluginCommands={agentCommands}
@@ -3257,8 +3264,8 @@ export default function App(): React.ReactElement {
                   </div>
 
                   {/* ── Side Chat Pane ──────────────────────────────────────────── */}
-                  {store.sideChatSessionId && (() => {
-                    const sideSession = store.sessions.find((s) => s.id === store.sideChatSessionId)
+                  {useAppStore.getState().sideChatSessionId && (() => {
+                    const sideSession = useAppStore.getState().sessions.find((s) => s.id === useAppStore.getState().sideChatSessionId)
                     if (!sideSession) return null
                     return (
                       <div className="flex flex-1 flex-col min-w-0 overflow-hidden border-l border-border bg-background/50">
@@ -3276,17 +3283,17 @@ export default function App(): React.ReactElement {
                           </button>
                         </div>
                         <ChatView
-                          messages={store.sideChatMessages}
+                          messages={useAppStore.getState().sideChatMessages}
                           sessionTitle={sideSession.title}
                           modelName={sideSession.model}
-                          isLoading={store.sideChatIsLoading}
+                          isLoading={useAppStore.getState().sideChatIsLoading}
                           onSuggestion={handleSendSideChat}
                         />
                         <SideChatInput
                           onSend={handleSendSideChat}
-                          disabled={store.sideChatIsLoading}
+                          disabled={useAppStore.getState().sideChatIsLoading}
                           onCancel={handleAbortSideChat}
-                          placeholder={`Ask ${displayModel(sideSession.model || store.settings.defaultModel)}…`}
+                          placeholder={`Ask ${displayModel(sideSession.model || useAppStore.getState().settings.defaultModel)}…`}
                         />
                       </div>
                     )
@@ -3299,16 +3306,16 @@ export default function App(): React.ReactElement {
           </Suspense>
           </div>
 
-          {store.terminalOpen && (
+          {useAppStore.getState().terminalOpen && (
             <div
               className="shrink-0 border-t border-border"
-              style={{ height: store.terminalHeight }}
+              style={{ height: useAppStore.getState().terminalHeight }}
             >
               <Suspense fallback={<PanelFallback />}>
               <TerminalView
-                cwd={store.workspacePath}
-                onClose={store.toggleTerminal}
-                onHeightChange={(h) => store.setTerminalHeight(h)}
+                cwd={useAppStore.getState().workspacePath}
+                onClose={useAppStore.getState().toggleTerminal}
+                onHeightChange={(h) => useAppStore.getState().setTerminalHeight(h)}
               />
               </Suspense>
             </div>
@@ -3316,10 +3323,10 @@ export default function App(): React.ReactElement {
         </div>
       </div>
       <StatusBar
-        workspacePath={store.workspacePath}
-        currentModel={displayModel(activeSession?.model ?? store.settings.defaultModel)}
-        sessionCount={store.sessions.length}
-        messages={store.messages}
+        workspacePath={useAppStore.getState().workspacePath}
+        currentModel={displayModel(activeSession?.model ?? useAppStore.getState().settings.defaultModel)}
+        sessionCount={useAppStore.getState().sessions.length}
+        messages={useAppStore.getState().messages}
       />
       <Toaster />
 
@@ -3332,17 +3339,17 @@ export default function App(): React.ReactElement {
       <TabSwitcher
         open={tabSwitcherOpen}
         onClose={() => setTabSwitcherOpen(false)}
-        tabs={store.tabs}
-        activeTabId={store.activeTabId}
+        tabs={useAppStore.getState().tabs}
+        activeTabId={useAppStore.getState().activeTabId}
         onSelectTab={handleSelectTab}
       />
       <QuickFileOpen
         open={quickFileOpenOpen}
         onClose={() => setQuickFileOpenOpen(false)}
-        workspacePath={store.workspacePath}
+        workspacePath={useAppStore.getState().workspacePath}
         onOpenFile={(path) => {
-          const node = findFileNode(store.fileNodes, path)
-          if (node) store.openFileTab(node)
+          const node = findFileNode(useAppStore.getState().fileNodes, path)
+          if (node) useAppStore.getState().openFileTab(node)
         }}
       />
       <SessionSearchOverlay
@@ -3355,15 +3362,15 @@ export default function App(): React.ReactElement {
 }
 
 // ── Command palette entries ───────────────────────────────────────────────────
-function usePaletteCommands(store: ReturnType<typeof useAppStore.getState>): CommandEntry[] {
+function usePaletteCommands(settings: AppSettings): CommandEntry[] {
   return [
-    { id: 'new-session', label: 'New session', description: 'Create a new chat session', category: 'General', action: () => store.openSessionTab({ id: crypto.randomUUID(), title: 'New session', model: store.settings.defaultModel, createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 }) },
-    { id: 'toggle-terminal', label: 'Toggle terminal', description: 'Open or close the terminal panel', shortcut: 'Ctrl+`', category: 'View', action: () => store.toggleTerminal() },
-    { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => store.toggleZenMode() },
-    { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => store.setActiveView('settings') },
-    { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => store.setActiveView('explorer') },
-    { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => store.setActiveView('git') },
-    { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => store.setActiveView('extensions') },
+    { id: 'new-session', label: 'New session', description: 'Create a new chat session', category: 'General', action: () => useAppStore.getState().openSessionTab({ id: crypto.randomUUID(), title: 'New session', model: useAppStore.getState().settings.defaultModel, createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 }) },
+    { id: 'toggle-terminal', label: 'Toggle terminal', description: 'Open or close the terminal panel', shortcut: 'Ctrl+`', category: 'View', action: () => useAppStore.getState().toggleTerminal() },
+    { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => useAppStore.getState().toggleZenMode() },
+    { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => useAppStore.getState().setActiveView('settings') },
+    { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => useAppStore.getState().setActiveView('explorer') },
+    { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => useAppStore.getState().setActiveView('git') },
+    { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => useAppStore.getState().setActiveView('extensions') },
   ]
 }
 
