@@ -59,6 +59,11 @@ const nativeGit = {
   diff:          (cwd: string, p: string, staged: boolean) => ipcRenderer.invoke('git:diff', cwd, p, staged),
   log:           (cwd: string, limit?: number) => ipcRenderer.invoke('git:log', cwd, limit),
   init:          (cwd: string) => ipcRenderer.invoke('git:init', cwd),
+  stashList:     (cwd: string) => ipcRenderer.invoke('git:stashList', cwd),
+  stashPush:     (cwd: string, msg?: string) => ipcRenderer.invoke('git:stashPush', cwd, msg),
+  stashPop:      (cwd: string) => ipcRenderer.invoke('git:stashPop', cwd),
+  stashDrop:     (cwd: string, idx: number) => ipcRenderer.invoke('git:stashDrop', cwd, idx),
+  stashClear:    (cwd: string) => ipcRenderer.invoke('git:stashClear', cwd),
 }
 
 const checkpoint = {

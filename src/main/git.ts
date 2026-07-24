@@ -238,3 +238,62 @@ export async function getFileDiff(cwd: string, filePath: string, staged: boolean
 export async function initRepo(cwd: string): Promise<void> {
   await git(['init'], cwd)
 }
+
+// ── Stash ────────────────────────────────────────────────────────────────────
+
+export interface StashEntry {
+  index: number
+  branch: string
+  message: string
+}
+
+export async function stashList(cwd: string): Promise<StashEntry[]> {
+  try {
+    const output = await git(['stash', 'list', '--format=%gd|%gs'], cwd)
+    if (!output) return []
+    return output.split('\n').filter(Boolean).map((line, i) => {
+      const parts = line.split('|')
+      const rawMessage = parts.slice(1).join('|').replace(/^WIP on /, '')
+      const branch = rawMessage.split(': ')[0] || 'HEAD'
+      return { index: i, branch, message: rawMessage }
+    })
+  } catch { return [] }
+}
+
+export async function stashPush(cwd: string, message?: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const args = ['stash', 'push', '-u', '-q']
+    if (message) args.push('-m', message)
+    const output = await git(args, cwd)
+    return { ok: true, message: output || 'Saved working changes' }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
+}
+
+export async function stashPop(cwd: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    const output = await git(['stash', 'pop', '-q'], cwd)
+    return { ok: true, message: output || 'Applied stash' }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
+}
+
+export async function stashDrop(cwd: string, index: number): Promise<{ ok: boolean; message: string }> {
+  try {
+    const output = await git(['stash', 'drop', '-q', `stash@{${index}}`], cwd)
+    return { ok: true, message: output || `Dropped stash@{${index}}` }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
+}
+
+export async function stashClear(cwd: string): Promise<{ ok: boolean; message: string }> {
+  try {
+    await git(['stash', 'clear'], cwd)
+    return { ok: true, message: 'All stashes cleared' }
+  } catch (e) {
+    return { ok: false, message: (e as Error).message }
+  }
+}
