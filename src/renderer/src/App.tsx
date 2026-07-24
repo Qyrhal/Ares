@@ -739,6 +739,40 @@ export default function App(): React.ReactElement {
         if (recentMsg) store.appendMessage(parseMessage(recentMsg))
         break
       }
+      case 'exec': {
+        const { workspacePath } = useAppStore.getState()
+        const command = args.trim()
+        const lines: string[] = ['**Shell Command**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else if (!command) {
+          lines.push('Usage: `/exec <command>` — run a shell command in the workspace')
+        } else {
+          lines.push(`$ \`${command}\`\n`)
+          try {
+            const result = await el.exec.run(workspacePath, command)
+            if (result.output) {
+              const truncated = result.output.length > 3000
+                ? result.output.slice(-3000) + '\n\n[output truncated]'
+                : result.output
+              lines.push(`\`\`\`\n${truncated}\n\`\`\``)
+            } else if (result.ok) {
+              lines.push('(no output)')
+            } else {
+              lines.push(`❌ Command failed`)
+            }
+            if (!result.ok && result.output) {
+              lines.push(`\nExit code: non-zero`)
+            }
+          } catch (err) {
+            lines.push(`Error: ${(err as Error).message}`)
+          }
+        }
+        const execMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (execMsg) store.appendMessage(parseMessage(execMsg))
+        break
+      }
       case 'review': {
         const msgs = await el.db.getMessages(sess.id)
         if (!msgs || msgs.length === 0) {

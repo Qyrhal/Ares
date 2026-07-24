@@ -161,6 +161,9 @@ const electronMock = {
   recent: {
     files: vi.fn().mockResolvedValue({ ok: true, files: [] }),
   },
+  exec: {
+    run: vi.fn().mockResolvedValue({ ok: true, output: '' }),
+  },
   dbEvents: {
     onFlushError: vi.fn().mockReturnValue(() => {}),
   },
