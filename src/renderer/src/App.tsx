@@ -713,6 +713,32 @@ export default function App(): React.ReactElement {
         if (stashMsg) store.appendMessage(parseMessage(stashMsg))
         break
       }
+      case 'recent': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Recently Modified Files**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          try {
+            const limit = parseInt(args.trim(), 10) || 20
+            const result = await el.recent.files(workspacePath, Math.min(limit, 50))
+            if (!result.ok || result.files.length === 0) {
+              lines.push('No recently modified files found.')
+            } else {
+              for (const f of result.files) {
+                lines.push(`· \`${f}\``)
+              }
+              lines.push(`\n_${result.files.length} files (last ${limit} commits)_`)
+            }
+          } catch (err) {
+            lines.push(`Error: ${(err as Error).message}`)
+          }
+        }
+        const recentMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (recentMsg) store.appendMessage(parseMessage(recentMsg))
+        break
+      }
       case 'review': {
         const msgs = await el.db.getMessages(sess.id)
         if (!msgs || msgs.length === 0) {

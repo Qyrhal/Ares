@@ -64,6 +64,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'history',       description: 'Show recent prompt history' },
   { kind: 'builtin', name: 'log',          description: 'Show recent git commits' },
   { kind: 'builtin', name: 'stash',        description: 'Manage git stashes (push/pop/drop/clear)' },
+  { kind: 'builtin', name: 'recent',       description: 'Show recently modified files in workspace' },
   { kind: 'builtin', name: 'fetch',        description: 'Fetch web content from a URL' },
   { kind: 'builtin', name: 'lint',         description: 'Run TypeScript type checking on the workspace' },
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },

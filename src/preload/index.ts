@@ -255,7 +255,11 @@ const buildApi = {
   run: (cwd: string) => ipcRenderer.invoke('build:run', cwd),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, dbEvents: dbEventsApi }
+const recentApi = {
+  files: (cwd: string, limit?: number) => ipcRenderer.invoke('recent:files', cwd, limit),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, recent: recentApi, dbEvents: dbEventsApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)
