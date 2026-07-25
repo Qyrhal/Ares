@@ -749,6 +749,7 @@ export default function App(): React.ReactElement {
         } else if (!command) {
           lines.push('Usage: `/exec <command>` — run a shell command in the workspace')
         } else {
+          store.setLastExecCommand(command)
           lines.push(`$ \`${command}\`\n`)
           try {
             const result = await el.exec.run(workspacePath, command)
@@ -771,6 +772,42 @@ export default function App(): React.ReactElement {
         }
         const execMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (execMsg) store.appendMessage(parseMessage(execMsg))
+        break
+      }
+      case 'rerun': {
+        const lastCmd = useAppStore.getState().lastExecCommand
+        if (!lastCmd) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No previous command to rerun. Use `/exec <command>` first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const { workspacePath } = useAppStore.getState()
+        if (!workspacePath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace folder is open.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const lines: string[] = ['**Shell Command (rerun)**\n', `$ \`${lastCmd}\`\n`]
+        try {
+          const result = await el.exec.run(workspacePath, lastCmd)
+          if (result.output) {
+            const truncated = result.output.length > 3000
+              ? result.output.slice(-3000) + '\n\n[output truncated]'
+              : result.output
+            lines.push(`\`\`\`\n${truncated}\n\`\`\``)
+          } else if (result.ok) {
+            lines.push('(no output)')
+          } else {
+            lines.push(`❌ Command failed`)
+          }
+          if (!result.ok && result.output) {
+            lines.push(`\nExit code: non-zero`)
+          }
+        } catch (err) {
+          lines.push(`Error: ${(err as Error).message}`)
+        }
+        const rerunMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (rerunMsg) store.appendMessage(parseMessage(rerunMsg))
         break
       }
       case 'review': {
