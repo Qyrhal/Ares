@@ -60,4 +60,40 @@ describe('PermissionPrompt', () => {
     render(<PermissionPrompt {...defaultProps} toolName="writeFile" />)
     expect(screen.getByText(/Allow writeFile/)).toBeInTheDocument()
   })
+
+  it('calls onApprove when Enter key is pressed on the prompt', async () => {
+    const onApprove = vi.fn()
+    render(<PermissionPrompt {...defaultProps} onApprove={onApprove} />)
+    const region = screen.getByRole('region')
+    region.focus()
+    await userEvent.keyboard('{Enter}')
+    expect(onApprove).toHaveBeenCalledTimes(1)
+  })
+
+  it('calls onDeny when Escape key is pressed on the prompt', async () => {
+    const onDeny = vi.fn()
+    render(<PermissionPrompt {...defaultProps} onDeny={onDeny} />)
+    const region = screen.getByRole('region')
+    region.focus()
+    await userEvent.keyboard('{Escape}')
+    expect(onDeny).toHaveBeenCalledTimes(1)
+  })
+
+  it('truncates long raw args at 100 characters', () => {
+    const longArg = 'x'.repeat(150)
+    render(<PermissionPrompt {...defaultProps} toolArgs={longArg} />)
+    const displayed = screen.getByText(longArg.slice(0, 100))
+    expect(displayed).toBeInTheDocument()
+    expect(screen.queryByText(longArg)).not.toBeInTheDocument()
+  })
+
+  it('has correct accessibility labels and roles', () => {
+    render(<PermissionPrompt {...defaultProps} />)
+    expect(screen.getByRole('region')).toHaveAttribute(
+      'aria-label',
+      'Permission request for readFile'
+    )
+    expect(screen.getByRole('button', { name: /approve/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /deny/i })).toBeInTheDocument()
+  })
 })

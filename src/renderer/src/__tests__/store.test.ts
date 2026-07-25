@@ -1304,3 +1304,249 @@ describe('store — integration: renameTabPaths scenarios', () => {
     expect(useAppStore.getState().activeTabId).toBe('/src/keep.ts')
   })
 })
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Edge-case tests – patterns not yet covered
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — updateRunningTool: edge cases', () => {
+  it('no-ops on empty messages array without throwing', () => {
+    useAppStore.setState({ messages: [] })
+    expect(() => useAppStore.getState().updateRunningTool({ toolStatus: 'done' })).not.toThrow()
+    expect(useAppStore.getState().messages).toHaveLength(0)
+  })
+
+  it('sequential updates: after updating the last, the next running tool becomes the target', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', role: 'tool', toolStatus: 'running', toolName: 'first' }),
+        mkMessage({ id: 'm2', role: 'tool', toolStatus: 'running', toolName: 'second' }),
+      ],
+    })
+    // First update targets m2 (last running)
+    useAppStore.getState().updateRunningTool({ toolStatus: 'done' })
+    expect(useAppStore.getState().messages[1].toolStatus).toBe('done')
+    expect(useAppStore.getState().messages[0].toolStatus).toBe('running')
+
+    // Second update now targets m1 (it's the only remaining running tool)
+    useAppStore.getState().updateRunningTool({ toolStatus: 'error' })
+    expect(useAppStore.getState().messages[0].toolStatus).toBe('error')
+    expect(useAppStore.getState().messages[1].toolStatus).toBe('done')
+  })
+
+  it('no-ops when messages contain only non-tool roles', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', role: 'user', content: 'hi' }),
+        mkMessage({ id: 'm2', role: 'assistant', content: 'hello' }),
+      ],
+    })
+    useAppStore.getState().updateRunningTool({ toolStatus: 'done' })
+    expect(useAppStore.getState().messages[0].toolStatus).toBeUndefined()
+    expect(useAppStore.getState().messages[1].toolStatus).toBeUndefined()
+  })
+
+  it('does not affect a finished tool message', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', role: 'tool', toolStatus: 'done', toolName: 'old' }),
+        mkMessage({ id: 'm2', role: 'tool', toolStatus: 'running', toolName: 'active' }),
+      ],
+    })
+    useAppStore.getState().updateRunningTool({ toolStatus: 'done', toolName: 'updated' })
+    expect(useAppStore.getState().messages[0].toolName).toBe('old')
+    expect(useAppStore.getState().messages[1].toolName).toBe('updated')
+  })
+})
+
+describe('store — upsertMessage: edge cases', () => {
+  it('appends new message at the end of existing messages', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', content: 'first' }),
+        mkMessage({ id: 'm2', content: 'second' }),
+      ],
+    })
+    useAppStore.getState().upsertMessage('m3', mkMessage({ id: 'm3', content: 'third' }))
+    const msgs = useAppStore.getState().messages
+    expect(msgs).toHaveLength(3)
+    expect(msgs[2].id).toBe('m3')
+    expect(msgs[2].content).toBe('third')
+  })
+
+  it('replace in-place preserves other messages order', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', content: 'aaa' }),
+        mkMessage({ id: 'm2', content: 'bbb' }),
+        mkMessage({ id: 'm3', content: 'ccc' }),
+      ],
+    })
+    useAppStore.getState().upsertMessage('m2', mkMessage({ id: 'm2', content: 'UPDATED' }))
+    const msgs = useAppStore.getState().messages
+    expect(msgs).toHaveLength(3)
+    expect(msgs[0].content).toBe('aaa')
+    expect(msgs[1].content).toBe('UPDATED')
+    expect(msgs[2].content).toBe('ccc')
+  })
+
+  it('upsert on empty array simply appends', () => {
+    useAppStore.setState({ messages: [] })
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', content: 'solo' }))
+    expect(useAppStore.getState().messages).toHaveLength(1)
+    expect(useAppStore.getState().messages[0].content).toBe('solo')
+  })
+
+  it('multiple upserts build up conversation correctly', () => {
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', content: 'q1' }))
+    useAppStore.getState().upsertMessage('m2', mkMessage({ id: 'm2', content: 'a1' }))
+    useAppStore.getState().upsertMessage('m3', mkMessage({ id: 'm3', content: 'q2' }))
+    expect(useAppStore.getState().messages).toHaveLength(3)
+
+    // Update an earlier message
+    useAppStore.getState().upsertMessage('m1', mkMessage({ id: 'm1', content: 'q1-edited' }))
+    const msgs = useAppStore.getState().messages
+    expect(msgs).toHaveLength(3)
+    expect(msgs[0].content).toBe('q1-edited')
+    expect(msgs[1].content).toBe('a1')
+    expect(msgs[2].content).toBe('q2')
+  })
+})
+
+describe('store — removeMessage: edge cases', () => {
+  it('no-ops on empty messages array', () => {
+    useAppStore.setState({ messages: [] })
+    expect(() => useAppStore.getState().removeMessage('m1')).not.toThrow()
+    expect(useAppStore.getState().messages).toHaveLength(0)
+  })
+
+  it('removing the only message leaves empty array', () => {
+    useAppStore.setState({ messages: [mkMessage({ id: 'm1' })] })
+    useAppStore.getState().removeMessage('m1')
+    expect(useAppStore.getState().messages).toHaveLength(0)
+  })
+
+  it('removing all messages one by one', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1' }),
+        mkMessage({ id: 'm2' }),
+        mkMessage({ id: 'm3' }),
+      ],
+    })
+    useAppStore.getState().removeMessage('m1')
+    useAppStore.getState().removeMessage('m3')
+    useAppStore.getState().removeMessage('m2')
+    expect(useAppStore.getState().messages).toHaveLength(0)
+  })
+
+  it('non-existent id does not alter array length', () => {
+    useAppStore.setState({
+      messages: [mkMessage({ id: 'a' }), mkMessage({ id: 'b' })],
+    })
+    useAppStore.getState().removeMessage('z')
+    expect(useAppStore.getState().messages).toHaveLength(2)
+    expect(useAppStore.getState().messages.map((m) => m.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('store — closeTab: edge cases', () => {
+  function tab(id: string): Tab {
+    return { type: 'session', id, title: id }
+  }
+
+  it('closing first tab (which is active) falls back to second', () => {
+    useAppStore.setState({
+      tabs: [tab('s1'), tab('s2'), tab('s3')],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().closeTab('s1')
+    const { tabs, activeTabId } = useAppStore.getState()
+    expect(tabs).toHaveLength(2)
+    expect((tabs[0] as Extract<Tab, { type: 'session' }>).id).toBe('s2')
+    expect((tabs[1] as Extract<Tab, { type: 'session' }>).id).toBe('s3')
+    expect(activeTabId).toBe('s2')
+  })
+
+  it('closing last tab (which is active) falls back to second-to-last', () => {
+    useAppStore.setState({
+      tabs: [tab('s1'), tab('s2'), tab('s3')],
+      activeTabId: 's3',
+    })
+    useAppStore.getState().closeTab('s3')
+    const { tabs, activeTabId } = useAppStore.getState()
+    expect(tabs).toHaveLength(2)
+    expect((tabs[0] as Extract<Tab, { type: 'session' }>).id).toBe('s1')
+    expect((tabs[1] as Extract<Tab, { type: 'session' }>).id).toBe('s2')
+    // Falls back to min(idx=2, next.length-1=1) = index 1 → 's2'
+    expect(activeTabId).toBe('s2')
+  })
+
+  it('closing middle tab (which is active) falls back correctly', () => {
+    useAppStore.setState({
+      tabs: [tab('s1'), tab('s2'), tab('s3')],
+      activeTabId: 's2',
+    })
+    useAppStore.getState().closeTab('s2')
+    const { tabs, activeTabId } = useAppStore.getState()
+    expect(tabs).toHaveLength(2)
+    // idx=1, min(1, 1)=1 → fallback to s3
+    expect(activeTabId).toBe('s3')
+  })
+
+  it('closing non-existent id leaves tabs and activeTabId unchanged', () => {
+    useAppStore.setState({
+      tabs: [tab('s1'), tab('s2')],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().closeTab('ghost')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+
+  it('closing middle non-active tab preserves activeTabId', () => {
+    useAppStore.setState({
+      tabs: [tab('s1'), tab('s2'), tab('s3')],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().closeTab('s2')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect((useAppStore.getState().tabs[0] as Extract<Tab, { type: 'session' }>).id).toBe('s1')
+    expect((useAppStore.getState().tabs[1] as Extract<Tab, { type: 'session' }>).id).toBe('s3')
+  })
+})
+
+describe('store — togglePinSession: edge cases', () => {
+  it('multi-toggle cycle: unpinned → pinned → unpinned', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1', pinned: false })])
+    useAppStore.getState().togglePinSession('s1')
+    expect(useAppStore.getState().sessions[0].pinned).toBe(true)
+    useAppStore.getState().togglePinSession('s1')
+    expect(useAppStore.getState().sessions[0].pinned).toBe(false)
+  })
+
+  it('only toggles the targeted session, leaves others unchanged', () => {
+    useAppStore.getState().setSessions([
+      mkSession({ id: 's1', pinned: false }),
+      mkSession({ id: 's2', pinned: true }),
+    ])
+    useAppStore.getState().togglePinSession('s1')
+    expect(useAppStore.getState().sessions[0].pinned).toBe(true)
+    expect(useAppStore.getState().sessions[1].pinned).toBe(true)
+  })
+
+  it('no-ops on non-existent session id', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1', pinned: false })])
+    useAppStore.getState().togglePinSession('ghost')
+    expect(useAppStore.getState().sessions[0].pinned).toBe(false)
+  })
+
+  it('handles undefined pinned field (treats as falsy)', () => {
+    useAppStore.getState().setSessions([mkSession({ id: 's1' })])
+    // pinned is undefined initially
+    expect(useAppStore.getState().sessions[0].pinned).toBeUndefined()
+    useAppStore.getState().togglePinSession('s1')
+    expect(useAppStore.getState().sessions[0].pinned).toBe(true)
+  })
+})

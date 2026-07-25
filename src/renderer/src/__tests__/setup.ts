@@ -5,17 +5,25 @@ import { vi } from 'vitest'
 // Mock xterm for TerminalView tests — use plain constructor functions
 // (vi.fn() is not available in hoisted vi.mock factory context)
 vi.mock('@xterm/xterm', () => {
+  if (!(globalThis as any).__terminalInstances) {
+    (globalThis as any).__terminalInstances = []
+  }
+  const terminalInstances = (globalThis as any).__terminalInstances as any[]
+
   function MockTerminal() {
+    const self = this
     this.loadAddon = function() {}
-    this.open = function() {}
+    this.open = function(el: HTMLElement) { self._el = el }
     this.focus = function() {}
-    this.write = function() {}
-    this.clear = function() {}
-    this.onData = function() { return function() {} }
+    this.write = function(data: string) { self._writeCalls = (self._writeCalls || []).concat(data) }
+    this.clear = function() { self._clearCalls = (self._clearCalls || 0) + 1 }
+    this._onDataCallback = null
+    this.onData = function(cb: (data: string) => void) { self._onDataCallback = cb; return function() {} }
     this.onResize = function() { return function() {} }
     this.dispose = function() {}
     this.cols = 80
     this.rows = 24
+    terminalInstances.push(this)
   }
   return { Terminal: MockTerminal as unknown as typeof import('@xterm/xterm').Terminal }
 })

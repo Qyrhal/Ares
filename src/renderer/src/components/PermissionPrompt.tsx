@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertTriangle, Check, X, Zap } from 'lucide-react'
+import { AlertTriangle, Check, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PermissionPromptProps {
@@ -10,6 +10,16 @@ interface PermissionPromptProps {
 }
 
 export const PermissionPrompt = React.memo(function PermissionPrompt({ toolName, toolArgs, onApprove, onDeny }: PermissionPromptProps): React.ReactElement {
+  const handleKeyDown = React.useCallback((e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      onApprove()
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      onDeny()
+    }
+  }, [onApprove, onDeny])
+
   let argsDisplay: string
   try {
     const parsed = JSON.parse(toolArgs)
@@ -21,7 +31,13 @@ export const PermissionPrompt = React.memo(function PermissionPrompt({ toolName,
   }
 
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 mx-4 mb-2 shadow-sm">
+    <div
+      className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2.5 mx-4 mb-2 shadow-sm"
+      onKeyDown={handleKeyDown}
+      tabIndex={0}
+      role="region"
+      aria-label={`Permission request for ${toolName}`}
+    >
       <AlertTriangle className="size-4 shrink-0 text-amber-400" />
       <div className="flex-1 min-w-0">
         <span className="text-xs font-medium text-amber-300">Allow {toolName}?</span>
