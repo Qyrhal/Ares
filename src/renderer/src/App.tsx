@@ -1162,7 +1162,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1949,6 +1949,29 @@ export default function App(): React.ReactElement {
           if (msg) store.appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'filter': {
+        const rawArgs = args.trim()
+        if (!rawArgs || rawArgs === 'clear') {
+          store.setSessionFilter(null)
+          const msg = await el.db.addMessage(sess.id, 'system', 'Filter cleared — showing all sessions.')
+          if (msg) store.appendMessage(parseMessage(msg))
+        } else if (rawArgs.startsWith('model:')) {
+          const value = rawArgs.slice(6)
+          store.setSessionFilter({ type: 'model', value })
+          const msg = await el.db.addMessage(sess.id, 'system', `Filtering sessions by model: **${value}**`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } else if (rawArgs.startsWith('status:')) {
+          const value = rawArgs.slice(7)
+          store.setSessionFilter({ type: 'status', value })
+          const msg = await el.db.addMessage(sess.id, 'system', `Filtering sessions by status: **${value}**`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } else {
+          store.setSessionFilter({ type: 'keyword', value: rawArgs })
+          const msg = await el.db.addMessage(sess.id, 'system', `Filtering sessions by keyword: **${rawArgs}**`)
           if (msg) store.appendMessage(parseMessage(msg))
         }
         break

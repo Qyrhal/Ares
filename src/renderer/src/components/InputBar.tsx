@@ -70,6 +70,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'exec',         description: 'Run a shell command in the workspace' },
   { kind: 'builtin', name: 'rerun',        description: 'Re-run the last shell command' },
   { kind: 'builtin', name: 'fetch',        description: 'Fetch web content from a URL' },
+  { kind: 'builtin', name: 'filter',       description: 'Filter sessions by model or status' },
   { kind: 'builtin', name: 'lint',         description: 'Run TypeScript type checking on the workspace' },
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },
   { kind: 'builtin', name: 'config',        description: 'View or change settings from chat' },
@@ -466,6 +467,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           onCommand?.('help', '')
           return
         case 'commit':
+        case 'filter':
         case 'helpful':
         case 'not-helpful':
         case 'pr':
