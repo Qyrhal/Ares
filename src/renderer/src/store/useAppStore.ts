@@ -55,6 +55,9 @@ interface AppStore {
   // ── Deleted messages (for undo) ─────────────────────────────────────────────
   lastDeletedMessage: Message | null
 
+  // ── Exec history ──────────────────────────────────────────────────────────
+  lastExecCommand: string | null
+
   // ── Prompt history ────────────────────────────────────────────────────────
   promptHistory: string[]
   promptHistoryIdx: number  // -1 = not navigating, 0..N = navigating
@@ -133,6 +136,9 @@ interface AppStore {
   addPromptToHistory: (prompt: string) => void
   navigatePromptHistory: (direction: 'up' | 'down') => string | null
   resetPromptHistoryIdx: () => void
+
+  // ── Exec history ──────────────────────────────────────────────────────────
+  setLastExecCommand: (cmd: string) => void
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -161,6 +167,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   settings: DEFAULT_SETTINGS,
   todos: [],
   lastDeletedMessage: null,
+  lastExecCommand: null,
 
   promptHistory: [],
   promptHistoryIdx: -1,
@@ -399,4 +406,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   resetPromptHistoryIdx: () => set({ promptHistoryIdx: -1 }),
+
+  // ── Exec history ──────────────────────────────────────────────────────────
+  setLastExecCommand: (cmd: string) => set({ lastExecCommand: cmd }),
 }))
