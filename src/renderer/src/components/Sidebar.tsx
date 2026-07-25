@@ -109,6 +109,9 @@ function SessionsPane({
   const renameInputRef = useRef<HTMLInputElement>(null)
   const [showArchived, setShowArchived] = useState(false)
 
+  const sessionFilter = useAppStore((s) => s.sessionFilter)
+  const setSessionFilter = useAppStore((s) => s.setSessionFilter)
+
   // ── Session group state ────────────────────────────────────────────────────
   const sessionGroups = useAppStore((s) => s.sessionGroups)
   const addSessionGroup = useAppStore((s) => s.addSessionGroup)
@@ -378,14 +381,22 @@ function SessionsPane({
     </button>
   )}
 
-  const pinned = orderWithChildren(sessions.filter((s) => s.pinned && !s.archived))
+  const matchesFilter = (s: Session): boolean => {
+    if (!sessionFilter) return true
+    if (sessionFilter.type === 'model') return s.model.toLowerCase().includes(sessionFilter.value.toLowerCase())
+    if (sessionFilter.type === 'status') return s.agentStatus === sessionFilter.value
+    return s.title.toLowerCase().includes(sessionFilter.value.toLowerCase())
+  }
+
+  const pinned = orderWithChildren(sessions.filter((s) => s.pinned && !s.archived && matchesFilter(s)))
   const unpinned = sessions.filter((s) => !s.pinned)
   const visibleSessions = showArchived ? unpinned : unpinned.filter((s) => !s.archived)
+  const filteredVisible = visibleSessions.filter(matchesFilter)
 
   // Group unpinned sessions by their group field
   const groupedSessions = new Map<string, Session[]>()
   const ungrouped: Session[] = []
-  for (const s of visibleSessions) {
+  for (const s of filteredVisible) {
     if (s.group && sessionGroups.some((g) => g.id === s.group)) {
       const arr = groupedSessions.get(s.group) ?? []
       arr.push(s)
@@ -472,6 +483,19 @@ function SessionsPane({
               className="text-xs text-primary hover:underline"
             >
               Start one
+            </button>
+          </div>
+        )}
+
+        {sessionFilter && (
+          <div className="flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-1 text-[10px] text-primary">
+            <span>Filtered: {sessionFilter.type}:{sessionFilter.value}</span>
+            <button
+              onClick={() => setSessionFilter(null)}
+              className="ml-auto rounded p-0.5 hover:bg-primary/20"
+              title="Clear filter"
+            >
+              <X className="size-2.5" />
             </button>
           </div>
         )}
