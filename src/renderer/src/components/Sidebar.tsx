@@ -329,6 +329,11 @@ function SessionsPane({
             {truncate(s.title, isSubAgent ? 26 : 32)}
           </p>
         )}
+        {s.model && (
+          <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-muted/50 text-muted-foreground/70 mt-0.5 inline-block max-w-[120px] truncate">
+            {s.model}
+          </span>
+        )}
         {s.notes && (
           <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground/50 italic" title={s.notes}>
             📝 {truncate(s.notes, 40)}
