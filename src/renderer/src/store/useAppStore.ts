@@ -61,6 +61,9 @@ interface AppStore {
   // ── Session filter ──────────────────────────────────────────────────
   sessionFilter: { type: 'model' | 'status' | 'keyword'; value: string } | null
 
+  // ── Session sort ────────────────────────────────────────────────────
+  sessionSort: { by: 'recent' | 'name' | 'duration' | 'messages'; asc: boolean }
+
   // ── Prompt history ────────────────────────────────────────────────
   promptHistory: string[]
   promptHistoryIdx: number  // -1 = not navigating, 0..N = navigating
@@ -141,6 +144,7 @@ interface AppStore {
   resetPromptHistoryIdx: () => void
 
   setSessionFilter: (filter: { type: 'model' | 'status' | 'keyword'; value: string } | null) => void
+  setSessionSort: (sort: { by: 'recent' | 'name' | 'duration' | 'messages'; asc: boolean }) => void
 
   // ── Exec history ──────────────────────────────────────────────────
   setLastExecCommand: (cmd: string) => void
@@ -175,6 +179,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   lastExecCommand: null,
 
   sessionFilter: null,
+  sessionSort: { by: 'recent', asc: false },
 
   promptHistory: [],
   promptHistoryIdx: -1,
@@ -416,6 +421,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Exec history ──────────────────────────────────────────────────────────
   setSessionFilter: (filter) => set({ sessionFilter: filter }),
+
+  setSessionSort: (sort) => set({ sessionSort: sort }),
 
   setLastExecCommand: (cmd: string) => set({ lastExecCommand: cmd }),
 }))
