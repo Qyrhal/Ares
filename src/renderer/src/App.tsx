@@ -1162,7 +1162,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -1974,6 +1974,58 @@ export default function App(): React.ReactElement {
           const msg = await el.db.addMessage(sess.id, 'system', `Filtering sessions by keyword: **${rawArgs}**`)
           if (msg) store.appendMessage(parseMessage(msg))
         }
+        break
+      }
+      case 'sort': {
+        const rawArgs = args.trim().toLowerCase()
+        const label = (b: string, a: boolean) => `**${b.charAt(0).toUpperCase() + b.slice(1)}** (${a ? 'ascending' : 'descending'})`
+
+        if (!rawArgs) {
+          const cur = store.sessionSort
+          const msg = await el.db.addMessage(sess.id, 'system', `**Current sort:** ${label(cur.by, cur.asc)}\n\nAvailable options:\n• \`/sort recent\` — by last updated (newest first)\n• \`/sort name\` — alphabetically by title\n• \`/sort duration\` — by session length (longest first)\n• \`/sort messages\` — by message count (most first)\n• \`/sort asc\` — switch to ascending order\n• \`/sort desc\` — switch to descending order`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (rawArgs === 'asc') {
+          const cur = store.sessionSort
+          store.setSessionSort({ ...cur, asc: true })
+          const msg = await el.db.addMessage(sess.id, 'system', `Sort direction: **ascending** (by ${label(cur.by, true)})`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (rawArgs === 'desc') {
+          const cur = store.sessionSort
+          store.setSessionSort({ ...cur, asc: false })
+          const msg = await el.db.addMessage(sess.id, 'system', `Sort direction: **descending** (by ${label(cur.by, false)})`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (rawArgs === 'recent') {
+          store.setSessionSort({ by: 'recent', asc: false })
+          const msg = await el.db.addMessage(sess.id, 'system', `Sorted by **recent** (newest first)`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (rawArgs === 'name') {
+          store.setSessionSort({ by: 'name', asc: true })
+          const msg = await el.db.addMessage(sess.id, 'system', `Sorted by **name** (A→Z)`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (rawArgs === 'duration') {
+          store.setSessionSort({ by: 'duration', asc: false })
+          const msg = await el.db.addMessage(sess.id, 'system', `Sorted by **duration** (longest first)`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (rawArgs === 'messages') {
+          store.setSessionSort({ by: 'messages', asc: false })
+          const msg = await el.db.addMessage(sess.id, 'system', `Sorted by **messages** (most first)`)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const msg = await el.db.addMessage(sess.id, 'system', `Unknown sort option: **${rawArgs}**\n\nUsage: \`/sort\`, \`/sort recent\`, \`/sort name\`, \`/sort duration\`, \`/sort messages\`, \`/sort asc\`, \`/sort desc\``)
+        if (msg) store.appendMessage(parseMessage(msg))
         break
       }
       case 'export': {

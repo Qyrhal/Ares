@@ -111,6 +111,7 @@ function SessionsPane({
 
   const sessionFilter = useAppStore((s) => s.sessionFilter)
   const setSessionFilter = useAppStore((s) => s.setSessionFilter)
+  const sessionSort = useAppStore((s) => s.sessionSort)
 
   // ── Session group state ────────────────────────────────────────────────────
   const sessionGroups = useAppStore((s) => s.sessionGroups)
@@ -393,7 +394,31 @@ function SessionsPane({
     return s.title.toLowerCase().includes(sessionFilter.value.toLowerCase())
   }
 
-  const pinned = orderWithChildren(sessions.filter((s) => s.pinned && !s.archived && matchesFilter(s)))
+  const sortSessions = (list: Session[]): Session[] => {
+    const comparator = (a: Session, b: Session): number => {
+      switch (sessionSort.by) {
+        case 'recent': return a.updatedAt - b.updatedAt
+        case 'name': return a.title.localeCompare(b.title)
+        case 'duration': return (a.updatedAt - a.createdAt) - (b.updatedAt - b.createdAt)
+        case 'messages': return a.messageCount - b.messageCount
+      }
+    }
+    const childrenOf = new Map<string, Session[]>()
+    const roots: Session[] = []
+    for (const s of list) {
+      if (s.parentId && list.some((p) => p.id === s.parentId)) {
+        const arr = childrenOf.get(s.parentId) ?? []
+        arr.push(s)
+        childrenOf.set(s.parentId, arr)
+      } else {
+        roots.push(s)
+      }
+    }
+    roots.sort((a, b) => sessionSort.asc ? comparator(a, b) : comparator(b, a))
+    return roots.flatMap((root) => [root, ...(childrenOf.get(root.id) ?? [])])
+  }
+
+  const pinned = sortSessions(orderWithChildren(sessions.filter((s) => s.pinned && !s.archived && matchesFilter(s))))
   const unpinned = sessions.filter((s) => !s.pinned)
   const visibleSessions = showArchived ? unpinned : unpinned.filter((s) => !s.archived)
   const filteredVisible = visibleSessions.filter(matchesFilter)
@@ -412,9 +437,9 @@ function SessionsPane({
   }
   // Apply parent-child ordering within each group and ungrouped
   for (const [id, arr] of groupedSessions) {
-    groupedSessions.set(id, orderWithChildren(arr))
+    groupedSessions.set(id, sortSessions(orderWithChildren(arr)))
   }
-  const orderedUngrouped = orderWithChildren(ungrouped)
+  const orderedUngrouped = sortSessions(orderWithChildren(ungrouped))
 
   // Sort groups by createdAt
   const orderedGroups = [...sessionGroups].sort((a, b) => a.createdAt - b.createdAt)
@@ -502,6 +527,12 @@ function SessionsPane({
             >
               <X className="size-2.5" />
             </button>
+          </div>
+        )}
+
+        {sessionSort.by !== 'recent' && (
+          <div className="flex items-center gap-1.5 rounded-md bg-muted/50 px-2 py-1 text-[10px] text-muted-foreground">
+            <span>Sorted by: {sessionSort.by}{sessionSort.asc ? ' ↑' : ' ↓'}</span>
           </div>
         )}
 
