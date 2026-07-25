@@ -71,6 +71,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'rerun',        description: 'Re-run the last shell command' },
   { kind: 'builtin', name: 'fetch',        description: 'Fetch web content from a URL' },
   { kind: 'builtin', name: 'filter',       description: 'Filter sessions by model or status' },
+  { kind: 'builtin', name: 'sessions',     description: 'List all sessions with metadata and filters' },
   { kind: 'builtin', name: 'sort',         description: 'Sort sessions by date, title, or activity' },
   { kind: 'builtin', name: 'lint',         description: 'Run TypeScript type checking on the workspace' },
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },
