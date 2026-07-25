@@ -2292,20 +2292,25 @@ export default function App(): React.ReactElement {
             if (msg) store.appendMessage(parseMessage(msg))
             break
           }
+          const depthMatch = args.match(/--depth\s+(\d+)|-d\s+(\d+)/)
+          const maxDepth = depthMatch ? parseInt(depthMatch[1] || depthMatch[2], 10) : undefined
           const folderName = wsPath.split(/[/\\]/).pop() || wsPath
           const lines: string[] = [folderName + '/']
-          function renderTree(items: FileNode[], prefix: string) {
+          function renderTree(items: FileNode[], prefix: string, depth: number) {
             for (let i = 0; i < items.length; i++) {
               const isLast = i === items.length - 1
               const connector = isLast ? '└── ' : '├── '
               const node = items[i]
-              lines.push(prefix + connector + node.name + (node.type === 'directory' ? '/' : ''))
-              if (node.type === 'directory' && node.children) {
-                renderTree(node.children, prefix + (isLast ? '    ' : '│   '))
+              const isDir = node.type === 'directory'
+              lines.push(prefix + connector + node.name + (isDir ? '/' : ''))
+              if (isDir && node.children && (maxDepth === undefined || depth < maxDepth)) {
+                renderTree(node.children, prefix + (isLast ? '    ' : '│   '), depth + 1)
+              } else if (isDir && node.children && node.children.length > 0 && maxDepth !== undefined && depth >= maxDepth) {
+                lines.push(prefix + (isLast ? '    ' : '│   ') + '...')
               }
             }
           }
-          renderTree(nodes, '')
+          renderTree(nodes, '', 0)
           const treeText = lines.join('\n')
           const truncated = treeText.length > 4000 ? treeText.slice(0, 4000) + '\n\n[truncated]' : treeText
           const msg = await el.db.addMessage(sess.id, 'system', '```\n' + truncated + '\n```')
