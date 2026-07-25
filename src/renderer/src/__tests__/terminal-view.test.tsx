@@ -170,3 +170,230 @@ describe('TerminalView — search', () => {
     expect(screen.queryByPlaceholderText('Find…')).not.toBeInTheDocument()
   })
 })
+
+describe('TerminalView — tab switching', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    el.terminal.create.mockResolvedValue('term-1')
+    el.terminal.onOutput.mockReturnValue(() => {})
+    el.terminal.kill = vi.fn()
+    ;(globalThis as any).__terminalInstances.length = 0
+  })
+
+  it('clicking an inactive tab switches the active terminal', async () => {
+    render(<TerminalView cwd="/home/user/project" onClose={vi.fn()} />)
+    await waitFor(() => {
+      expect(el.terminal.create).toHaveBeenCalledTimes(1)
+    })
+
+    // Create second terminal
+    el.terminal.create.mockResolvedValue('term-2')
+    fireEvent.click(screen.getByTitle('New terminal'))
+    await waitFor(() => {
+      expect(el.terminal.create).toHaveBeenCalledTimes(2)
+    })
+
+    // Both tabs should show the same label
+    const tabSpans = screen.getAllByText('user/project')
+    expect(tabSpans.length).toBe(2)
+
+    // Get the tab parent divs (they have the 'group' class)
+    const tab1 = tabSpans[0].closest('.group') as HTMLElement
+    const tab2 = tabSpans[1].closest('.group') as HTMLElement
+    expect(tab1).toBeDefined()
+    expect(tab2).toBeDefined()
+
+    // After creating second terminal, it's active (has bg-background)
+    expect(tab2.className).toContain('bg-background')
+    expect(tab1.className).not.toContain('bg-background')
+
+    // Click the first tab to switch
+    fireEvent.click(tab1)
+
+    // Now first tab should be active
+    await waitFor(() => {
+      expect(tab1.className).toContain('bg-background')
+      expect(tab2.className).not.toContain('bg-background')
+    })
+  })
+})
+
+describe('TerminalView — tab renaming', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    el.terminal.create.mockResolvedValue('term-1')
+    el.terminal.onOutput.mockReturnValue(() => {})
+    el.terminal.kill = vi.fn()
+    ;(globalThis as any).__terminalInstances.length = 0
+  })
+
+  it('double-click to rename a tab', async () => {
+    render(<TerminalView cwd="/home/user/project" onClose={vi.fn()} />)
+    await waitFor(() => {
+      expect(el.terminal.create).toHaveBeenCalled()
+    })
+
+    // Find the tab label span
+    const tabLabel = screen.getByText('user/project')
+    const tabDiv = tabLabel.closest('.group') as HTMLElement
+    expect(tabDiv).toBeDefined()
+
+    // Double-click to rename
+    fireEvent.doubleClick(tabDiv)
+
+    // The rename input should appear
+    await waitFor(() => {
+      const input = tabDiv.querySelector('input') as HTMLInputElement
+      expect(input).toBeDefined()
+      expect(input.value).toBe('user/project')
+    })
+
+    // Type a new name
+    const input = tabDiv.querySelector('input') as HTMLInputElement
+    fireEvent.change(input, { target: { value: 'my-project' } })
+
+    // Press Enter to submit
+    fireEvent.keyDown(input, { key: 'Enter' })
+
+    // The label should be updated
+    await waitFor(() => {
+      expect(screen.getByText('my-project')).toBeDefined()
+    })
+  })
+})
+
+describe('TerminalView — search bar toggle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    el.terminal.create.mockResolvedValue('term-1')
+    el.terminal.onOutput.mockReturnValue(() => {})
+    el.terminal.kill = vi.fn()
+    ;(globalThis as any).__terminalInstances.length = 0
+  })
+
+  it('toggles search bar with Ctrl+F', async () => {
+    render(<TerminalView cwd="/home/user/test" onClose={vi.fn()} />)
+    await waitFor(() => {
+      expect(el.terminal.create).toHaveBeenCalled()
+    })
+
+    // Search bar should not be visible initially
+    expect(screen.queryByPlaceholderText('Find…')).not.toBeInTheDocument()
+
+    // Wait for TerminalInstance to mount and attach keydown listener
+    await waitFor(() => {
+      expect(document.querySelector('.relative.min-h-0.flex-1.overflow-hidden')).toBeInTheDocument()
+    })
+
+    // Get the containerRef element via the mock terminal instance
+    const instances = (globalThis as any).__terminalInstances
+    const term = instances[instances.length - 1]
+    expect(term._el).toBeDefined()
+
+    // Dispatch Ctrl+F keydown event on the containerRef element
+    fireEvent.keyDown(term._el, { key: 'f', ctrlKey: true })
+
+    // Search bar should appear
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText('Find…')).toBeInTheDocument()
+    })
+  })
+})
+
+describe('TerminalView — Ctrl+L clear screen', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    el.terminal.create.mockResolvedValue('term-1')
+    el.terminal.onOutput.mockReturnValue(() => {})
+    el.terminal.kill = vi.fn()
+    ;(globalThis as any).__terminalInstances.length = 0
+  })
+
+  it('Ctrl+L triggers terminal clear instead of writing to pty', async () => {
+    render(<TerminalView cwd="/home/user/test" onClose={vi.fn()} />)
+
+    // Wait for the MockTerminal instance to be created (TerminalInstance mounts)
+    const instances = (globalThis as any).__terminalInstances
+    await waitFor(() => {
+      expect(instances.length).toBeGreaterThan(0)
+    })
+    const term = instances[instances.length - 1]
+
+    // The onData callback should have been registered
+    expect(term._onDataCallback).toBeDefined()
+
+    // Clear previous write calls
+    el.terminal.write.mockClear()
+
+    // Simulate Ctrl+L by calling the onData callback with \x0c
+    term._onDataCallback('\x0c')
+
+    // The clear function should have been called on the xterm instance
+    expect(term._clearCalls).toBe(1)
+
+    // And it should NOT have written to the pty
+    expect(el.terminal.write).not.toHaveBeenCalled()
+  })
+})
+
+describe('TerminalView — multiple terminal lifecycle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    el.terminal.create.mockResolvedValue('term-1')
+    el.terminal.onOutput.mockReturnValue(() => {})
+    el.terminal.kill = vi.fn()
+    ;(globalThis as any).__terminalInstances.length = 0
+  })
+
+  it('creates 3 terminals and closes the middle one', async () => {
+    render(<TerminalView cwd="/home/user/project" onClose={vi.fn()} />)
+    await waitFor(() => {
+      expect(el.terminal.create).toHaveBeenCalledTimes(1)
+    })
+
+    // Create second terminal
+    el.terminal.create.mockResolvedValue('term-2')
+    fireEvent.click(screen.getByTitle('New terminal'))
+    await waitFor(() => {
+      expect(el.terminal.create).toHaveBeenCalledTimes(2)
+    })
+
+    // Create third terminal
+    el.terminal.create.mockResolvedValue('term-3')
+    fireEvent.click(screen.getByTitle('New terminal'))
+    await waitFor(() => {
+      expect(el.terminal.create).toHaveBeenCalledTimes(3)
+    })
+
+    // Should have 3 close buttons (one per tab)
+    const closeButtons = screen.getAllByRole('button', { name: 'Close terminal' })
+    expect(closeButtons.length).toBe(3)
+
+    // Close the middle terminal (term-2)
+    fireEvent.click(closeButtons[1])
+
+    await waitFor(() => {
+      expect(el.terminal.kill).toHaveBeenCalledWith('term-2')
+    })
+
+    // Only term-2 should have been killed
+    expect(el.terminal.kill).toHaveBeenCalledTimes(1)
+
+    // Should now have 2 close buttons
+    const remainingCloseButtons = screen.getAllByRole('button', { name: 'Close terminal' })
+    expect(remainingCloseButtons.length).toBe(2)
+
+    // Both remaining tabs should have the same label
+    const tabLabels = screen.getAllByText('user/project')
+    expect(tabLabels.length).toBe(2)
+
+    // The last remaining tab (term-3) should be active
+    // (closeTerminal selects next[Math.min(idx, next.length - 1)])
+    const lastTab = tabLabels[1].closest('.group') as HTMLElement
+    expect(lastTab.className).toContain('bg-background')
+
+    // The first tab should be inactive
+    const firstTab = tabLabels[0].closest('.group') as HTMLElement
+    expect(firstTab.className).not.toContain('bg-background')
+  })
+})

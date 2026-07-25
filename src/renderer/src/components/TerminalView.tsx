@@ -321,6 +321,7 @@ export function TerminalView({ cwd, onClose, onHeightChange }: TerminalViewProps
           <div
             key={tab.id}
             onClick={() => setActiveId(tab.id)}
+            onDoubleClick={(e) => { e.stopPropagation(); handleRename(tab.id) }}
             className={cn(
               'group flex items-center gap-1.5 rounded-md px-2.5 py-0.5 text-xs border transition-all cursor-pointer',
               tab.id === activeId
@@ -328,7 +329,22 @@ export function TerminalView({ cwd, onClose, onHeightChange }: TerminalViewProps
                 : 'text-muted-foreground border-transparent hover:border-border/40 hover:text-foreground'
             )}
           >
-            <span>{tab.label}</span>
+            {renamingTab === tab.id ? (
+              <input
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onBlur={() => handleRenameSubmit(tab.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleRenameSubmit(tab.id)
+                  if (e.key === 'Escape') setRenamingTab(null)
+                }}
+                autoFocus
+                className="bg-transparent text-xs outline-none w-20 border-b border-primary"
+                onClick={(e) => e.stopPropagation()}
+              />
+            ) : (
+              <span>{tab.label}</span>
+            )}
             <button
               onClick={(e) => { e.stopPropagation(); closeTerminal(tab.id) }}
               className="rounded p-0.5 text-muted-foreground/50 hover:text-foreground transition-colors"
