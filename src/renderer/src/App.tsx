@@ -1996,6 +1996,39 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'import': {
+        try {
+          const result = await el.session.import()
+          if (!result) {
+            const cancelMsg = await el.db.addMessage(sess.id, 'system', 'Import cancelled.')
+            if (cancelMsg) store.appendMessage(parseMessage(cancelMsg))
+            break
+          }
+          if ('error' in result) {
+            const errMsg = await el.db.addMessage(sess.id, 'system', `**Import failed:** ${result.error}`)
+            if (errMsg) store.appendMessage(parseMessage(errMsg))
+            break
+          }
+          const raw = await el.db.createSession(`${result.title} (imported)`, sess.model)
+          const newSession = parseSession(raw)
+          for (const m of result.messages) {
+            await el.db.addMessage(newSession.id, m.role, m.content, {
+              toolName: m.toolName ?? undefined,
+              toolInput: m.toolInput ?? undefined,
+              toolOutput: m.toolOutput ?? undefined,
+              thinking: m.thinking ?? undefined,
+            })
+          }
+          store.addSession(newSession)
+          store.openSessionTab(newSession)
+          const importMsg = await el.db.addMessage(newSession.id, 'system', `**Imported** ${result.messages.length} messages from "${result.title}".`)
+          if (importMsg) store.appendMessage(parseMessage(importMsg))
+        } catch (e) {
+          const errMsg = await el.db.addMessage(sess.id, 'system', `**Import failed:** ${(e as Error).message}`)
+          if (errMsg) store.appendMessage(parseMessage(errMsg))
+        }
+        break
+      }
       case 'branches': {
         const wsPath = store.workspacePath
         if (!wsPath) {
@@ -3581,6 +3614,7 @@ function usePaletteCommands(
     { id: 'cmd-usage', label: '/usage', description: 'Show session token usage and cost', category: 'Slash Commands', action: () => handleCommand('usage', '') },
     { id: 'cmd-changes', label: '/changes', description: 'Show workspace git status', category: 'Slash Commands', action: () => handleCommand('changes', '') },
     { id: 'cmd-export', label: '/export', description: 'Export session as Markdown', category: 'Slash Commands', action: () => handleCommand('export', '') },
+    { id: 'cmd-import', label: '/import', description: 'Import session from JSON file', category: 'Slash Commands', action: () => handleCommand('import', '') },
     { id: 'cmd-shortcuts', label: '/shortcuts', description: 'Show all keyboard shortcuts', category: 'Slash Commands', action: () => handleCommand('shortcuts', '') },
     { id: 'cmd-review', label: '/review', description: 'AI-powered code review', category: 'Slash Commands', action: () => handleCommand('review', '') },
     { id: 'cmd-summarize', label: '/summarize', description: 'Generate conversation summary', category: 'Slash Commands', action: () => handleCommand('summarize', '') },

@@ -50,6 +50,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'usage',        description: 'Show session token usage and estimated cost' },
   { kind: 'builtin', name: 'changes',      description: 'Show workspace git status (branch, staged, unstaged files)' },
   { kind: 'builtin', name: 'export',       description: 'Export current session as a Markdown file' },
+  { kind: 'builtin', name: 'import',       description: 'Import a session from a JSON file' },
   { kind: 'builtin', name: 'shortcuts',   description: 'Show all keyboard shortcuts' },
   { kind: 'builtin', name: 'review',       description: 'AI-powered review of session code and patterns' },
   { kind: 'builtin', name: 'summarize',    description: 'Generate an AI summary of the conversation' },
