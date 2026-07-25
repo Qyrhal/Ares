@@ -1915,6 +1915,7 @@ export default function App(): React.ReactElement {
             if (msg) store.appendMessage(parseMessage(msg))
             break
           }
+          const targetFile = args.trim()
           const allFiles = [...status.staged, ...status.unstaged]
           if (allFiles.length === 0) {
             const msg = await el.db.addMessage(sess.id, 'system', 'No changes in working tree.')
@@ -1922,14 +1923,29 @@ export default function App(): React.ReactElement {
             break
           }
           const diffParts: string[] = []
-          for (const f of allFiles.slice(0, 30)) {
-            const isStaged = status.staged.some((s) => s.path === f.path)
-            const diff = await el.git.diff(workspacePath, f.path, isStaged)
-            if (diff) diffParts.push(`### ${f.path} (${isStaged ? 'staged' : 'unstaged'})\n\`\`\`diff\n${diff}\n\`\`\``)
+          if (targetFile) {
+            const matched = allFiles.filter((f) => f.path.includes(targetFile))
+            if (matched.length === 0) {
+              const msg = await el.db.addMessage(sess.id, 'system', `No changes found for \`${targetFile}\`.`)
+              if (msg) store.appendMessage(parseMessage(msg))
+              break
+            }
+            for (const f of matched) {
+              const isStaged = status.staged.some((s) => s.path === f.path)
+              const diff = await el.git.diff(workspacePath, f.path, isStaged)
+              if (diff) diffParts.push(`### ${f.path} (${isStaged ? 'staged' : 'unstaged'})\n\`\`\`diff\n${diff}\n\`\`\``)
+            }
+          } else {
+            for (const f of allFiles.slice(0, 30)) {
+              const isStaged = status.staged.some((s) => s.path === f.path)
+              const diff = await el.git.diff(workspacePath, f.path, isStaged)
+              if (diff) diffParts.push(`### ${f.path} (${isStaged ? 'staged' : 'unstaged'})\n\`\`\`diff\n${diff}\n\`\`\``)
+            }
+            if (allFiles.length > 30) diffParts.push(`\n*...and ${allFiles.length - 30} more files*`)
           }
-          if (allFiles.length > 30) diffParts.push(`\n*...and ${allFiles.length - 30} more files*`)
           const diffText = diffParts.length > 0 ? diffParts.join('\n\n') : 'No diff content available.'
-          const msg = await el.db.addMessage(sess.id, 'system', `**Git Diff**\n\n${diffText}`)
+          const header = targetFile ? `**Git Diff — \`${targetFile}\`**` : '**Git Diff**'
+          const msg = await el.db.addMessage(sess.id, 'system', `${header}\n\n${diffText}`)
           if (msg) store.appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)

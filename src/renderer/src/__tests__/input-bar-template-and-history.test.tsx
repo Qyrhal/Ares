@@ -409,7 +409,7 @@ describe('InputBar — addPromptToHistory called on send', () => {
 
 describe('InputBar — BUILTIN_COMMANDS count', () => {
   it('exports the correct number of builtin commands', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(38)
+    expect(BUILTIN_COMMANDS.length).toBe(39)
   })
 
   it('picker shows all builtin commands when / is typed with no filter', () => {

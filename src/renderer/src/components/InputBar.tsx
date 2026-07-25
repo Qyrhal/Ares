@@ -63,6 +63,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'doctor',        description: 'Run environment diagnostics and health checks' },
   { kind: 'builtin', name: 'history',       description: 'Show recent prompt history' },
   { kind: 'builtin', name: 'log',          description: 'Show recent git commits' },
+  { kind: 'builtin', name: 'diff',         description: 'Show git diff for changed files' },
   { kind: 'builtin', name: 'stash',        description: 'Manage git stashes (push/pop/drop/clear)' },
   { kind: 'builtin', name: 'recent',       description: 'Show recently modified files in workspace' },
   { kind: 'builtin', name: 'exec',         description: 'Run a shell command in the workspace' },
