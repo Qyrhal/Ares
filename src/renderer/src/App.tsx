@@ -69,7 +69,7 @@ export default function App(): React.ReactElement {
   const [tabSwitcherOpen, setTabSwitcherOpen] = useState(false)
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
 
-  const paletteCommands = React.useMemo(() => usePaletteCommands(store), [store])
+  // paletteCommands defined after handleCommand below
 
   // ── Plan preview ──────────────────────────────────────────────────
   const [pendingPlan, setPendingPlan] = useState<{
@@ -2657,6 +2657,11 @@ export default function App(): React.ReactElement {
     }
   }, [activeSession, store])
 
+  const paletteCommands = React.useMemo(
+    () => usePaletteCommands(store, handleCommand, !!activeSession),
+    [store, handleCommand, activeSession]
+  )
+
   // ── File system ──────────────────────────────────────────────────────────────
   const refreshTree = useCallback(async () => {
     const { workspacePath } = useAppStore.getState()
@@ -3546,16 +3551,74 @@ export default function App(): React.ReactElement {
 }
 
 // ── Command palette entries ───────────────────────────────────────────────────
-function usePaletteCommands(store: ReturnType<typeof useAppStore.getState>): CommandEntry[] {
-  return [
-    { id: 'new-session', label: 'New session', description: 'Create a new chat session', category: 'General', action: () => store.openSessionTab({ id: crypto.randomUUID(), title: 'New session', model: store.settings.defaultModel, createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 }) },
-    { id: 'toggle-terminal', label: 'Toggle terminal', description: 'Open or close the terminal panel', shortcut: 'Ctrl+`', category: 'View', action: () => store.toggleTerminal() },
-    { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => store.toggleZenMode() },
-    { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => store.setActiveView('settings') },
-    { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => store.setActiveView('explorer') },
-    { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => store.setActiveView('git') },
-    { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => store.setActiveView('extensions') },
+function usePaletteCommands(
+  _store: ReturnType<typeof useAppStore.getState>,
+  handleCommand: (cmd: string, args: string) => void,
+  hasActiveSession: boolean,
+): CommandEntry[] {
+  const general: CommandEntry[] = [
+    { id: 'new-session', label: 'New session', description: 'Create a new chat session', category: 'General', action: () => _store.openSessionTab({ id: crypto.randomUUID(), title: 'New session', model: _store.settings.defaultModel, createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 }) },
+    { id: 'toggle-terminal', label: 'Toggle terminal', description: 'Open or close the terminal panel', shortcut: 'Ctrl+`', category: 'View', action: () => _store.toggleTerminal() },
+    { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => _store.toggleZenMode() },
+    { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => _store.setActiveView('settings') },
+    { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => _store.setActiveView('explorer') },
+    { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => _store.setActiveView('git') },
+    { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => _store.setActiveView('extensions') },
   ]
+
+  if (!hasActiveSession) return general
+
+  const slashCommands: CommandEntry[] = [
+    { id: 'cmd-model', label: '/model', description: 'List or change the model', category: 'Slash Commands', action: () => handleCommand('model', '') },
+    { id: 'cmd-folder', label: '/folder', description: 'Open or switch workspace folder', category: 'Slash Commands', action: () => handleCommand('folder', '') },
+    { id: 'cmd-overview', label: '/overview', description: 'AI-generated project summary', category: 'Slash Commands', action: () => handleCommand('overview', '') },
+    { id: 'cmd-clear', label: '/clear', description: 'Clear messages (--hard: full reset)', category: 'Slash Commands', action: () => handleCommand('clear', '') },
+    { id: 'cmd-pr', label: '/pr', description: 'Generate a pull request from session', category: 'Slash Commands', action: () => handleCommand('pr', '') },
+    { id: 'cmd-fork', label: '/fork', description: 'Clone session as a new working session', category: 'Slash Commands', action: () => handleCommand('fork', '') },
+    { id: 'cmd-helpful', label: '/helpful', description: 'Mark last response as helpful', category: 'Slash Commands', action: () => handleCommand('helpful', '') },
+    { id: 'cmd-not-helpful', label: '/not-helpful', description: 'Mark last response as not helpful', category: 'Slash Commands', action: () => handleCommand('not-helpful', '') },
+    { id: 'cmd-compact', label: '/compact', description: 'Compact conversation context', category: 'Slash Commands', action: () => handleCommand('compact', '') },
+    { id: 'cmd-usage', label: '/usage', description: 'Show session token usage and cost', category: 'Slash Commands', action: () => handleCommand('usage', '') },
+    { id: 'cmd-changes', label: '/changes', description: 'Show workspace git status', category: 'Slash Commands', action: () => handleCommand('changes', '') },
+    { id: 'cmd-export', label: '/export', description: 'Export session as Markdown', category: 'Slash Commands', action: () => handleCommand('export', '') },
+    { id: 'cmd-shortcuts', label: '/shortcuts', description: 'Show all keyboard shortcuts', category: 'Slash Commands', action: () => handleCommand('shortcuts', '') },
+    { id: 'cmd-review', label: '/review', description: 'AI-powered code review', category: 'Slash Commands', action: () => handleCommand('review', '') },
+    { id: 'cmd-summarize', label: '/summarize', description: 'Generate conversation summary', category: 'Slash Commands', action: () => handleCommand('summarize', '') },
+    { id: 'cmd-rename', label: '/rename', description: 'Rename current session', category: 'Slash Commands', action: () => handleCommand('rename', '') },
+    { id: 'cmd-pin', label: '/pin', description: 'Pin or unpin session', category: 'Slash Commands', action: () => handleCommand('pin', '') },
+    { id: 'cmd-branches', label: '/branches', description: 'List, create, or switch branches', category: 'Slash Commands', action: () => handleCommand('branches', '') },
+    { id: 'cmd-stage', label: '/stage', description: 'Stage or unstage files', category: 'Slash Commands', action: () => handleCommand('stage', '') },
+    { id: 'cmd-commit', label: '/commit', description: 'Commit staged changes', category: 'Slash Commands', action: () => handleCommand('commit', '') },
+    { id: 'cmd-undo', label: '/undo', description: 'Remove last exchange', category: 'Slash Commands', action: () => handleCommand('undo', '') },
+    { id: 'cmd-debug', label: '/debug', description: 'Show diagnostic information', category: 'Slash Commands', action: () => handleCommand('debug', '') },
+    { id: 'cmd-doctor', label: '/doctor', description: 'Run environment diagnostics', category: 'Slash Commands', action: () => handleCommand('doctor', '') },
+    { id: 'cmd-history', label: '/history', description: 'Show recent prompt history', category: 'Slash Commands', action: () => handleCommand('history', '') },
+    { id: 'cmd-log', label: '/log', description: 'Show recent git commits', category: 'Slash Commands', action: () => handleCommand('log', '') },
+    { id: 'cmd-diff', label: '/diff', description: 'Show git diff for changed files', category: 'Slash Commands', action: () => handleCommand('diff', '') },
+    { id: 'cmd-stash', label: '/stash', description: 'Manage git stashes', category: 'Slash Commands', action: () => handleCommand('stash', '') },
+    { id: 'cmd-recent', label: '/recent', description: 'Recently modified files', category: 'Slash Commands', action: () => handleCommand('recent', '') },
+    { id: 'cmd-exec', label: '/exec', description: 'Run a shell command', category: 'Slash Commands', action: () => handleCommand('exec', '') },
+    { id: 'cmd-rerun', label: '/rerun', description: 'Re-run last shell command', category: 'Slash Commands', action: () => handleCommand('rerun', '') },
+    { id: 'cmd-fetch', label: '/fetch', description: 'Fetch web content from URL', category: 'Slash Commands', action: () => handleCommand('fetch', '') },
+    { id: 'cmd-lint', label: '/lint', description: 'Run TypeScript type checking', category: 'Slash Commands', action: () => handleCommand('lint', '') },
+    { id: 'cmd-task', label: '/task', description: 'Manage session tasks', category: 'Slash Commands', action: () => handleCommand('task', '') },
+    { id: 'cmd-config', label: '/config', description: 'View or change settings', category: 'Slash Commands', action: () => handleCommand('config', '') },
+    { id: 'cmd-rewind', label: '/rewind', description: 'Rewind to earlier point', category: 'Slash Commands', action: () => handleCommand('rewind', '') },
+    { id: 'cmd-test', label: '/test', description: 'Run the test suite', category: 'Slash Commands', action: () => handleCommand('test', '') },
+    { id: 'cmd-build', label: '/build', description: 'Run the project build', category: 'Slash Commands', action: () => handleCommand('build', '') },
+    { id: 'cmd-tree', label: '/tree', description: 'Show workspace directory tree', category: 'Slash Commands', action: () => handleCommand('tree', '') },
+    { id: 'cmd-help', label: '/help', description: 'Show available commands', category: 'Slash Commands', action: () => handleCommand('help', '') },
+    { id: 'cmd-context', label: '/context', description: 'Show context window utilization', category: 'Slash Commands', action: () => handleCommand('context', '') },
+    { id: 'cmd-cost', label: '/cost', description: 'Show workspace cost summary', category: 'Slash Commands', action: () => handleCommand('cost', '') },
+    { id: 'cmd-search', label: '/search', description: 'Search messages in session', category: 'Slash Commands', action: () => handleCommand('search', '') },
+    { id: 'cmd-stats', label: '/stats', description: 'Show session message statistics', category: 'Slash Commands', action: () => handleCommand('stats', '') },
+    { id: 'cmd-note', label: '/note', description: 'Add session notes', category: 'Slash Commands', action: () => handleCommand('note', '') },
+    { id: 'cmd-theme', label: '/theme', description: 'Switch color mode or accent', category: 'Slash Commands', action: () => handleCommand('theme', '') },
+    { id: 'cmd-agents', label: '/agents', description: 'Show running sub-agents', category: 'Slash Commands', action: () => handleCommand('agents', '') },
+    { id: 'cmd-kill', label: '/kill', description: 'Stop a running sub-agent', category: 'Slash Commands', action: () => handleCommand('kill', '') },
+  ]
+
+  return [...general, ...slashCommands]
 }
 
 // ── File tree helpers ─────────────────────────────────────────────────────────
