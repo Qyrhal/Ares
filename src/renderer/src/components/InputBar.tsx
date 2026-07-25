@@ -79,6 +79,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'rewind',        description: 'Rewind conversation to an earlier point' },
   { kind: 'builtin', name: 'test',          description: 'Run the test suite and show results' },
   { kind: 'builtin', name: 'build',         description: 'Run the project build and show results' },
+  { kind: 'builtin', name: 'check',         description: 'Run lint, tests, and build (pre-commit gate)' },
   { kind: 'builtin', name: 'tree',          description: 'Show workspace directory tree (limit levels with flag)' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]

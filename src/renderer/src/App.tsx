@@ -2439,6 +2439,60 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'check': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const checkMsg = await el.db.addMessage(sess.id, 'system', '**Running quality gate** (lint → test → build)...')
+        if (checkMsg) store.appendMessage(parseMessage(checkMsg))
+        const results: string[] = []
+        const startAll = Date.now()
+        // Step 1: Lint
+        try {
+          const lintResult = await el.lint.run(wsPath)
+          results.push(lintResult.ok ? '✅ Lint passed' : `❌ Lint: ${lintResult.errors} error${lintResult.errors === 1 ? '' : 's'}`)
+          if (!lintResult.ok && lintResult.output) {
+            const snippet = lintResult.output.length > 500 ? lintResult.output.slice(0, 500) + '\n[truncated]' : lintResult.output
+            results.push('```\n' + snippet + '\n```')
+          }
+        } catch {
+          results.push('❌ Lint: failed to run')
+        }
+        // Step 2: Test
+        try {
+          const testResult = await el.test.run(wsPath)
+          results.push(testResult.ok
+            ? `✅ Tests passed (${testResult.passed}/${testResult.total})`
+            : `❌ Tests: ${testResult.failed} failed, ${testResult.passed} passed`)
+          if (!testResult.ok && testResult.output) {
+            const snippet = testResult.output.length > 500 ? testResult.output.slice(0, 500) + '\n[truncated]' : testResult.output
+            results.push('```\n' + snippet + '\n```')
+          }
+        } catch {
+          results.push('❌ Tests: failed to run')
+        }
+        // Step 3: Build
+        try {
+          const buildResult = await el.build.run(wsPath)
+          results.push(buildResult.ok ? '✅ Build passed' : '❌ Build failed')
+          if (!buildResult.ok && buildResult.output) {
+            const snippet = buildResult.output.length > 500 ? buildResult.output.slice(-500) : buildResult.output
+            results.push('```\n' + snippet + '\n```')
+          }
+        } catch {
+          results.push('❌ Build: failed to run')
+        }
+        const elapsed = ((Date.now() - startAll) / 1000).toFixed(1)
+        const allPassed = results.every((r) => r.startsWith('✅'))
+        const header = allPassed ? '**✅ All checks passed**' : '**❌ Some checks failed**'
+        const summary = `${header} (${elapsed}s)\n\n${results.join('\n')}`
+        const finalMsg = await el.db.addMessage(sess.id, 'system', summary)
+        if (finalMsg) store.appendMessage(parseMessage(finalMsg))
+        break
+      }
       case 'tree': {
         const wsPath = store.workspacePath
         if (!wsPath) {
@@ -3752,6 +3806,7 @@ function usePaletteCommands(
     { id: 'cmd-rewind', label: '/rewind', description: 'Rewind to earlier point', category: 'Slash Commands', action: () => handleCommand('rewind', '') },
     { id: 'cmd-test', label: '/test', description: 'Run the test suite', category: 'Slash Commands', action: () => handleCommand('test', '') },
     { id: 'cmd-build', label: '/build', description: 'Run the project build', category: 'Slash Commands', action: () => handleCommand('build', '') },
+    { id: 'cmd-check', label: '/check', description: 'Run lint, tests, and build', category: 'Slash Commands', action: () => handleCommand('check', '') },
     { id: 'cmd-tree', label: '/tree', description: 'Show workspace directory tree', category: 'Slash Commands', action: () => handleCommand('tree', '') },
     { id: 'cmd-help', label: '/help', description: 'Show available commands', category: 'Slash Commands', action: () => handleCommand('help', '') },
     { id: 'cmd-context', label: '/context', description: 'Show context window utilization', category: 'Slash Commands', action: () => handleCommand('context', '') },
