@@ -2028,6 +2028,43 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'sessions': {
+        const { sessions } = useAppStore.getState()
+        const rawArgs = args.trim().toLowerCase()
+        let filtered = [...sessions]
+        if (rawArgs === '--pinned' || rawArgs === 'pinned') {
+          filtered = filtered.filter((s: Session) => s.pinned)
+        } else if (rawArgs === '--archived' || rawArgs === 'archived') {
+          filtered = filtered.filter((s: Session) => s.archived)
+        } else if (rawArgs === '--running' || rawArgs === 'running') {
+          filtered = filtered.filter((s: Session) => s.agentStatus === 'running')
+        }
+        filtered.sort((a: Session, b: Session) => b.updatedAt - a.updatedAt)
+        if (filtered.length === 0) {
+          const hint = rawArgs ? 'No sessions match the filter.' : 'No sessions found.'
+          const msg = await el.db.addMessage(sess.id, 'system', hint)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const duration = (ms: number) => {
+          const sec = Math.floor((Date.now() - ms) / 1000)
+          if (sec < 60) return `${sec}s`
+          const min = Math.floor(sec / 60)
+          if (min < 60) return `${min}m`
+          return `${Math.floor(min / 60)}h ${min % 60}m`
+        }
+        const lines = [`**📋 Sessions** (${filtered.length})\n`]
+        for (const s of filtered) {
+          const parts = [s.model || 'no model', `${s.messageCount} msgs`, duration(s.createdAt)]
+          if (s.pinned) parts.push('📌')
+          if (s.archived) parts.push('📦')
+          lines.push(`**${s.title || 'Untitled'}** — ${parts.join(' · ')}`)
+        }
+        const filterHint = rawArgs ? '' : '\nFilter: `/sessions --pinned`, `--archived`, or `--running`'
+        const sessMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n') + filterHint)
+        if (sessMsg) store.appendMessage(parseMessage(sessMsg))
+        break
+      }
       case 'export': {
         const msgs = useAppStore.getState().messages
         if (msgs.length === 0) {
@@ -3725,6 +3762,7 @@ function usePaletteCommands(
     { id: 'cmd-theme', label: '/theme', description: 'Switch color mode or accent', category: 'Slash Commands', action: () => handleCommand('theme', '') },
     { id: 'cmd-agents', label: '/agents', description: 'Show running sub-agents', category: 'Slash Commands', action: () => handleCommand('agents', '') },
     { id: 'cmd-kill', label: '/kill', description: 'Stop a running sub-agent', category: 'Slash Commands', action: () => handleCommand('kill', '') },
+    { id: 'cmd-sessions', label: '/sessions', description: 'List all sessions with metadata', category: 'Slash Commands', action: () => handleCommand('sessions', '') },
   ]
 
   return [...general, ...slashCommands]
