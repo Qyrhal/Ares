@@ -99,7 +99,7 @@ describe('Workspace command logic', () => {
     expect(cmd?.description).toContain('workspace')
   })
 
-  it('BUILTIN_COMMANDS count is 49', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(49)
+  it('BUILTIN_COMMANDS count is 60', () => {
+    expect(BUILTIN_COMMANDS.length).toBe(60)
   })
 })
