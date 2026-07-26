@@ -2394,10 +2394,11 @@ export default function App(): React.ReactElement {
           if (msg) store.appendMessage(parseMessage(msg))
           break
         }
-        const testMsg = await el.db.addMessage(sess.id, 'system', '**Running tests...**')
+        const pattern = args?.trim() || undefined
+        const testMsg = await el.db.addMessage(sess.id, 'system', pattern ? `**Running tests matching "${pattern}"...**` : '**Running tests...**')
         if (testMsg) store.appendMessage(parseMessage(testMsg))
         try {
-          const result = await el.test.run(wsPath)
+          const result = await el.test.run(wsPath, pattern)
           if (result.ok) {
             const msg = await el.db.addMessage(sess.id, 'system', `**All tests passed** — ${result.passed} passed, ${result.total} total`)
             if (msg) store.appendMessage(parseMessage(msg))

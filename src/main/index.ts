@@ -544,10 +544,11 @@ function registerIpcHandlers(): void {
     }
   })
 
-  ipcMain.handle('test:run', async (_, cwd: string) => {
+  ipcMain.handle('test:run', async (_, cwd: string, pattern?: string) => {
     const execAsync = promisify(execCb)
     try {
-      const { stdout, stderr } = await execAsync('npx vitest run 2>&1', { cwd, timeout: 120_000 })
+      const cmd = pattern ? `npx vitest run ${pattern} 2>&1` : 'npx vitest run 2>&1'
+      const { stdout, stderr } = await execAsync(cmd, { cwd, timeout: 120_000 })
       const output = (stdout + stderr).trim()
       const passMatch = output.match(/Tests\s+([\d,]+)\s+passed/)
       const failMatch = output.match(/([\d,]+)\s+failed/)

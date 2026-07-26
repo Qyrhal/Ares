@@ -248,7 +248,7 @@ const lintApi = {
 }
 
 const testApi = {
-  run: (cwd: string) => ipcRenderer.invoke('test:run', cwd),
+  run: (cwd: string, pattern?: string) => ipcRenderer.invoke('test:run', cwd, pattern),
 }
 
 const buildApi = {
