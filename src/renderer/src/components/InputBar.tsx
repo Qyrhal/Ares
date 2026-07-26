@@ -74,6 +74,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'sessions',     description: 'List all sessions with metadata and filters' },
   { kind: 'builtin', name: 'sort',         description: 'Sort sessions by date, title, or activity' },
   { kind: 'builtin', name: 'lint',         description: 'Run TypeScript type checking on the workspace' },
+  { kind: 'builtin', name: 'fix',          description: 'Auto-fix type errors with AI suggestions' },
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },
   { kind: 'builtin', name: 'config',        description: 'View or change settings from chat' },
   { kind: 'builtin', name: 'safe',           description: 'Toggle safe mode (disable customizations)' },
@@ -478,6 +479,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
         case 'not-helpful':
         case 'pr':
         case 'fork':
+        case 'fix':
           setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
           onCommand?.(item.name, '')
           return
