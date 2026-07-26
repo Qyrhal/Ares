@@ -61,6 +61,7 @@ export interface Session {
   isSideChat?: boolean
   group?: string
   notes?: string
+  tags?: string[]
 }
 
 export interface SessionGroup {

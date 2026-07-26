@@ -59,7 +59,7 @@ interface AppStore {
   lastExecCommand: string | null
 
   // ── Session filter ──────────────────────────────────────────────────
-  sessionFilter: { type: 'model' | 'status' | 'keyword'; value: string } | null
+  sessionFilter: { type: 'model' | 'status' | 'keyword' | 'tag'; value: string } | null
 
   // ── Session sort ────────────────────────────────────────────────────
   sessionSort: { by: 'recent' | 'name' | 'duration' | 'messages'; asc: boolean }
@@ -143,7 +143,7 @@ interface AppStore {
   navigatePromptHistory: (direction: 'up' | 'down') => string | null
   resetPromptHistoryIdx: () => void
 
-  setSessionFilter: (filter: { type: 'model' | 'status' | 'keyword'; value: string } | null) => void
+  setSessionFilter: (filter: { type: 'model' | 'status' | 'keyword' | 'tag'; value: string } | null) => void
   setSessionSort: (sort: { by: 'recent' | 'name' | 'duration' | 'messages'; asc: boolean }) => void
 
   // ── Exec history ──────────────────────────────────────────────────

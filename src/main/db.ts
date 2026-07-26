@@ -69,6 +69,7 @@ export interface DbSession {
   agent_status?: string
   is_side_chat?: boolean
   notes?: string
+  tags?: string[]
 }
 
 export interface DbMessage {
@@ -303,7 +304,7 @@ export function createSession(title: string, model = 'gpt-4o-mini', parentId?: s
 
 export function updateSession(
   id: string,
-  updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'archived' | 'workspace_path' | 'effort' | 'permissionMode' | 'agent_status' | 'is_side_chat' | 'notes'>>
+  updates: Partial<Pick<DbSession, 'title' | 'model' | 'pinned' | 'archived' | 'workspace_path' | 'effort' | 'permissionMode' | 'agent_status' | 'is_side_chat' | 'notes' | 'tags'>>
 ): void {
   const store = readStore()
   store.sessions = store.sessions.map((s) =>

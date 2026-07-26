@@ -2009,6 +2009,11 @@ export default function App(): React.ReactElement {
           store.setSessionFilter(null)
           const msg = await el.db.addMessage(sess.id, 'system', 'Filter cleared — showing all sessions.')
           if (msg) store.appendMessage(parseMessage(msg))
+        } else if (rawArgs.startsWith('tag:')) {
+          const filterTag = rawArgs.slice(4).toLowerCase()
+          store.setSessionFilter({ type: 'tag', value: filterTag })
+          const msg = await el.db.addMessage(sess.id, 'system', `Filtering sessions by tag: **${filterTag}**`)
+          if (msg) store.appendMessage(parseMessage(msg))
         } else if (rawArgs.startsWith('model:')) {
           const value = rawArgs.slice(6)
           store.setSessionFilter({ type: 'model', value })
@@ -2075,6 +2080,95 @@ export default function App(): React.ReactElement {
           break
         }
         const msg = await el.db.addMessage(sess.id, 'system', `Unknown sort option: **${rawArgs}**\n\nUsage: \`/sort\`, \`/sort recent\`, \`/sort name\`, \`/sort duration\`, \`/sort messages\`, \`/sort asc\`, \`/sort desc\``)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
+      case 'tag': {
+        const activeTabId = useAppStore.getState().activeTabId
+        if (!activeTabId) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No active session.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const tagSession = useAppStore.getState().sessions.find((s) => s.id === activeTabId)
+        if (!tagSession) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Session not found.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const subcommand = parts[1]?.toLowerCase()
+
+        if (!subcommand || subcommand === 'list') {
+          if (subcommand === 'list') {
+            const allTags = new Set<string>()
+            useAppStore.getState().sessions.forEach((s) => s.tags?.forEach((t) => allTags.add(t)))
+            const tagList = [...allTags].sort()
+            if (tagList.length === 0) {
+              const msg = await el.db.addMessage(sess.id, 'system', 'No tags in use yet.')
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              const formatted = tagList.map((t) => '`' + t + '`').join(', ')
+              const msg = await el.db.addMessage(sess.id, 'system', '**All tags:** ' + formatted)
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          } else {
+            const currentTags = tagSession.tags ?? []
+            if (currentTags.length === 0) {
+              const msg = await el.db.addMessage(sess.id, 'system', 'No tags on this session. Use `/tag add <name>` to add one.')
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              const formatted = currentTags.map((t) => '`' + t + '`').join(', ')
+              const msg = await el.db.addMessage(sess.id, 'system', '**Current tags:** ' + formatted)
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          }
+          break
+        }
+
+        if (subcommand === 'add') {
+          const tagName = parts[2]?.trim().toLowerCase()
+          if (!tagName) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/tag add <name>`')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const currentTags = tagSession.tags ?? []
+          if (currentTags.includes(tagName)) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Tag `' + tagName + '` already exists.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const newTags = [...currentTags, tagName]
+          await window.electron.session.updateTags(activeTabId, newTags)
+          useAppStore.getState().updateSession(activeTabId, { tags: newTags })
+          const formatted = newTags.map((t) => '`' + t + '`').join(', ')
+          const msg = await el.db.addMessage(sess.id, 'system', 'Added tag `' + tagName + '`. Tags: ' + formatted)
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        if (subcommand === 'remove') {
+          const tagName = parts[2]?.trim().toLowerCase()
+          if (!tagName) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/tag remove <name>`')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const currentTags = tagSession.tags ?? []
+          if (!currentTags.includes(tagName)) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Tag `' + tagName + '` not found on this session.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const newTags = currentTags.filter((t) => t !== tagName)
+          await window.electron.session.updateTags(activeTabId, newTags)
+          useAppStore.getState().updateSession(activeTabId, { tags: newTags })
+          const msg = await el.db.addMessage(sess.id, 'system', 'Removed tag `' + tagName + '`.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/tag [add|remove|list] [name]`')
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }

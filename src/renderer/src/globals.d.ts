@@ -119,6 +119,7 @@ declare global {
       session: {
         export(title: string, id: string, messages: unknown[]): Promise<string | null>
         import(): Promise<{ title: string; messages: unknown[] } | { error: string } | null>
+        updateTags(sessionId: string, tags: string[]): Promise<boolean>
       }
       mcp: { status(): Promise<McpStatus[]> }
       shell: { openExternal(url: string): Promise<void>; openPath(filePath: string): Promise<string> }

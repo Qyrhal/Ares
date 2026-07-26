@@ -153,6 +153,7 @@ const electronMock = {
   session: {
     export: vi.fn().mockResolvedValue('/tmp/export.json'),
     import: vi.fn().mockResolvedValue(null),
+    updateTags: vi.fn().mockResolvedValue(true),
   },
   mcp: {
     status: vi.fn().mockResolvedValue([]),

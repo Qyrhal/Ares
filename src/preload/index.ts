@@ -218,6 +218,7 @@ const hooksApi = {
 const sessionApi = {
   export: (title: string, id: string, messages: unknown[]) => ipcRenderer.invoke('session:export', title, id, messages),
   import: () => ipcRenderer.invoke('session:import'),
+  updateTags: (sessionId: string, tags: string[]) => ipcRenderer.invoke('session:updateTags', sessionId, tags),
 }
 
 // ── MCP ────────────────────────────────────────────────────────────────────
