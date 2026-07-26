@@ -3057,6 +3057,76 @@ export default function App(): React.ReactElement {
         if (statsMsg) store.appendMessage(parseMessage(statsMsg))
         break
       }
+      case 'workspace': {
+        const subcommand = args.trim().toLowerCase()
+        const { workspacePath } = useAppStore.getState()
+
+        if (!subcommand) {
+          // Show current workspace
+          if (workspacePath) {
+            const msg = await el.db.addMessage(sess.id, 'system', '**Workspace:** `' + workspacePath + '`')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No workspace folder is open. Use `/workspace set` to open one.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+
+        if (subcommand === 'set') {
+          const p = await el.dialog.openFolder()
+          if (!p) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Cancelled.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          await el.workspace.setPath(p)
+          const nodes = await el.fs.readDir(p)
+          store.setWorkspace(p, nodes)
+          store.setActiveView('explorer')
+          el.workspace.getRecent().then((r) => store.setRecentProjects(r as string[]))
+          // Save workspace to current session
+          const sess2 = useAppStore.getState().sessions.find((s) => s.id === sess.id)
+          if (sess2) {
+            await el.db.updateSession(sess2.id, { workspace_path: p })
+            store.updateSession(sess2.id, { workspacePath: p })
+          }
+          const msg = await el.db.addMessage(sess.id, 'system', '**Workspace set to:** `' + p + '`')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        if (subcommand === 'recent') {
+          const recent = useAppStore.getState().recentProjects ?? []
+          if (recent.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'No recent projects.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const list = recent.map((p, i) => (i + 1) + '. `' + p + '`').join('\n')
+            const msg = await el.db.addMessage(sess.id, 'system', '**Recent projects:**\n' + list)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+
+        if (subcommand === 'clear') {
+          await el.workspace.setPath(null)
+          store.setWorkspace(null, [])
+          // Save to current session
+          const sess3 = useAppStore.getState().sessions.find((s) => s.id === sess.id)
+          if (sess3) {
+            await el.db.updateSession(sess3.id, { workspace_path: null })
+            store.updateSession(sess3.id, { workspacePath: undefined })
+          }
+          const msg = await el.db.addMessage(sess.id, 'system', 'Workspace cleared.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/workspace [set|recent|clear]`')
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
     }
   }, [activeSession, store])
 
