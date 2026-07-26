@@ -86,6 +86,17 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'tree',          description: 'Show workspace directory tree (limit levels with flag)' },
   { kind: 'builtin', name: 'tag',           description: 'Manage session tags for categorization' },
   { kind: 'builtin', name: 'workspace',     description: 'View or switch workspace folder' },
+  { kind: 'builtin', name: 'agents',        description: 'Show running sub-agents' },
+  { kind: 'builtin', name: 'context',       description: 'Show context window utilization' },
+  { kind: 'builtin', name: 'cost',          description: 'Show cumulative workspace cost' },
+  { kind: 'builtin', name: 'export-all',    description: 'Export all sessions as Markdown' },
+  { kind: 'builtin', name: 'kill',          description: 'Stop a running sub-agent' },
+  { kind: 'builtin', name: 'note',          description: 'Add or view session notes' },
+  { kind: 'builtin', name: 'search',        description: 'Search messages in the session' },
+  { kind: 'builtin', name: 'stats',         description: 'Show session message statistics' },
+  { kind: 'builtin', name: 'status',        description: 'Check API and system health' },
+  { kind: 'builtin', name: 'summary',       description: 'Show session summary' },
+  { kind: 'builtin', name: 'theme',         description: 'Switch color mode or accent color' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
