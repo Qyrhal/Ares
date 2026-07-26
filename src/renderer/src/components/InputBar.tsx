@@ -85,6 +85,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'open',          description: 'Open file in system default editor' },
   { kind: 'builtin', name: 'tree',          description: 'Show workspace directory tree (limit levels with flag)' },
   { kind: 'builtin', name: 'tag',           description: 'Manage session tags for categorization' },
+  { kind: 'builtin', name: 'workspace',     description: 'View or switch workspace folder' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
@@ -482,6 +483,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
         case 'fork':
         case 'fix':
         case 'tag':
+        case 'workspace':
           setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
           onCommand?.(item.name, '')
           return
