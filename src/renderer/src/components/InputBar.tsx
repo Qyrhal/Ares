@@ -76,6 +76,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'lint',         description: 'Run TypeScript type checking on the workspace' },
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },
   { kind: 'builtin', name: 'config',        description: 'View or change settings from chat' },
+  { kind: 'builtin', name: 'safe',           description: 'Toggle safe mode (disable customizations)' },
   { kind: 'builtin', name: 'rewind',        description: 'Rewind conversation to an earlier point' },
   { kind: 'builtin', name: 'test',          description: 'Run test suite with optional file pattern' },
   { kind: 'builtin', name: 'build',         description: 'Run the project build and show results' },

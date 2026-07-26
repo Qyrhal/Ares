@@ -119,6 +119,7 @@ export interface DbSettings {
   maxWebSearches?: number
   planPreviewEnabled?: boolean
   mcpAutoBackgroundMs?: number
+  safeMode?: boolean
 }
 
 export interface DbPiSkill {
@@ -247,6 +248,7 @@ Call when the entire goal is accomplished. Shows a completion toast. title is a 
   maxConcurrentSubagents: 5,
   maxWebSearches: 200,
   planPreviewEnabled: true,
+  safeMode: false,
 }
 
 function getStorePath(): string {
