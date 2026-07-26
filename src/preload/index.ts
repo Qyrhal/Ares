@@ -228,6 +228,7 @@ const mcpApi = {
 
 const shellApi = {
   openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+  openPath: (filePath: string) => ipcRenderer.invoke('shell:openPath', filePath),
 }
 
 const dbEventsApi = {

@@ -80,6 +80,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'test',          description: 'Run test suite with optional file pattern' },
   { kind: 'builtin', name: 'build',         description: 'Run the project build and show results' },
   { kind: 'builtin', name: 'check',         description: 'Run lint, tests, and build (pre-commit gate)' },
+  { kind: 'builtin', name: 'open',          description: 'Open file in system default editor' },
   { kind: 'builtin', name: 'tree',          description: 'Show workspace directory tree (limit levels with flag)' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
