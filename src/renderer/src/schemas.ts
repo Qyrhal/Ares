@@ -62,6 +62,7 @@ export const AppSettingsSchema = z.object({
   colorMode: z.enum(['dark', 'light']).default('dark'),
   systemPrompt: z.string().default(''),
   permissionMode: z.enum(['ask', 'auto', 'yolo']).default('ask'),
+  safeMode: z.boolean().optional().default(false),
 })
 
 // ── Parsed domain types ────────────────────────────────────────────────────────

@@ -1140,6 +1140,31 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'safe': {
+        const current = store.settings.safeMode ?? false
+        const next = { ...store.settings, safeMode: !current }
+        await el.settings.set(next)
+        store.setSettings(next)
+        if (!current) {
+          // Turning ON
+          const lines = [
+            '**Safe mode enabled** 🔒\n',
+            'The following are disabled:',
+            '· System prompt customization (using bare default)',
+            '· MCP server connections',
+            '· Plugin commands and extensions',
+            '',
+            'To disable: `/safe`',
+          ]
+          const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+        } else {
+          // Turning OFF
+          const msg = await el.db.addMessage(sess.id, 'system', '**Safe mode disabled** — normal behavior restored.')
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'rewind': {
         const msgs = useAppStore.getState().messages
         if (msgs.length === 0) {
