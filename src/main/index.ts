@@ -734,6 +734,10 @@ function registerIpcHandlers(): void {
     })
     return { ...childDb, parent_id: parentSessionId }
   })
+  ipcMain.handle('shell:openPath', async (_, filePath: string) => {
+    const { shell } = await import('electron')
+    await shell.openPath(filePath)
+  })
   ipcMain.handle('shell:openExternal', async (_, url: string) => {
     if (!/^https?:\/\//i.test(url)) {
       throw new Error(`Blocked: only http/https URLs allowed (got ${url.slice(0, 80)})`)

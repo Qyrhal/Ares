@@ -121,7 +121,7 @@ declare global {
         import(): Promise<{ title: string; messages: unknown[] } | { error: string } | null>
       }
       mcp: { status(): Promise<McpStatus[]> }
-      shell: { openExternal(url: string): Promise<void> }
+      shell: { openExternal(url: string): Promise<void>; openPath(filePath: string): Promise<string> }
       lint: { run(cwd: string): Promise<{ ok: boolean; errors: number; output: string }> }
       test: { run(cwd: string, pattern?: string): Promise<{ ok: boolean; passed: number; failed: number; total: number; output: string }> }
       build: { run(cwd: string): Promise<{ ok: boolean; output: string }> }

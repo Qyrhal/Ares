@@ -343,13 +343,13 @@ describe('InputBar — arrow key navigation in command picker', () => {
     renderInputBar({ pluginSkills: [], pluginCommands: [] })
     const textarea = screen.getByPlaceholderText(PLACEHOLDER)
     fireEvent.change(textarea, { target: { value: '/' } })
-    // 44 builtins, indices 0-43. After 42 presses from 0, highlight is at index 42 (/tree)
-    for (let i = 0; i < 42; i++) {
+    // 45 builtins, indices 0-44. After 43 presses from 0, highlight is at index 43 (/tree)
+    for (let i = 0; i < 43; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
     const treeBtn = screen.getByText('/tree').closest('button')!
     expect(treeBtn).toHaveClass('bg-accent')
-    // Press ArrowDown — should clamp to last item (/help, index 43)
+    // Press ArrowDown — should clamp to last item (/help, index 44)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     const helpBtn = screen.getByText('/help').closest('button')!
     expect(helpBtn).toHaveClass('bg-accent')

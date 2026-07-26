@@ -739,6 +739,31 @@ export default function App(): React.ReactElement {
         if (recentMsg) store.appendMessage(parseMessage(recentMsg))
         break
       }
+      case 'open': {
+        if (!args?.trim()) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/open <file-path>` — opens file in system default editor')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const filePath = args.trim()
+        const wsPath = store.workspacePath || ''
+        // Resolve relative paths against workspace
+        const fullPath = filePath.startsWith('/') ? filePath : (wsPath ? `${wsPath}/${filePath}` : filePath)
+        try {
+          const err = await el.shell.openPath(fullPath)
+          if (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error opening file:** ${err}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Opened** \`${filePath}\` in system editor`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'exec': {
         const { workspacePath } = useAppStore.getState()
         const command = args.trim()

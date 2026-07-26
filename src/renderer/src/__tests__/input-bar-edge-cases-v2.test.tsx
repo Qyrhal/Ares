@@ -233,7 +233,7 @@ describe('InputBar slash command — Shift+Enter never sends', () => {
 
 describe('InputBar — Command count matches BUILTIN_COMMANDS', () => {
   it('BUILTIN_COMMANDS has expected count', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(44)
+    expect(BUILTIN_COMMANDS.length).toBe(45)
   })
 
   it('all builtin command names are unique', () => {
