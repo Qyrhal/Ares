@@ -479,6 +479,21 @@ function registerIpcHandlers(): void {
     }
   })
 
+  // Ports — list listening TCP/UDP ports with PIDs and process names
+  ipcMain.handle('ports:list', async () => {
+    const execAsync = promisify(execCb)
+    try {
+      const isMac = process.platform === 'darwin'
+      const cmd = isMac
+        ? 'lsof -iTCP -sTCP:LISTEN -P -n 2>/dev/null'
+        : 'ss -tlnp 2>/dev/null'
+      const { stdout } = await execAsync(cmd, { timeout: 10_000 })
+      return { ok: true, output: stdout.trim() }
+    } catch (e) {
+      return { ok: false, output: (e as Error).message }
+    }
+  })
+
   // Checkpoints — git stash-backed undo snapshots (inspired by Claude Code)
   ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => { validatePath(cwd); return createCheckpoint(cwd, msg) })
   ipcMain.handle('checkpoint:list',    (_, cwd: string) => { validatePath(cwd); return listCheckpoints(cwd) })

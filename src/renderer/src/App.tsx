@@ -799,6 +799,27 @@ export default function App(): React.ReactElement {
         if (execMsg) store.appendMessage(parseMessage(execMsg))
         break
       }
+      case 'ports': {
+        const lines: string[] = ['**Listening Ports**\n']
+        try {
+          const result = await el.ports.list()
+          if (!result.ok) {
+            lines.push(`Error: ${result.output}`)
+          } else if (!result.output) {
+            lines.push('No listening ports found.')
+          } else {
+            const output = result.output.length > 3000
+              ? result.output.slice(-3000) + '\n\n[output truncated]'
+              : result.output
+            lines.push(`\`\`\`\n${output}\n\`\`\``)
+          }
+        } catch (err) {
+          lines.push(`Error: ${(err as Error).message}`)
+        }
+        const portsMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (portsMsg) store.appendMessage(parseMessage(portsMsg))
+        break
+      }
       case 'rerun': {
         const lastCmd = useAppStore.getState().lastExecCommand
         if (!lastCmd) {
