@@ -502,6 +502,12 @@ function registerIpcHandlers(): void {
     catch (e) { return { error: (e as Error).message } }
   })
 
+  // Session tags
+  ipcMain.handle('session:updateTags', (_e, sessionId: string, tags: string[]) => {
+    updateSession(sessionId, { tags })
+    return true
+  })
+
   // MCP status
   ipcMain.handle('mcp:status', () => getMcpStatus())
 

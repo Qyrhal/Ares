@@ -84,6 +84,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'check',         description: 'Run lint, tests, and build (pre-commit gate)' },
   { kind: 'builtin', name: 'open',          description: 'Open file in system default editor' },
   { kind: 'builtin', name: 'tree',          description: 'Show workspace directory tree (limit levels with flag)' },
+  { kind: 'builtin', name: 'tag',           description: 'Manage session tags for categorization' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
@@ -480,6 +481,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
         case 'pr':
         case 'fork':
         case 'fix':
+        case 'tag':
           setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
           onCommand?.(item.name, '')
           return

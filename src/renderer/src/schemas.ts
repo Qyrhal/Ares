@@ -19,6 +19,7 @@ export const RawSessionSchema = z.object({
   agent_status: z.enum(['idle', 'running', 'done', 'error']).optional(),
   is_side_chat: z.boolean().optional().default(false),
   notes: z.string().optional(),
+  tags: z.array(z.string()).optional().default([]),
 })
 
 export const RawTodoSchema = z.object({
@@ -85,6 +86,7 @@ export function parseSession(raw: unknown): Session {
     agentStatus: r.agent_status ?? 'idle',
     isSideChat: r.is_side_chat ?? false,
     notes: r.notes,
+    tags: r.tags ?? [],
   }
 }
 

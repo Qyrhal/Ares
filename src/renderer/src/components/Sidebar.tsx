@@ -335,6 +335,18 @@ function SessionsPane({
             {s.model}
           </span>
         )}
+        {s.tags && s.tags.length > 0 && (
+          <div className="flex gap-1 mt-0.5 flex-wrap">
+            {s.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
+                {tag}
+              </span>
+            ))}
+            {s.tags.length > 3 && (
+              <span className="text-[10px] text-muted-foreground">+{s.tags.length - 3}</span>
+            )}
+          </div>
+        )}
         {s.notes && (
           <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground/50 italic" title={s.notes}>
             📝 {truncate(s.notes, 40)}
@@ -391,6 +403,7 @@ function SessionsPane({
     if (!sessionFilter) return true
     if (sessionFilter.type === 'model') return s.model.toLowerCase().includes(sessionFilter.value.toLowerCase())
     if (sessionFilter.type === 'status') return s.agentStatus === sessionFilter.value
+    if (sessionFilter.type === 'tag') return s.tags?.some((t) => t.toLowerCase().includes(sessionFilter.value.toLowerCase())) ?? false
     return s.title.toLowerCase().includes(sessionFilter.value.toLowerCase())
   }
 
