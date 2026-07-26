@@ -123,7 +123,7 @@ declare global {
       mcp: { status(): Promise<McpStatus[]> }
       shell: { openExternal(url: string): Promise<void> }
       lint: { run(cwd: string): Promise<{ ok: boolean; errors: number; output: string }> }
-      test: { run(cwd: string): Promise<{ ok: boolean; passed: number; failed: number; total: number; output: string }> }
+      test: { run(cwd: string, pattern?: string): Promise<{ ok: boolean; passed: number; failed: number; total: number; output: string }> }
       build: { run(cwd: string): Promise<{ ok: boolean; output: string }> }
       recent: { files(cwd: string, limit?: number): Promise<{ ok: boolean; files: string[] }> }
       exec: { run(cwd: string, command: string): Promise<{ ok: boolean; output: string }> }
