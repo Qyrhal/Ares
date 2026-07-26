@@ -1232,8 +1232,48 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'grep': {
+        const { workspacePath } = useAppStore.getState()
+        const raw = args.trim()
+        const lines: string[] = ['**Search Results**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else if (!raw) {
+          lines.push('Usage: `/grep <pattern> [--ext ts]` — search workspace file contents')
+        } else {
+          const extMatch = raw.match(/--ext\s+(\w+)/)
+          const ext = extMatch ? extMatch[1] : undefined
+          const pattern = raw.replace(/--ext\s+\w+/, '').trim()
+
+          if (!pattern) {
+            lines.push('Usage: `/grep <pattern> [--ext ts]` — search workspace file contents')
+          } else {
+            try {
+              const result = await el.grep.search(workspacePath, pattern, ext)
+              if (!result.ok) {
+                lines.push(`Error: ${result.output}`)
+              } else if (!result.output) {
+                lines.push(`No matches found for \`${pattern}\``)
+              } else {
+                const output = result.output.length > 3000
+                  ? result.output.slice(0, 3000) + '\n\n[output truncated]'
+                  : result.output
+                lines.push(`\`\`\`\n${output}\n\`\`\``)
+                const matchCount = (result.output.match(/\n/g) || []).length + 1
+                lines.push(`\n_${matchCount} matches found_`)
+              }
+            } catch (err) {
+              lines.push(`Error: ${(err as Error).message}`)
+            }
+          }
+        }
+        const grepMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (grepMsg) store.appendMessage(parseMessage(grepMsg))
+        break
+      }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break

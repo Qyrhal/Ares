@@ -493,6 +493,34 @@ function registerIpcHandlers(): void {
       return { ok: false, output: (e as Error).message }
     }
   })
+  // Grep — search workspace file contents
+  ipcMain.handle('grep:search', async (_, cwd: string, pattern: string, ext?: string) => {
+    validatePath(cwd)
+    const execAsync = promisify(execCb)
+    try {
+      // Validate extension parameter to prevent shell injection
+      if (ext && !/^\w+$/.test(ext)) {
+        return { ok: false, output: 'Invalid file extension' }
+      }
+      let cmd = 'grep -rn --color=never --exclude-dir=node_modules --exclude-dir=.git --exclude-dir=dist --exclude-dir=build --exclude-dir=.next --exclude-dir=coverage --exclude-dir=.cache'
+      if (ext) {
+        cmd += ` --include="*.${ext}"`
+      } else {
+        cmd += ' --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx" --include="*.json" --include="*.md" --include="*.css" --include="*.html"'
+      }
+      const escapedPattern = pattern.replace(/'/g, "'\\''")
+      cmd += ` '${escapedPattern}' .`
+      const { stdout } = await execAsync(cmd, { cwd, timeout: 15_000, maxBuffer: 1024 * 1024 })
+      return { ok: true, output: stdout.trim().slice(0, 4000) }
+    } catch (e) {
+      const err = e as { stdout?: string; stderr?: string; message: string }
+      if ((e as any).code === 1) {
+        return { ok: true, output: '' }
+      }
+      return { ok: false, output: err.message }
+    }
+  })
+
 
   // Checkpoints — git stash-backed undo snapshots (inspired by Claude Code)
   ipcMain.handle('checkpoint:create',  (_, cwd: string, msg: string) => { validatePath(cwd); return createCheckpoint(cwd, msg) })
