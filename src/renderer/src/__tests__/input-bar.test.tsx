@@ -516,8 +516,8 @@ describe('InputBar — arrow key navigation in command picker', () => {
     expect(wsBtn).toHaveClass('bg-accent')
     // Press ArrowDown — goes to /agents (index 48)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
-    // Continue navigating to /help (index 60)
-    for (let i = 0; i < 12; i++) {
+    // Continue navigating to /help (index 61)
+    for (let i = 0; i < 13; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
     const helpBtn = screen.getByText('/help').closest('button')!

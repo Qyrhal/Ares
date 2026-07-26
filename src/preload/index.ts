@@ -269,7 +269,11 @@ const portsApi = {
   list: () => ipcRenderer.invoke('ports:list'),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, recent: recentApi, exec: execApi, ports: portsApi, dbEvents: dbEventsApi }
+const grepApi = {
+  search: (cwd: string, pattern: string, ext?: string) => ipcRenderer.invoke('grep:search', cwd, pattern, ext),
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, recent: recentApi, exec: execApi, ports: portsApi, grep: grepApi, dbEvents: dbEventsApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)
