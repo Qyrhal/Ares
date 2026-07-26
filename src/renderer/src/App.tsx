@@ -2437,6 +2437,65 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'fix': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        if (!hasProvider(store.settings)) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured. Set one in Settings to use AI-powered fixes.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const fixStartMsg = await el.db.addMessage(sess.id, 'system', '**Running type check...**')
+        if (fixStartMsg) store.appendMessage(parseMessage(fixStartMsg))
+        try {
+          const result = await el.lint.run(wsPath)
+          if (result.ok) {
+            const msg = await el.db.addMessage(sess.id, 'system', '**No type errors found** — code is clean.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const errorOutput = result.output.length > 4000 ? result.output.slice(0, 4000) + '\n\n[truncated]' : result.output
+          const fixSystemPrompt = 'You are a TypeScript fix assistant. The user\'s project has type errors. Analyze the errors below and provide specific, actionable fixes for each one. For each error: 1) Identify the file and line. 2) Explain the error briefly. 3) Provide the exact code fix. Be concise and precise. If there are too many errors to fix all, focus on the most critical ones first.'
+          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+          fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [
+                { role: 'system', content: fixSystemPrompt },
+                { role: 'user', content: `Type errors in the project:\n\n${errorOutput}` },
+              ],
+              stream: false,
+            }),
+          }).then(async (response) => {
+            if (response.ok) {
+              const json = await response.json()
+              const fixContent = json.choices?.[0]?.message?.content ?? 'No fix suggestions generated.'
+              const msg = await el.db.addMessage(sess.id, 'system', `**🔧 Auto-Fix Suggestions**\n\n${fixContent}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              const msg = await el.db.addMessage(sess.id, 'system', `Fix generation failed: ${response.status}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          }).catch(async () => {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Fix generation failed: network error')
+            if (msg) store.appendMessage(parseMessage(msg))
+          })
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Fix error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'test': {
         const wsPath = store.workspacePath
         if (!wsPath) {
