@@ -1341,6 +1341,23 @@ export default function App(): React.ReactElement {
         if (grepMsg) store.appendMessage(parseMessage(grepMsg))
         break
       }
+      case 'init': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        try {
+          await el.git.init(wsPath)
+          const msg = await el.db.addMessage(sess.id, 'system', `Initialized git repository in \`${wsPath}\``)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Init failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'help': {
         const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
@@ -2470,6 +2487,29 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'checkout': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /checkout <branch-name>')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        const branchName = args.trim()
+        try {
+          await el.git.checkout(wsPath, branchName)
+          const msg = await el.db.addMessage(sess.id, 'system', `Switched to branch \`${branchName}\``)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Checkout failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'commit': {
         const wsPath = store.workspacePath
         if (!wsPath) {
@@ -2501,6 +2541,35 @@ export default function App(): React.ReactElement {
           if (msg) store.appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Commit failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'discard': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        if (!args) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /discard <file-path>')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        const filePath = args.trim()
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          await el.git.discardFile(wsPath, filePath)
+          const msg = await el.db.addMessage(sess.id, 'system', `Discarded changes to \`${filePath}\``)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Discard failed:** ${(err as Error).message}`)
           if (msg) store.appendMessage(parseMessage(msg))
         }
         break
