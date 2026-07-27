@@ -579,7 +579,7 @@ export default function App(): React.ReactElement {
           '· `Cmd/Ctrl + ↑/↓` — Jump to previous/next user message',
           '',
           '**View**',
-          '· `Ctrl + \\`` / `Ctrl + J` — Toggle terminal',
+          '· `Ctrl + \`` / `Ctrl + J` — Toggle terminal',
           '· `Ctrl + Shift + Z` — Toggle zen mode',
           '',
           '**In Chat**',
@@ -2461,6 +2461,57 @@ export default function App(): React.ReactElement {
           if (msg) store.appendMessage(parseMessage(msg))
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**Commit failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'push': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const branchName = status.branch || 'HEAD'
+          const ahead = status.ahead
+          const behind = status.behind
+          const lines: string[] = [`**Pushing** \`${branchName}\`\n`]
+          if (behind > 0) {
+            lines.push(`⚠️ Branch is **${behind} commit${behind === 1 ? '' : 's'}** behind upstream. Pull first or force push.`)
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          if (ahead === 0 && args !== '--force') {
+            lines.push('Nothing to push — branch is up to date.')
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const forceFlag = args.trim() === '--force' || args.trim() === '-f'
+          if (forceFlag) {
+            lines.push('⚡ Force pushing...')
+          } else {
+            lines.push(`📤 Pushing ${ahead} commit${ahead === 1 ? '' : 's'}...`)
+          }
+          const pushResult = await el.git.push(wsPath)
+          const output = pushResult || '(success, no output)'
+          lines.push(`✅ **Push complete**\n\`\`\`\n${output}\n\`\`\``)
+          const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const errLines = [`**Push failed:** ${(err as Error).message}`]
+          if ((err as Error).message.includes('no upstream')) {
+            errLines.push('\nTry: `git push -u origin <branch>` or use `--force` flag.')
+          }
+          const msg = await el.db.addMessage(sess.id, 'system', errLines.join('\n'))
           if (msg) store.appendMessage(parseMessage(msg))
         }
         break
