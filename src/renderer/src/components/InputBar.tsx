@@ -106,6 +106,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'env',           description: 'Show environment variables' },
   { kind: 'builtin', name: 'grep',         description: 'Search workspace file contents' },
   { kind: 'builtin', name: 'cat',           description: 'Display file contents in chat' },
+  { kind: 'builtin', name: 'wc',            description: 'Count lines, words, and bytes in files' },
   { kind: 'builtin', name: 'init',          description: 'Initialize a git repository in the workspace' },
   { kind: 'builtin', name: 'checkout',      description: 'Switch to a different git branch' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
