@@ -67,6 +67,6 @@ describe('/blame slash command', () => {
 
 describe('/blame BUILTIN_COMMANDS count', () => {
   it('has correct total count', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(70)
+    expect(BUILTIN_COMMANDS.length).toBe(71)
   })
 })

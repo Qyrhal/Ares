@@ -1341,6 +1341,72 @@ export default function App(): React.ReactElement {
         if (grepMsg) store.appendMessage(parseMessage(grepMsg))
         break
       }
+      case 'cat': {
+        const { workspacePath } = useAppStore.getState()
+        const raw = args.trim()
+        const lines: string[] = []
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else if (!raw) {
+          lines.push('Usage: `/cat <file> [--head N] [--tail N]` — display file contents in chat')
+        } else {
+          // Parse flags
+          const headMatch = raw.match(/--head\s+(\d+)/)
+          const tailMatch = raw.match(/--tail\s+(\d+)/)
+          const headN = headMatch ? parseInt(headMatch[1], 10) : undefined
+          const tailN = tailMatch ? parseInt(tailMatch[1], 10) : undefined
+          const filePath = raw.replace(/--head\s+\d+/, '').replace(/--tail\s+\d+/, '').trim()
+
+          if (!filePath) {
+            lines.push('Usage: `/cat <file> [--head N] [--tail N]` — display file contents in chat')
+          } else {
+            // Resolve relative path against workspace
+            const fullPath = filePath.startsWith('/') ? filePath : `${workspacePath}/${filePath}`
+            try {
+              const content = await el.fs.readFile(fullPath)
+              let display = content
+
+              // Apply head/tail flags
+              if (headN !== undefined || tailN !== undefined) {
+                const allLines = content.split('\n')
+                if (headN !== undefined && tailN !== undefined) {
+                  const head = allLines.slice(0, headN)
+                  const tail = allLines.slice(-tailN)
+                  display = [...head, `\n... (${allLines.length - headN - tailN} lines omitted) ...\n`, ...tail].join('\n')
+                } else if (headN !== undefined) {
+                  display = allLines.slice(0, headN).join('\n')
+                  if (allLines.length > headN) {
+                    display += `\n\n... (${allLines.length - headN} more lines, showing first ${headN})`
+                  }
+                } else if (tailN !== undefined) {
+                  display = allLines.slice(-tailN).join('\n')
+                  if (allLines.length > tailN) {
+                    display = `... (${allLines.length - tailN} lines omitted, showing last ${tailN}) ...\n\n` + display
+                  }
+                }
+              }
+
+              // Truncate if too long
+              if (display.length > 4000) {
+                display = display.slice(0, 4000) + '\n\n[content truncated — use --head or --tail for partial views]'
+              }
+
+              lines.push(`**\`${filePath}\`**`)
+              lines.push(`\`\`\`\n${display}\n\`\`\``)
+
+              const lineCount = content.split('\n').length
+              const size = new Blob([content]).size
+              lines.push(`\n_${lineCount} lines, ${size} bytes_`)
+            } catch (err) {
+              lines.push(`**Error reading file:** ${(err as Error).message}`)
+            }
+          }
+        }
+        const catMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (catMsg) store.appendMessage(parseMessage(catMsg))
+        break
+      }
       case 'init': {
         const wsPath = store.workspacePath
         if (!wsPath) {
@@ -1359,7 +1425,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
