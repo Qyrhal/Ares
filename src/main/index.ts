@@ -495,6 +495,19 @@ function registerIpcHandlers(): void {
       return { ok: false, output: (e as Error).message }
     }
   })
+  // Environment — list process environment variables
+  ipcMain.handle('env:list', async () => {
+    const sensitive = ['key', 'secret', 'token', 'password', 'credential', 'auth']
+    const vars: Record<string, string> = {}
+    for (const [k, v] of Object.entries(process.env)) {
+      if (sensitive.some(s => k.toLowerCase().includes(s))) {
+        vars[k] = '***'
+      } else {
+        vars[k] = v ?? ''
+      }
+    }
+    return vars
+  })
   // Grep — search workspace file contents
   ipcMain.handle('grep:search', async (_, cwd: string, pattern: string, ext?: string) => {
     validatePath(cwd)

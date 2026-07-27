@@ -17,7 +17,7 @@ describe('/grep command', () => {
   })
 
   it('has correct number of BUILTIN_COMMANDS', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(66)
+    expect(BUILTIN_COMMANDS.length).toBe(67)
   })
 
   it('shows usage when no args provided', () => {
