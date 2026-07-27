@@ -1407,6 +1407,81 @@ export default function App(): React.ReactElement {
         if (catMsg) store.appendMessage(parseMessage(catMsg))
         break
       }
+      case 'wc': {
+        const { workspacePath } = useAppStore.getState()
+        const raw = args.trim()
+        const lines: string[] = []
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else if (!raw) {
+          lines.push('Usage: `/wc <file> [--ext ts]` — count lines, words, and bytes')
+          lines.push('`/wc --all` — count totals for all workspace source files')
+        } else if (raw === '--all') {
+          // Count all source files in workspace
+          try {
+            const files = await el.fs.findFiles(workspacePath)
+            const exts = ['ts', 'tsx', 'js', 'jsx', 'json', 'md', 'css', 'html']
+            const sourceFiles = files.filter((f: string) => {
+              const ext = f.split('.').pop()?.toLowerCase()
+              return ext && exts.includes(ext)
+            })
+
+            let totalLines = 0
+            let totalWords = 0
+            let totalBytes = 0
+            let fileCount = 0
+
+            for (const f of sourceFiles.slice(0, 200)) {
+              try {
+                const content = await el.fs.readFile(f)
+                totalLines += content.split('\n').length
+                totalWords += content.split(/\s+/).filter(Boolean).length
+                totalBytes += new Blob([content]).size
+                fileCount++
+              } catch {
+                // Skip unreadable files
+              }
+            }
+
+            lines.push('**Workspace Totals**\n')
+            lines.push(`· Files scanned: ${fileCount}`)
+            lines.push(`· Total lines: ${totalLines.toLocaleString()}`)
+            lines.push(`· Total words: ${totalWords.toLocaleString()}`)
+            lines.push(`· Total bytes: ${totalBytes.toLocaleString()} (${(totalBytes / 1024).toFixed(1)} KB)`)
+            if (sourceFiles.length > 200) {
+              lines.push(`\n_${sourceFiles.length} source files found, showing first 200_`)
+            }
+          } catch (err) {
+            lines.push(`Error: ${(err as Error).message}`)
+          }
+        } else {
+          // Count specific file
+          const filePath = raw.replace(/--ext\s+\w+/, '').trim()
+
+          if (!filePath) {
+            lines.push('Usage: `/wc <file> [--ext ts]` — count lines, words, and bytes')
+          } else {
+            const fullPath = filePath.startsWith('/') ? filePath : `${workspacePath}/${filePath}`
+            try {
+              const content = await el.fs.readFile(fullPath)
+              const lineCount = content.split('\n').length
+              const wordCount = content.split(/\s+/).filter(Boolean).length
+              const byteCount = new Blob([content]).size
+
+              lines.push(`**\`${filePath}\`**\n`)
+              lines.push(`· ${lineCount.toLocaleString()} lines`)
+              lines.push(`· ${wordCount.toLocaleString()} words`)
+              lines.push(`· ${byteCount.toLocaleString()} bytes (${(byteCount / 1024).toFixed(1)} KB)`)
+            } catch (err) {
+              lines.push(`**Error reading file:** ${(err as Error).message}`)
+            }
+          }
+        }
+        const wcMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (wcMsg) store.appendMessage(parseMessage(wcMsg))
+        break
+      }
       case 'init': {
         const wsPath = store.workspacePath
         if (!wsPath) {
@@ -1425,7 +1500,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
