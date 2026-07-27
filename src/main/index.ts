@@ -21,7 +21,7 @@ import { handlePiSend, handlePiAbort, cleanupPiSession, clearAllPiSessions, getM
 import { runBackgroundScan } from './scanner'
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
-  discardFile, commit, push, pull,
+  discardFile, commit, push, pull, mergeBranch,
   getBranches, checkoutBranch, createBranch, getFileDiff,
   getLog, initRepo, blameFile,
   stashList, stashPush, stashPop, stashDrop, stashClear,
@@ -428,6 +428,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:commit',         (_, cwd: string, msg: string) => { validatePath(cwd); return commit(cwd, msg) })
   ipcMain.handle('git:push',           (_, cwd: string) => { validatePath(cwd); return push(cwd) })
   ipcMain.handle('git:pull',           (_, cwd: string) => { validatePath(cwd); return pull(cwd) })
+  ipcMain.handle('git:merge',          (_, cwd: string, branch: string) => { validatePath(cwd); return mergeBranch(cwd, branch) })
   ipcMain.handle('git:branches',       (_, cwd: string) => { validatePath(cwd); return getBranches(cwd) })
   ipcMain.handle('git:checkout',       (_, cwd: string, branch: string) => { validatePath(cwd); return checkoutBranch(cwd, branch) })
   ipcMain.handle('git:createBranch',   (_, cwd: string, branch: string) => { validatePath(cwd); return createBranch(cwd, branch) })

@@ -2556,6 +2556,48 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'merge': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        if (!args.trim()) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /merge <branch> — merge a branch into the current branch.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const targetBranch = args.trim()
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const currentBranch = status.branch || 'HEAD'
+          if (status.unstaged.length > 0 || status.staged.length > 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Working tree has changes. Commit or stash them first before merging.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const mergeMsg = await el.db.addMessage(sess.id, 'system', `**Merging** \`${targetBranch}\` into \`${currentBranch}\`...`)
+          if (mergeMsg) store.appendMessage(parseMessage(mergeMsg))
+          const result = await el.git.merge(wsPath, targetBranch)
+          const output = result || '(success, no output)'
+          const msg = await el.db.addMessage(sess.id, 'system', `✅ **Merge complete**\n\`\`\`\n${output}\n\`\`\``)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const errLines = [`**Merge failed:** ${(err as Error).message}`]
+          if ((err as Error).message.includes('CONFLICT') || (err as Error).message.includes('conflict')) {
+            errLines.push('\nMerge conflict detected. Resolve conflicts, then run `/exec git merge --continue` or `/exec git merge --abort`.')
+          }
+          const msg = await el.db.addMessage(sess.id, 'system', errLines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'undo': {
         const msgs = useAppStore.getState().messages
         // Find the last user message
