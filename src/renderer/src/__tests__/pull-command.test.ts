@@ -9,7 +9,7 @@ describe('/pull slash command', () => {
   })
 
   it('has correct total count', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(67)
+    expect(BUILTIN_COMMANDS.length).toBe(70)
   })
 
   it('formats pull success message', () => {

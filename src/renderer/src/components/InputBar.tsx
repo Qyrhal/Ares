@@ -59,6 +59,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'branches',      description: 'List, create, or switch git branches' },
   { kind: 'builtin', name: 'stage',         description: 'Stage or unstage files for commit' },
   { kind: 'builtin', name: 'commit',        description: 'Commit staged changes with a message' },
+  { kind: 'builtin', name: 'discard',       description: 'Discard uncommitted changes to a file' },
   { kind: 'builtin', name: 'push',          description: 'Push commits to the remote repository' },
   { kind: 'builtin', name: 'pull',           description: 'Pull latest changes from the remote' },
   { kind: 'builtin', name: 'merge',          description: 'Merge a branch into the current branch' },
@@ -104,6 +105,8 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'ports',         description: 'Show listening TCP/UDP ports' },
   { kind: 'builtin', name: 'env',           description: 'Show environment variables' },
   { kind: 'builtin', name: 'grep',         description: 'Search workspace file contents' },
+  { kind: 'builtin', name: 'init',          description: 'Initialize a git repository in the workspace' },
+  { kind: 'builtin', name: 'checkout',      description: 'Switch to a different git branch' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
