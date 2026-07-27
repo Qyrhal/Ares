@@ -233,6 +233,46 @@ export async function getFileDiff(cwd: string, filePath: string, staged: boolean
   }
 }
 
+// ── Blame ────────────────────────────────────────────────────────────────────
+
+export interface BlameLine {
+  line: number
+  hash: string
+  author: string
+  date: string
+  content: string
+}
+
+export async function blameFile(cwd: string, filePath: string): Promise<BlameLine[]> {
+  const raw = await git(['blame', '--porcelain', '--', filePath], cwd)
+  const lines = raw.split('\n')
+  const result: BlameLine[] = []
+  let current: Partial<BlameLine> = {}
+  let lineNum = 0
+
+  for (const line of lines) {
+    if (/^[0-9a-f]{40}/.test(line)) {
+      const parts = line.split(' ')
+      current.hash = parts[0]
+      lineNum = parseInt(parts[2]) || lineNum + 1
+    } else if (line.startsWith('author ')) {
+      current.author = line.slice(7)
+    } else if (line.startsWith('author-time ')) {
+      current.date = new Date(parseInt(line.slice(12)) * 1000).toISOString().slice(0, 10)
+    } else if (line.startsWith('\t')) {
+      result.push({
+        line: lineNum,
+        hash: (current.hash || '').slice(0, 7),
+        author: current.author || 'unknown',
+        date: current.date || '',
+        content: line.slice(1),
+      })
+      current = {}
+    }
+  }
+  return result
+}
+
 // ── Init ──────────────────────────────────────────────────────────────────────
 
 export async function initRepo(cwd: string): Promise<void> {

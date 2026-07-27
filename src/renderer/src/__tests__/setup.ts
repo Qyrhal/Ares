@@ -86,6 +86,7 @@ const electronMock = {
     stashPop: vi.fn().mockResolvedValue({ ok: true, message: 'Applied stash' }),
     stashDrop: vi.fn().mockResolvedValue({ ok: true, message: 'Dropped stash@{0}' }),
     stashClear: vi.fn().mockResolvedValue({ ok: true, message: 'All stashes cleared' }),
+    blame: vi.fn().mockResolvedValue([]),
   },
   terminal: {
     create: vi.fn().mockResolvedValue('term-1'),

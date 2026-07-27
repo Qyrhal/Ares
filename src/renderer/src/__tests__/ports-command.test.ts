@@ -17,7 +17,7 @@ describe('/ports command', () => {
   })
 
   it('has correct number of BUILTIN_COMMANDS', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(62)
+    expect(BUILTIN_COMMANDS.length).toBe(63)
   })
 
   it('formats listening ports output', () => {
