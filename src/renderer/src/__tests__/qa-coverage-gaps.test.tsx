@@ -244,8 +244,8 @@ describe('InputBar — picker keyboard navigation edge cases', () => {
 
     fireEvent.change(textarea, { target: { value: '/' } })
 
-    // Navigate to /help (last builtin at index 64)
-    for (let i = 0; i < 64; i++) {
+    // Navigate to /help (last builtin at index 65)
+    for (let i = 0; i < 65; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
     const helpBtn = screen.getByText('/help').closest('button')!

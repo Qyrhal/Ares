@@ -167,6 +167,18 @@ export async function pull(cwd: string): Promise<string> {
   }
 }
 
+export async function mergeBranch(cwd: string, branch: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await run('git', ['merge', branch], {
+      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    })
+    return (stdout + stderr).trim()
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string }
+    throw new Error(err.stderr ?? err.message ?? 'Merge failed')
+  }
+}
+
 // ── Log / History ─────────────────────────────────────────────────────────────
 
 export async function getLog(cwd: string, maxCount = 50): Promise<GitCommit[]> {

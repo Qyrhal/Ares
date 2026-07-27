@@ -77,7 +77,7 @@ const electronMock = {
   git: {
     status: vi.fn().mockResolvedValue({ hasRepo: false, branch: '', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [] }),
     stageFile: vi.fn(), unstageFile: vi.fn(), stageAll: vi.fn(), unstageAll: vi.fn(),
-    discardFile: vi.fn(), commit: vi.fn(), push: vi.fn(), pull: vi.fn(),
+    discardFile: vi.fn(), commit: vi.fn(), push: vi.fn(), pull: vi.fn(), merge: vi.fn(),
     branches: vi.fn().mockResolvedValue({ local: [], current: '' }),
     checkout: vi.fn(), createBranch: vi.fn(), diff: vi.fn().mockResolvedValue(''), init: vi.fn(),
     log: vi.fn().mockResolvedValue([]),

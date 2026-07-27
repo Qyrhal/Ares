@@ -92,6 +92,7 @@ declare global {
         commit(cwd: string, message: string): Promise<void>
         push(cwd: string): Promise<string>
         pull(cwd: string): Promise<string>
+        merge(cwd: string, branch: string): Promise<string>
         branches(cwd: string): Promise<GitBranches>
         checkout(cwd: string, branch: string): Promise<void>
         createBranch(cwd: string, branch: string): Promise<void>

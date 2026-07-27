@@ -53,6 +53,7 @@ const nativeGit = {
   commit:        (cwd: string, msg: string) => ipcRenderer.invoke('git:commit', cwd, msg),
   push:          (cwd: string) => ipcRenderer.invoke('git:push', cwd),
   pull:          (cwd: string) => ipcRenderer.invoke('git:pull', cwd),
+  merge:         (cwd: string, branch: string) => ipcRenderer.invoke('git:merge', cwd, branch),
   branches:      (cwd: string) => ipcRenderer.invoke('git:branches', cwd),
   checkout:      (cwd: string, branch: string) => ipcRenderer.invoke('git:checkout', cwd, branch),
   createBranch:  (cwd: string, branch: string) => ipcRenderer.invoke('git:createBranch', cwd, branch),
