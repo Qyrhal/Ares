@@ -131,6 +131,7 @@ declare global {
       recent: { files(cwd: string, limit?: number): Promise<{ ok: boolean; files: string[] }> }
       exec: { run(cwd: string, command: string): Promise<{ ok: boolean; output: string }> }
       ports: { list(): Promise<{ ok: boolean; output: string }> }
+      env: { list(): Promise<Record<string, string>> }
       grep: { search(cwd: string, pattern: string, ext?: string): Promise<{ ok: boolean; output: string }> }
       dbEvents: {
         onFlushError(cb: (msg: string) => void): () => void

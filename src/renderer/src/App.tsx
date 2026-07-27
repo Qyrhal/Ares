@@ -849,6 +849,46 @@ export default function App(): React.ReactElement {
         if (portsMsg) store.appendMessage(parseMessage(portsMsg))
         break
       }
+      case 'env': {
+        const lines: string[] = ['**Environment Variables**\n']
+        try {
+          const vars = await el.env.list()
+          const keys = Object.keys(vars).sort()
+          if (keys.length === 0) {
+            lines.push('No environment variables found.')
+          } else {
+            if (args.trim()) {
+              // Show specific variable
+              const key = args.trim()
+              const val = vars[key]
+              if (val === undefined) {
+                lines.push(`\`${key}\` is not set.`)
+              } else {
+                lines.push(`\`${key}\` = \`${val}\``)
+              }
+            } else {
+              // Show all, filtered to common useful vars
+              const useful = ['HOME', 'USER', 'SHELL', 'PATH', 'NODE_ENV', 'NODE_VERSION', 'npm_config_',
+                'ELECTRON', 'DISPLAY', 'LANG', 'TERM', 'PWD', 'EDITOR', 'VISUAL']
+              const filtered = keys.filter(k =>
+                useful.some(u => k.toUpperCase().includes(u.toUpperCase())) || k.startsWith('npm_') || k.startsWith('NODE_')
+              )
+              const display = filtered.length > 0 ? filtered : keys.slice(0, 50)
+              for (const k of display) {
+                const v = vars[k]
+                const displayVal = v.length > 80 ? v.slice(0, 80) + '...' : v
+                lines.push(`\`${k}\` = \`${displayVal}\``)
+              }
+              lines.push(`\n*${keys.length} total variables. Use \`/env <KEY>\` to see a specific one.*`)
+            }
+          }
+        } catch (err) {
+          lines.push(`Error: ${(err as Error).message}`)
+        }
+        const envMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (envMsg) store.appendMessage(parseMessage(envMsg))
+        break
+      }
       case 'rerun': {
         const lastCmd = useAppStore.getState().lastExecCommand
         if (!lastCmd) {

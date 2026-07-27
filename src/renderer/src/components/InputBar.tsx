@@ -102,6 +102,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'summary',       description: 'Show session summary' },
   { kind: 'builtin', name: 'theme',         description: 'Switch color mode or accent color' },
   { kind: 'builtin', name: 'ports',         description: 'Show listening TCP/UDP ports' },
+  { kind: 'builtin', name: 'env',           description: 'Show environment variables' },
   { kind: 'builtin', name: 'grep',         description: 'Search workspace file contents' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]

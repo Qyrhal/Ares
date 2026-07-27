@@ -174,6 +174,15 @@ const electronMock = {
   exec: {
     run: vi.fn().mockResolvedValue({ ok: true, output: '' }),
   },
+  ports: {
+    list: vi.fn().mockResolvedValue({ ok: true, output: '' }),
+  },
+  env: {
+    list: vi.fn().mockResolvedValue({}),
+  },
+  grep: {
+    search: vi.fn().mockResolvedValue({ ok: true, output: '' }),
+  },
   dbEvents: {
     onFlushError: vi.fn().mockReturnValue(() => {}),
   },
