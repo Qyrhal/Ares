@@ -2516,6 +2516,46 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'pull': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const branchName = status.branch || 'HEAD'
+          const rebase = args.trim() === '--rebase' || args.trim() === '-r'
+          const strategy = rebase ? 'rebase' : 'merge'
+          const lines: string[] = [`**Pulling** \`${branchName}\` (${strategy})\n`]
+          if (status.unstaged.length > 0 || status.staged.length > 0 || status.untracked.length > 0) {
+            lines.push('⚠️ Working tree has changes. Stash or commit first, or use `/stash push`.')
+            const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          lines.push('📥 Pulling from remote...')
+          const pullResult = await el.git.pull(wsPath)
+          const output = pullResult || '(success, no output)'
+          lines.push(`✅ **Pull complete**\n\`\`\`\n${output}\n\`\`\``)
+          const msg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const errLines = [`**Pull failed:** ${(err as Error).message}`]
+          if ((err as Error).message.includes('conflict') || (err as Error).message.includes('CONFLICT')) {
+            errLines.push('\nMerge conflict detected. Resolve conflicts manually or use `/exec git merge --abort`.')
+          }
+          const msg = await el.db.addMessage(sess.id, 'system', errLines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'undo': {
         const msgs = useAppStore.getState().messages
         // Find the last user message

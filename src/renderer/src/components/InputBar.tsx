@@ -60,6 +60,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'stage',         description: 'Stage or unstage files for commit' },
   { kind: 'builtin', name: 'commit',        description: 'Commit staged changes with a message' },
   { kind: 'builtin', name: 'push',          description: 'Push commits to the remote repository' },
+  { kind: 'builtin', name: 'pull',           description: 'Pull latest changes from the remote' },
   { kind: 'builtin', name: 'undo',           description: 'Remove the last exchange from the session' },
   { kind: 'builtin', name: 'debug',         description: 'Show diagnostic and debug information' },
   { kind: 'builtin', name: 'doctor',        description: 'Run environment diagnostics and health checks' },

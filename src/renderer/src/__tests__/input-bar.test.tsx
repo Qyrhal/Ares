@@ -499,11 +499,11 @@ describe('InputBar — arrow key navigation in command picker', () => {
     renderInputBar({ pluginSkills: [], pluginCommands: [] })
     const textarea = screen.getByPlaceholderText(PLACEHOLDER)
     fireEvent.change(textarea, { target: { value: '/' } })
-    // 63 builtins, indices 0-62. After 47 presses from 0, highlight is at index 47 (/tree)
-    for (let i = 0; i < 47; i++) {
+    // 64 builtins, indices 0-63. After 47 presses from 0, highlight is at index 47 (/tree)
+    for (let i = 0; i < 48; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
-    // After 47 presses from 0, highlight is at index 47 (/tree)
+    // After 48 presses from 0, highlight is at index 48 (/tree)
     const treeBtn = screen.getByText('/tree').closest('button')!
     expect(treeBtn).toHaveClass('bg-accent')
     // Press ArrowDown — goes to /tag (index 48)
@@ -516,7 +516,7 @@ describe('InputBar — arrow key navigation in command picker', () => {
     expect(wsBtn).toHaveClass('bg-accent')
     // Press ArrowDown — goes to /agents (index 50)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
-    // Continue navigating to /help (index 63)
+    // Continue navigating to /help (index 64)
     for (let i = 0; i < 13; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
