@@ -64,6 +64,7 @@ const nativeGit = {
   stashPop:      (cwd: string) => ipcRenderer.invoke('git:stashPop', cwd),
   stashDrop:     (cwd: string, idx: number) => ipcRenderer.invoke('git:stashDrop', cwd, idx),
   stashClear:    (cwd: string) => ipcRenderer.invoke('git:stashClear', cwd),
+  blame:         (cwd: string, p: string) => ipcRenderer.invoke('git:blame', cwd, p),
 }
 
 const checkpoint = {

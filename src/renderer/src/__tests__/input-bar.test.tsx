@@ -499,24 +499,24 @@ describe('InputBar — arrow key navigation in command picker', () => {
     renderInputBar({ pluginSkills: [], pluginCommands: [] })
     const textarea = screen.getByPlaceholderText(PLACEHOLDER)
     fireEvent.change(textarea, { target: { value: '/' } })
-    // 61 builtins, indices 0-60. After 45 presses from 0, highlight is at index 45 (/tree)
-    for (let i = 0; i < 45; i++) {
+    // 62 builtins, indices 0-61. After 46 presses from 0, highlight is at index 46 (/tree)
+    for (let i = 0; i < 46; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
-    // After 45 presses from 0, highlight is at index 45 (/tree)
+    // After 46 presses from 0, highlight is at index 46 (/tree)
     const treeBtn = screen.getByText('/tree').closest('button')!
     expect(treeBtn).toHaveClass('bg-accent')
-    // Press ArrowDown — goes to /tag (index 46)
+    // Press ArrowDown — goes to /tag (index 47)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     const tagBtn = screen.getByText('/tag').closest('button')!
     expect(tagBtn).toHaveClass('bg-accent')
-    // Press ArrowDown — goes to /workspace (index 47)
+    // Press ArrowDown — goes to /workspace (index 48)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     const wsBtn = screen.getByText('/workspace').closest('button')!
     expect(wsBtn).toHaveClass('bg-accent')
-    // Press ArrowDown — goes to /agents (index 48)
+    // Press ArrowDown — goes to /agents (index 49)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
-    // Continue navigating to /help (index 61)
+    // Continue navigating to /help (index 62)
     for (let i = 0; i < 13; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }

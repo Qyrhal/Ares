@@ -23,7 +23,7 @@ import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
   discardFile, commit, push, pull,
   getBranches, checkoutBranch, createBranch, getFileDiff,
-  getLog, initRepo,
+  getLog, initRepo, blameFile,
   stashList, stashPush, stashPop, stashDrop, stashClear,
 } from './git'
 import {
@@ -434,6 +434,7 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:diff',           (_, cwd: string, p: string, staged: boolean) => { validatePath(cwd); validatePath(p); return getFileDiff(cwd, p, staged) })
   ipcMain.handle('git:log',            (_, cwd: string, limit?: number) => { validatePath(cwd); return getLog(cwd, limit) })
   ipcMain.handle('git:init',           (_, cwd: string) => { validatePath(cwd); return initRepo(cwd) })
+  ipcMain.handle('git:blame',          (_, cwd: string, p: string) => { validatePath(cwd); validatePath(p); return blameFile(cwd, p) })
 
   // Git stash
   ipcMain.handle('git:stashList',  (_, cwd: string) => { validatePath(cwd); return stashList(cwd) })

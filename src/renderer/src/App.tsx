@@ -666,6 +666,35 @@ export default function App(): React.ReactElement {
         if (logMsg) store.appendMessage(parseMessage(logMsg))
         break
       }
+      case 'blame': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Git Blame**\n']
+        const filePath = args.trim()
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else if (!filePath) {
+          lines.push('Usage: `/blame <file>` — show line-by-line git annotations')
+        } else {
+          try {
+            const blame = await el.git.blame(workspacePath, filePath)
+            if (blame.length === 0) {
+              lines.push('No blame data (file may be untracked).')
+            } else {
+              lines.push(`\`${filePath}\`\n`)
+              for (const b of blame) {
+                const num = String(b.line).padStart(4)
+                lines.push(`${num}  \`${b.hash}\`  ${b.author.padEnd(16)}  ${b.date}  | ${b.content}`)
+              }
+            }
+          } catch (err) {
+            lines.push(`Error running git blame: ${(err as Error).message}`)
+          }
+        }
+        const blameMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (blameMsg) store.appendMessage(parseMessage(blameMsg))
+        break
+      }
       case 'stash': {
         const { workspacePath } = useAppStore.getState()
         const lines: string[] = ['**Git Stash**\n']
