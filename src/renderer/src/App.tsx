@@ -1500,7 +1500,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /open-pr - open current PR in browser, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -2304,6 +2304,45 @@ export default function App(): React.ReactElement {
           }
         } catch (err) {
           const msg = await el.db.addMessage(sess.id, 'system', `**CI error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
+      case 'open-pr': {
+        const { workspacePath } = useAppStore.getState()
+        if (!workspacePath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        try {
+          const status = await el.git.status(workspacePath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          // Try to open the PR in the browser
+          const result = await el.exec.run(workspacePath, 'gh pr view --web 2>&1')
+          if (result.ok) {
+            const msg = await el.db.addMessage(sess.id, 'system', '**Opened PR in browser.**')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            // Check if it's "no PR" or "not authenticated"
+            if (result.output.includes('no pull requests')) {
+              const msg = await el.db.addMessage(sess.id, 'system', `**No PR found** for the current branch (\`${status.branch || 'detached'}\`). Push and create a PR first.`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else if (result.output.includes('not logged in')) {
+              const msg = await el.db.addMessage(sess.id, 'system', 'Not authenticated with GitHub CLI. Run `gh auth login` to set up.')
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              const output = result.output.length > 2000 ? result.output.slice(0, 2000) + '\n\n[truncated]' : result.output
+              const msg = await el.db.addMessage(sess.id, 'system', `**Failed to open PR:**\n\n${output}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
           if (msg) store.appendMessage(parseMessage(msg))
         }
         break
@@ -4596,6 +4635,7 @@ function usePaletteCommands(
     { id: 'cmd-usage', label: '/usage', description: 'Show session token usage and cost', category: 'Slash Commands', action: () => handleCommand('usage', '') },
     { id: 'cmd-changes', label: '/changes', description: 'Show workspace git status', category: 'Slash Commands', action: () => handleCommand('changes', '') },
     { id: 'cmd-ci', label: '/ci', description: 'Check GitHub Actions CI status', category: 'Slash Commands', action: () => handleCommand('ci', '') },
+    { id: 'cmd-open-pr', label: '/open-pr', description: 'Open current PR in browser', category: 'Slash Commands', action: () => handleCommand('open-pr', '') },
     { id: 'cmd-export', label: '/export', description: 'Export session as Markdown', category: 'Slash Commands', action: () => handleCommand('export', '') },
     { id: 'cmd-import', label: '/import', description: 'Import session from JSON file', category: 'Slash Commands', action: () => handleCommand('import', '') },
     { id: 'cmd-shortcuts', label: '/shortcuts', description: 'Show all keyboard shortcuts', category: 'Slash Commands', action: () => handleCommand('shortcuts', '') },
