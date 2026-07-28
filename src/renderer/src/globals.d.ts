@@ -93,6 +93,9 @@ declare global {
         push(cwd: string): Promise<string>
         pull(cwd: string): Promise<string>
         merge(cwd: string, branch: string): Promise<string>
+        rebase(cwd: string, onto: string): Promise<string>
+        rebaseAbort(cwd: string): Promise<string>
+        rebaseContinue(cwd: string): Promise<string>
         branches(cwd: string): Promise<GitBranches>
         checkout(cwd: string, branch: string): Promise<void>
         createBranch(cwd: string, branch: string): Promise<void>

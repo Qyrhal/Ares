@@ -62,6 +62,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'discard',       description: 'Discard uncommitted changes to a file' },
   { kind: 'builtin', name: 'push',          description: 'Push commits to the remote repository' },
   { kind: 'builtin', name: 'pull',           description: 'Pull latest changes from the remote' },
+  { kind: 'builtin', name: 'rebase',        description: 'Rebase current branch onto another branch' },
   { kind: 'builtin', name: 'merge',          description: 'Merge a branch into the current branch' },
   { kind: 'builtin', name: 'undo',           description: 'Remove the last exchange from the session' },
   { kind: 'builtin', name: 'debug',         description: 'Show diagnostic and debug information' },

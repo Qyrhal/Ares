@@ -179,6 +179,42 @@ export async function mergeBranch(cwd: string, branch: string): Promise<string> 
   }
 }
 
+export async function rebaseBranch(cwd: string, onto: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await run('git', ['rebase', onto], {
+      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    })
+    return (stdout + stderr).trim()
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string }
+    throw new Error(err.stderr ?? err.message ?? 'Rebase failed')
+  }
+}
+
+export async function rebaseAbort(cwd: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await run('git', ['rebase', '--abort'], {
+      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    })
+    return (stdout + stderr).trim() || 'Rebase aborted'
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string }
+    throw new Error(err.stderr ?? err.message ?? 'Rebase abort failed')
+  }
+}
+
+export async function rebaseContinue(cwd: string): Promise<string> {
+  try {
+    const { stdout, stderr } = await run('git', ['rebase', '--continue'], {
+      cwd, env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }
+    })
+    return (stdout + stderr).trim() || 'Rebase continued'
+  } catch (e: unknown) {
+    const err = e as { stderr?: string; message?: string }
+    throw new Error(err.stderr ?? err.message ?? 'Rebase continue failed')
+  }
+}
+
 // ── Log / History ─────────────────────────────────────────────────────────────
 
 export async function getLog(cwd: string, maxCount = 50): Promise<GitCommit[]> {
