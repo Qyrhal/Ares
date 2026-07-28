@@ -778,6 +778,75 @@ export default function App(): React.ReactElement {
         if (stashMsg) store.appendMessage(parseMessage(stashMsg))
         break
       }
+      case 'checkpoint': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Checkpoints**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          const sub = args.trim().toLowerCase()
+          try {
+            if (sub.startsWith('save ') || sub.startsWith('create ')) {
+              const msg = args.trim().slice(sub.startsWith('save') ? 5 : 7).trim()
+              if (!msg) {
+                lines.push('Usage: `/checkpoint save <message>` — save a checkpoint')
+              } else {
+                const result = await el.checkpoint.create(workspacePath, msg)
+                if (result) {
+                  lines.push(`✅ Checkpoint saved: \`${result.id}\` — ${result.message}`)
+                } else {
+                  lines.push('No changes to checkpoint (working tree clean or not a git repo).')
+                }
+              }
+            } else if (sub.startsWith('restore ')) {
+              const idx = parseInt(sub.split(' ')[1], 10)
+              if (isNaN(idx)) {
+                lines.push('Usage: `/checkpoint restore <n>` — restore checkpoint by index')
+              } else {
+                const result = await el.checkpoint.restore(workspacePath, idx)
+                lines.push(result.ok ? `✅ Checkpoint ${idx} restored.` : `❌ ${result.error}`)
+              }
+            } else if (sub.startsWith('diff ')) {
+              const idx = parseInt(sub.split(' ')[1], 10)
+              if (isNaN(idx)) {
+                lines.push('Usage: `/checkpoint diff <n>` — show diff for checkpoint')
+              } else {
+                const diff = await el.checkpoint.diff(workspacePath, idx)
+                if (diff) {
+                  lines.push(`**Checkpoint ${idx} diff:**\n\`\`\`diff\n${diff}\n\`\`\``)
+                } else {
+                  lines.push(`No diff available for checkpoint ${idx}.`)
+                }
+              }
+            } else if (sub.startsWith('drop ')) {
+              const idx = parseInt(sub.split(' ')[1], 10)
+              if (isNaN(idx)) {
+                lines.push('Usage: `/checkpoint drop <n>` — drop checkpoint by index')
+              } else {
+                const result = await el.checkpoint.drop(workspacePath, idx)
+                lines.push(result.ok ? `✅ Checkpoint ${idx} dropped.` : `❌ ${result.error}`)
+              }
+            } else {
+              const checkpoints = await el.checkpoint.list(workspacePath)
+              if (checkpoints.length === 0) {
+                lines.push('No checkpoints saved.')
+              } else {
+                for (const cp of checkpoints) {
+                  const msg = cp.message.length > 60 ? cp.message.slice(0, 57) + '...' : cp.message
+                  lines.push(`· \`stash@{${cp.index}}\` — ${msg}`)
+                }
+                lines.push('\nUsage: `/checkpoint save <msg>`, `/checkpoint restore <n>`, `/checkpoint diff <n>`, `/checkpoint drop <n>`')
+              }
+            }
+          } catch (err) {
+            lines.push(`Error: ${(err as Error).message}`)
+          }
+        }
+        const cpMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (cpMsg) store.appendMessage(parseMessage(cpMsg))
+        break
+      }
       case 'recent': {
         const { workspacePath } = useAppStore.getState()
         const lines: string[] = ['**Recently Modified Files**\n']
