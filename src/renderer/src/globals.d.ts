@@ -105,6 +105,7 @@ declare global {
         stashDrop(cwd: string, index: number): Promise<{ ok: boolean; message: string }>
         stashClear(cwd: string): Promise<{ ok: boolean; message: string }>
         blame(cwd: string, path: string): Promise<{ line: number; hash: string; author: string; date: string; content: string }[]>
+        changelog(cwd: string, limit?: number): Promise<{ ok: boolean; commits?: { hash: string; shortHash: string; author: string; date: string; message: string }[]; output?: string }>
       }
       checkpoint: {
         create(cwd: string, msg: string): Promise<Checkpoint | null>
