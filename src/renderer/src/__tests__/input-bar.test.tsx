@@ -513,8 +513,8 @@ describe('InputBar — arrow key navigation in command picker', () => {
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     // Press ArrowDown — goes to /agents (index 54)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
-    // Continue navigating to /help (index 72)
-    for (let i = 0; i < 21; i++) {
+    // Continue navigating to /help (index 76)
+    for (let i = 0; i < 25; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
     const helpBtn = screen.getByText('/help').closest('button')!
