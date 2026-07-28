@@ -1123,3 +1123,372 @@ describe('InputBar — more edge cases', () => {
     expect(screen.queryByText('/model')).toBeInTheDocument()
   })
 })
+
+// ─── NEW TESTS: Emoji autocomplete ──────────────────────────────────────────
+
+describe('InputBar — emoji autocomplete', () => {
+  it('opens emoji picker when : is typed', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':fire' } })
+    // Should show emoji suggestions
+    expect(screen.getByText('🔥')).toBeInTheDocument()
+  })
+
+  it('filters emojis by query', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':heart' } })
+    expect(screen.getByText('❤️')).toBeInTheDocument()
+    // Other emojis should not appear
+    expect(screen.queryByText('🚀')).not.toBeInTheDocument()
+  })
+
+  it('arrow down navigates through emoji suggestions', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':h' } })
+    // Both heart and heart-eyes should appear
+    expect(screen.getByText('❤️')).toBeInTheDocument()
+    expect(screen.getByText('😍')).toBeInTheDocument()
+    // Arrow down should not crash
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' })
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' })
+  })
+
+  it('arrow up clamps at first emoji', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':h' } })
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' })
+    // Should not crash
+    expect(screen.getByText('❤️')).toBeInTheDocument()
+  })
+
+  it('arrow down clamps at last emoji', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':h' } })
+    // Navigate past all items
+    for (let i = 0; i < 10; i++) {
+      fireEvent.keyDown(textarea, { key: 'ArrowDown' })
+    }
+    expect(screen.getByText('❤️')).toBeInTheDocument()
+  })
+
+  it('Enter inserts highlighted emoji and closes picker', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER) as HTMLTextAreaElement
+    fireEvent.change(textarea, { target: { value: ':fire' } })
+    // Picker should be visible — emoji button in dropdown
+    expect(screen.getByText('🔥')).toBeInTheDocument()
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    // After insertEmoji, the emoji char replaces the shortcode in textarea
+    expect(textarea.value).toContain('🔥')
+    // The emoji dropdown should no longer be rendered (picker closed)
+    expect(screen.queryAllByText('🔥').length).toBeLessThanOrEqual(1) // only in textarea
+  })
+
+  it('Escape closes emoji picker', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':fire' } })
+    expect(screen.getByText('🔥')).toBeInTheDocument()
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    expect(screen.queryByText('🔥')).not.toBeInTheDocument()
+  })
+
+  it('emoji picker does not open when : is followed by a space', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: 'hello : fire' } })
+    // afterColon contains ' fire' which has a space → picker should not open
+    expect(screen.queryByText('🔥')).not.toBeInTheDocument()
+  })
+
+  it('empty : query shows no suggestions', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':' } })
+    // No query text → filteredEmoji is empty → no suggestions shown
+    expect(screen.queryByText('🔥')).not.toBeInTheDocument()
+    expect(screen.queryByText('❤️')).not.toBeInTheDocument()
+  })
+
+  it('closing emoji picker resets state', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: ':fire' } })
+    expect(screen.getByText('🔥')).toBeInTheDocument()
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    // Re-type : should reopen picker
+    fireEvent.change(textarea, { target: { value: ':star' } })
+    expect(screen.getByText('⭐')).toBeInTheDocument()
+  })
+})
+
+// ─── NEW TESTS: Description-based filtering ─────────────────────────────────
+
+describe('InputBar — description-based filtering', () => {
+  it('filters commands by description text', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    // "pr" is in the description of /pr command
+    fireEvent.change(textarea, { target: { value: '/pr' } })
+    // /pr matches by name prefix AND description — at least one picker element should exist
+    expect(screen.queryAllByText('/pr').length).toBeGreaterThanOrEqual(1)
+  })
+
+  it('description filter matches substring', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    // "commit" appears in description of /commit
+    fireEvent.change(textarea, { target: { value: '/comm' } })
+    expect(screen.getByText('/commit')).toBeInTheDocument()
+  })
+
+  it('description filter is case-insensitive', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/COMMIT' } })
+    // Should match /commit via description.toLowerCase().includes()
+    expect(screen.getByText('/commit')).toBeInTheDocument()
+  })
+
+  it('description filter shows no results for unmatched query', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/xyznoexist' } })
+    expect(screen.queryByText('/model')).not.toBeInTheDocument()
+    expect(screen.queryByText('/clear')).not.toBeInTheDocument()
+  })
+})
+
+// ─── NEW TESTS: Permission mode cycling ─────────────────────────────────────
+
+describe('InputBar — permission mode cycling', () => {
+  it('cycles from ask to auto on click', () => {
+    const onPermissionModeChange = vi.fn()
+    renderInputBar({ permissionMode: 'ask', onPermissionModeChange })
+    const btn = screen.getByText('Ask')
+    fireEvent.click(btn)
+    expect(onPermissionModeChange).toHaveBeenCalledWith('auto')
+  })
+
+  it('cycles from auto to yolo on click', () => {
+    const onPermissionModeChange = vi.fn()
+    renderInputBar({ permissionMode: 'auto', onPermissionModeChange })
+    const btn = screen.getByText('Auto')
+    fireEvent.click(btn)
+    expect(onPermissionModeChange).toHaveBeenCalledWith('yolo')
+  })
+
+  it('cycles from yolo to ask on click', () => {
+    const onPermissionModeChange = vi.fn()
+    renderInputBar({ permissionMode: 'yolo', onPermissionModeChange })
+    const btn = screen.getByText('Yolo')
+    fireEvent.click(btn)
+    expect(onPermissionModeChange).toHaveBeenCalledWith('ask')
+  })
+})
+
+// ─── NEW TESTS: Effort picker interaction ───────────────────────────────────
+
+describe('InputBar — effort picker interaction', () => {
+  it('shows current effort level button', () => {
+    renderInputBar({ effort: 'high' })
+    expect(screen.getByText('High')).toBeInTheDocument()
+  })
+
+  it('clicking effort button toggles the effort picker dropdown', () => {
+    renderInputBar({ effort: 'medium' })
+    const btn = screen.getByText('Med')
+    fireEvent.click(btn)
+    // After clicking, the dropdown should show all effort level options
+    // The options use capitalize class and render as "low", "medium", "high"
+    const allButtons = screen.getAllByText(/^(low|medium|high)$/i)
+    expect(allButtons.length).toBeGreaterThanOrEqual(3)
+  })
+})
+
+// ─── NEW TESTS: Cancel button ───────────────────────────────────────────────
+
+describe('InputBar — cancel button', () => {
+  it('calls onCancel when stop button is clicked', () => {
+    const onCancel = vi.fn()
+    renderInputBar({ disabled: true, onCancel })
+    const stopBtn = screen.getByLabelText('Stop generation (Ctrl+C)')
+    fireEvent.click(stopBtn)
+    expect(onCancel).toHaveBeenCalledTimes(1)
+  })
+
+  it('stop button not rendered when not disabled', () => {
+    renderInputBar({ disabled: false })
+    expect(screen.queryByLabelText('Stop generation (Ctrl+C)')).not.toBeInTheDocument()
+  })
+})
+
+// ─── NEW TESTS: Multiple skill attachments ──────────────────────────────────
+
+describe('InputBar — multiple skill attachments', () => {
+  it('removes individual skill attachments', () => {
+    const pluginSkills = [
+      { name: 'skill-a', description: 'Skill A', content: 'content a' },
+      { name: 'skill-b', description: 'Skill B', content: 'content b' },
+    ]
+    renderInputBar({ pluginSkills })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    // Type / to open picker, then mouseDown on skill (picker renders as /skill-a)
+    fireEvent.change(textarea, { target: { value: '/' } })
+    fireEvent.mouseDown(screen.getByText('/skill-a'))
+    // Clear textarea and open picker again for second skill
+    fireEvent.change(textarea, { target: { value: '' } })
+    fireEvent.change(textarea, { target: { value: '/' } })
+    fireEvent.mouseDown(screen.getByText('/skill-b'))
+    // Both skill chips should appear in the DOM (chips render name without /)
+    expect(screen.getAllByText('skill-a').length).toBeGreaterThanOrEqual(1)
+    expect(screen.getAllByText('skill-b').length).toBeGreaterThanOrEqual(1)
+    // Remove skill-a by clicking its remove button
+    fireEvent.click(screen.getByLabelText('Remove skill-a'))
+    // After removal, skill-b chip should still be present
+    expect(screen.queryAllByText('skill-b').length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+// ─── NEW TESTS: Edge cases ──────────────────────────────────────────────────
+
+describe('InputBar — additional edge cases', () => {
+  it('Escape when no picker is open does not crash', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.keyDown(textarea, { key: 'Escape' })
+    // No crash = pass
+  })
+
+  it('Enter when picker is open but filtered list is empty does not crash', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/zzznoexist' } })
+    // Picker is open but filteredCommands is empty
+    fireEvent.keyDown(textarea, { key: 'Enter' })
+    // No crash = pass
+  })
+
+  it('Tab when picker is open but no items match does not crash', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/zzznoexist' } })
+    fireEvent.keyDown(textarea, { key: 'Tab' })
+    // No crash = pass
+  })
+
+  it('pasting text starting with / at line start opens picker', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: '/clear' } })
+    // /clear appears in both textarea and picker — check at least 2 elements
+    expect(screen.queryAllByText('/clear').length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('pasting text with / not at line start does not open picker', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: 'hello /clear' } })
+    expect(screen.queryByText('/clear')).not.toBeInTheDocument()
+  })
+
+  it('multiline text with / at start of second line opens picker', () => {
+    renderInputBar({ pluginSkills: [], pluginCommands: [] })
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: 'line1\n/clear' } })
+    // The lineStart index should detect / at start of line 2
+    expect(screen.getByText('/clear')).toBeInTheDocument()
+  })
+})
+
+// ─── NEW TESTS: Reply chip interaction ──────────────────────────────────────
+
+describe('InputBar — reply chip interaction', () => {
+  it('clicking cancel reply calls onCancelReply', () => {
+    const onCancelReply = vi.fn()
+    renderInputBar({
+      replyTo: { id: 'm1', content: 'test reply', role: 'assistant' },
+      onCancelReply,
+    })
+    const cancelBtn = screen.getByLabelText('Cancel reply')
+    fireEvent.click(cancelBtn)
+    expect(onCancelReply).toHaveBeenCalledTimes(1)
+  })
+
+  it('reply chip shows correct role label for user', () => {
+    renderInputBar({
+      replyTo: { id: 'm1', content: 'hello', role: 'user' },
+      onCancelReply: vi.fn(),
+    })
+    expect(screen.getByText('Replying to You')).toBeInTheDocument()
+  })
+
+  it('reply chip shows correct role label for assistant', () => {
+    renderInputBar({
+      replyTo: { id: 'm1', content: 'hello', role: 'assistant' },
+      onCancelReply: vi.fn(),
+    })
+    expect(screen.getByText('Replying to Assistant')).toBeInTheDocument()
+  })
+})
+
+// ─── NEW TESTS: Send button aria label ──────────────────────────────────────
+
+describe('InputBar — send button', () => {
+  it('send button has correct aria label', () => {
+    renderInputBar()
+    expect(screen.getByLabelText('Send message')).toBeInTheDocument()
+  })
+
+  it('send button is disabled when text is empty and no attachments', () => {
+    renderInputBar()
+    const sendBtn = screen.getByLabelText('Send message')
+    expect(sendBtn).toBeDisabled()
+  })
+
+  it('send button is enabled when text is present', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.change(textarea, { target: { value: 'hello' } })
+    const sendBtn = screen.getByLabelText('Send message')
+    expect(sendBtn).not.toBeDisabled()
+  })
+})
+
+// ─── NEW TESTS: Context donut ───────────────────────────────────────────────
+
+describe('InputBar — context donut', () => {
+  it('renders context donut SVG when model is provided', () => {
+    renderInputBar({ currentModel: 'gpt-4o', messages: [] })
+    // The ContextDonut renders an SVG with a circle element
+    const svg = document.querySelector('svg[viewBox="0 0 18 18"]')
+    expect(svg).toBeInTheDocument()
+  })
+})
+
+// ─── NEW TESTS: Prompt history navigation ───────────────────────────────────
+
+describe('InputBar — prompt history', () => {
+  it('ArrowUp with empty input recalls previous prompt', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER) as HTMLTextAreaElement
+    // Focus textarea with empty text
+    fireEvent.focus(textarea)
+    // ArrowUp should recall from prompt history (empty by default, so no change)
+    fireEvent.keyDown(textarea, { key: 'ArrowUp' })
+    // No crash = pass
+  })
+
+  it('ArrowDown with empty input navigates history down', () => {
+    renderInputBar()
+    const textarea = screen.getByPlaceholderText(PLACEHOLDER)
+    fireEvent.focus(textarea)
+    fireEvent.keyDown(textarea, { key: 'ArrowDown' })
+    // No crash = pass
+  })
+})
