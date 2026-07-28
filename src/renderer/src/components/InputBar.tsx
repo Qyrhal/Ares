@@ -110,6 +110,10 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'wc',            description: 'Count lines, words, and bytes in files' },
   { kind: 'builtin', name: 'init',          description: 'Initialize a git repository in the workspace' },
   { kind: 'builtin', name: 'checkout',      description: 'Switch to a different git branch' },
+  { kind: 'builtin', name: 'changelog',     description: 'Show formatted git commit history' },
+  { kind: 'builtin', name: 'ci',            description: 'Check GitHub Actions CI status' },
+  { kind: 'builtin', name: 'open-pr',       description: 'Open current branch PR in the browser' },
+  { kind: 'builtin', name: 'watch',         description: 'Watch files for changes with live notifications' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
