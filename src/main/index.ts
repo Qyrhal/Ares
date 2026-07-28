@@ -22,6 +22,7 @@ import { runBackgroundScan } from './scanner'
 import {
   getStatus, stageFile, unstageFile, stageAll, unstageAll,
   discardFile, commit, push, pull, mergeBranch,
+  rebaseBranch, rebaseAbort, rebaseContinue,
   getBranches, checkoutBranch, createBranch, getFileDiff,
   getLog, initRepo, blameFile,
   stashList, stashPush, stashPop, stashDrop, stashClear,
@@ -430,6 +431,9 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:push',           (_, cwd: string) => { validatePath(cwd); return push(cwd) })
   ipcMain.handle('git:pull',           (_, cwd: string) => { validatePath(cwd); return pull(cwd) })
   ipcMain.handle('git:merge',          (_, cwd: string, branch: string) => { validatePath(cwd); return mergeBranch(cwd, branch) })
+  ipcMain.handle('git:rebase',         (_, cwd: string, onto: string) => { validatePath(cwd); return rebaseBranch(cwd, onto) })
+  ipcMain.handle('git:rebaseAbort',    (_, cwd: string) => { validatePath(cwd); return rebaseAbort(cwd) })
+  ipcMain.handle('git:rebaseContinue', (_, cwd: string) => { validatePath(cwd); return rebaseContinue(cwd) })
   ipcMain.handle('git:branches',       (_, cwd: string) => { validatePath(cwd); return getBranches(cwd) })
   ipcMain.handle('git:checkout',       (_, cwd: string, branch: string) => { validatePath(cwd); return checkoutBranch(cwd, branch) })
   ipcMain.handle('git:createBranch',   (_, cwd: string, branch: string) => { validatePath(cwd); return createBranch(cwd, branch) })

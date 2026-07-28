@@ -3148,6 +3148,69 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'rebase': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        const rebaseArgs = args.trim()
+        if (!rebaseArgs || rebaseArgs === '--abort' || rebaseArgs === '--continue') {
+          try {
+            const status = await el.git.status(wsPath)
+            if (!status.hasRepo) {
+              const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+              if (msg) store.appendMessage(parseMessage(msg))
+              break
+            }
+            if (rebaseArgs === '--abort') {
+              const result = await el.git.rebaseAbort(wsPath)
+              const msg = await el.db.addMessage(sess.id, 'system', `✅ **Rebase aborted**\n${result || '(success)'}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else if (rebaseArgs === '--continue') {
+              const result = await el.git.rebaseContinue(wsPath)
+              const msg = await el.db.addMessage(sess.id, 'system', `✅ **Rebase continued**\n${result || '(success)'}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              const msg = await el.db.addMessage(sess.id, 'system', 'Usage: `/rebase <branch>` — rebase current branch onto another branch\nSubcommands: `/rebase --abort`, `/rebase --continue`')
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Rebase failed:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+          break
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          if (status.unstaged.length > 0 || status.staged.length > 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Working tree has changes. Commit or stash them first before rebasing.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const currentBranch = status.branch || 'HEAD'
+          const rebaseMsg = await el.db.addMessage(sess.id, 'system', `**Rebasing** \`${currentBranch}\` onto \`${rebaseArgs}\`...`)
+          if (rebaseMsg) store.appendMessage(parseMessage(rebaseMsg))
+          const result = await el.git.rebase(wsPath, rebaseArgs)
+          const output = result || '(success, no output)'
+          const msg = await el.db.addMessage(sess.id, 'system', `✅ **Rebase complete**\n\`\`\`\n${output}\n\`\`\``)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const errLines = [`**Rebase failed:** ${(err as Error).message}`]
+          if ((err as Error).message.includes('CONFLICT') || (err as Error).message.includes('conflict')) {
+            errLines.push('\nConflict detected. Resolve conflicts, then run `/rebase --continue` or `/rebase --abort`.')
+          }
+          const msg = await el.db.addMessage(sess.id, 'system', errLines.join('\n'))
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'undo': {
         const msgs = useAppStore.getState().messages
         // Find the last user message
