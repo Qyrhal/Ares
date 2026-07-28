@@ -439,6 +439,25 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:blame',          (_, cwd: string, p: string) => { validatePath(cwd); validatePath(p); return blameFile(cwd, p) })
 
   // Git stash
+  // Changelog — formatted git commit history
+  ipcMain.handle('git:changelog', async (_, cwd: string, limit?: number) => {
+    validatePath(cwd)
+    const execAsync = promisify(execCb)
+    try {
+      const { stdout } = await execAsync(
+        `git log --pretty=format:'%H|%h|%an|%ad|%s' --date=short -${limit || 20}`,
+        { cwd, timeout: 10_000 }
+      )
+      const commits = stdout.trim().split('\n').filter(Boolean).map(line => {
+        const [hash, shortHash, author, date, ...rest] = line.split('|')
+        return { hash, shortHash, author, date, message: rest.join('|') }
+      })
+      return { ok: true, commits }
+    } catch (e) {
+      return { ok: false, output: (e as Error).message }
+    }
+  })
+
   ipcMain.handle('git:stashList',  (_, cwd: string) => { validatePath(cwd); return stashList(cwd) })
   ipcMain.handle('git:stashPush',  (_, cwd: string, msg?: string) => { validatePath(cwd); return stashPush(cwd, msg) })
   ipcMain.handle('git:stashPop',   (_, cwd: string) => { validatePath(cwd); return stashPop(cwd) })

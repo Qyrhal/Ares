@@ -675,6 +675,33 @@ export default function App(): React.ReactElement {
         if (logMsg) store.appendMessage(parseMessage(logMsg))
         break
       }
+      case 'changelog': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = ['**Changelog**\n']
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+        } else {
+          const limit = args.trim() ? parseInt(args.trim()) || 20 : 20
+          try {
+            const result = await el.git.changelog(workspacePath, limit)
+            if (!result.ok) {
+              lines.push(`❌ ${result.output}`)
+            } else if (result.commits!.length === 0) {
+              lines.push('No commits found.')
+            } else {
+              for (const c of result.commits!) {
+                lines.push(`- \`${c.shortHash}\` ${c.message} _(${c.author}, ${c.date})_`)
+              }
+            }
+          } catch (err) {
+            lines.push(`Error reading changelog: ${(err as Error).message}`)
+          }
+        }
+        const logMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (logMsg) store.appendMessage(parseMessage(logMsg))
+        break
+      }
       case 'blame': {
         const { workspacePath } = useAppStore.getState()
         const lines: string[] = ['**Git Blame**\n']
@@ -4748,6 +4775,7 @@ function usePaletteCommands(
     { id: 'cmd-doctor', label: '/doctor', description: 'Run environment diagnostics', category: 'Slash Commands', action: () => handleCommand('doctor', '') },
     { id: 'cmd-history', label: '/history', description: 'Show recent prompt history', category: 'Slash Commands', action: () => handleCommand('history', '') },
     { id: 'cmd-log', label: '/log', description: 'Show recent git commits', category: 'Slash Commands', action: () => handleCommand('log', '') },
+    { id: 'cmd-changelog', label: '/changelog', description: 'Formatted git changelog', category: 'Slash Commands', action: () => handleCommand('changelog', '') },
     { id: 'cmd-diff', label: '/diff', description: 'Show git diff for changed files', category: 'Slash Commands', action: () => handleCommand('diff', '') },
     { id: 'cmd-stash', label: '/stash', description: 'Manage git stashes', category: 'Slash Commands', action: () => handleCommand('stash', '') },
     { id: 'cmd-recent', label: '/recent', description: 'Recently modified files', category: 'Slash Commands', action: () => handleCommand('recent', '') },
