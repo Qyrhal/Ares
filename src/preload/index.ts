@@ -279,7 +279,18 @@ const grepApi = {
   search: (cwd: string, pattern: string, ext?: string) => ipcRenderer.invoke('grep:search', cwd, pattern, ext),
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, recent: recentApi, exec: execApi, ports: portsApi, env: envApi, grep: grepApi, dbEvents: dbEventsApi }
+const watchApi = {
+  start: (cwd: string, filePath: string, sessionId: string) => ipcRenderer.invoke('watch:start', cwd, filePath, sessionId),
+  stop: (sessionId?: string) => ipcRenderer.invoke('watch:stop', sessionId),
+  list: (sessionId?: string) => ipcRenderer.invoke('watch:list', sessionId),
+  onChange: (cb: (data: { sessionId: string; filePath: string; event: string; timestamp: string }) => void): (() => void) => {
+    const listener = (_e: IpcRendererEvent, data: { sessionId: string; filePath: string; event: string; timestamp: string }): void => cb(data)
+    ipcRenderer.on('watch:change', listener)
+    return () => ipcRenderer.off('watch:change', listener)
+  },
+}
+
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, recent: recentApi, exec: execApi, ports: portsApi, env: envApi, grep: grepApi, watch: watchApi, dbEvents: dbEventsApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)

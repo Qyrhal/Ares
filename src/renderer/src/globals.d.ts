@@ -147,7 +147,7 @@ declare global {
         delete(id: string): Promise<void>
       }
       pi: {
-        send(reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: string, cwd: string | null): void
+        send(reqId: string, sessionId: string, message: string, model: string, apiBaseUrl: string, apiKey: *** cwd: string | null): void
         abort(sessionId: string): void
         cleanup(sessionId: string): void
         onDelta(cb: (reqId: string, text: string) => void): () => void
@@ -161,6 +161,12 @@ declare global {
         onMcpAutoBackground(cb: (toolName: string, params: string) => void): () => void
         onMcpToolBackgroundResult(cb: (toolName: string, output: string) => void): () => void
         spawnFromUi(parentSessionId: string, task: string, title: string): Promise<unknown>
+      }
+      watch: {
+        start(cwd: string, filePath: string, sessionId: string): Promise<{ ok: boolean; message?: string; error?: string }>
+        stop(sessionId?: string): Promise<{ ok: boolean }>
+        list(sessionId?: string): Promise<{ ok: boolean; watches: { filePath: string; sessionId: string }[] }>
+        onChange(cb: (data: { sessionId: string; filePath: string; event: string; timestamp: string }) => void): () => void
       }
     }
   }

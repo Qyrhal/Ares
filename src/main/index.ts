@@ -40,6 +40,7 @@ if (process.env.ARES_USER_DATA) {
 }
 
 const ptyProcesses = new Map<string, NodePty.IPty>()
+const fileWatchers = new Map<string, { watcher: import('fs').FSWatcher; sessionId: string }>()
 let nextTerminalId = 1
 
 interface FileNode {
@@ -798,6 +799,56 @@ function registerIpcHandlers(): void {
     })
     return { ...childDb, parent_id: parentSessionId }
   })
+  // File Watcher — live file change monitoring
+  ipcMain.handle('watch:start', async (_, cwd: string, filePath: string, sessionId: string) => {
+    validatePath(cwd)
+    try {
+      const fullPath = nodePath.resolve(cwd, filePath)
+      if (!fs.existsSync(fullPath)) return { ok: false, error: 'File not found' }
+      const watchKey = `${sessionId}:${fullPath}`
+      // Stop existing watcher for same file
+      if (fileWatchers.has(watchKey)) {
+        fileWatchers.get(watchKey)!.watcher.close()
+      }
+      const watcher = fs.watch(fullPath, (eventType) => {
+        const event = eventType === 'rename' ? 'renamed/deleted' : 'modified'
+        const timestamp = new Date().toLocaleTimeString()
+        BrowserWindow.getAllWindows().forEach(win => {
+          if (!win.isDestroyed()) {
+            win.webContents.send('watch:change', { sessionId, filePath, event, timestamp })
+          }
+        })
+      })
+      fileWatchers.set(watchKey, { watcher, sessionId })
+      return { ok: true, message: `Watching ${filePath}` }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle('watch:stop', (_, sessionId?: string) => {
+    for (const [key, entry] of fileWatchers) {
+      if (!sessionId || entry.sessionId === sessionId) {
+        entry.watcher.close()
+        fileWatchers.delete(key)
+      }
+    }
+    return { ok: true }
+  })
+
+  ipcMain.handle('watch:list', (_, sessionId?: string) => {
+    const watches: { filePath: string; sessionId: string }[] = []
+    for (const [key] of fileWatchers) {
+      const sep = key.indexOf(':')
+      const sid = key.slice(0, sep)
+      const fpath = key.slice(sep + 1)
+      if (!sessionId || sid === sessionId) {
+        watches.push({ filePath: fpath, sessionId: sid })
+      }
+    }
+    return { ok: true, watches }
+  })
+
   ipcMain.handle('shell:openPath', async (_, filePath: string) => {
     const { shell } = await import('electron')
     await shell.openPath(filePath)

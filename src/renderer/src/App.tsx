@@ -231,7 +231,16 @@ export default function App(): React.ReactElement {
       toast.warning('Disk write error', { description: msg, duration: 10_000 })
     })
 
-    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete(); offFlushError() }
+    const offWatchChange = el.watch.onChange(({ sessionId, filePath, event, timestamp }) => {
+      const activeTabId = useAppStore.getState().activeTabId
+      if (sessionId !== activeTabId) return
+      const content = `👁️ **File ${event}:** \`${filePath}\` at ${timestamp}`
+      el.db.addMessage(sessionId, 'system', content).then((msg) => {
+        if (msg) useAppStore.getState().appendMessage(parseMessage(msg))
+      })
+    })
+
+    return () => { offScan(); offTodos(); offAskUser(); offAgentSpawned(); offAgentStatus(); offCompaction(); offSessionComplete(); offFlushError(); offWatchChange() }
   }, [])
 
   // Load messages and todos when active session changes
@@ -827,6 +836,52 @@ export default function App(): React.ReactElement {
         const execMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
         if (execMsg) store.appendMessage(parseMessage(execMsg))
         break
+      }
+      case 'watch': {
+        const { workspacePath } = useAppStore.getState()
+        const lines: string[] = []
+
+        if (args.trim() === '--stop') {
+          await el.watch.stop()
+          lines.push('Stopped all file watchers.')
+          const watchMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (watchMsg) store.appendMessage(parseMessage(watchMsg))
+          return
+        }
+
+        if (!args.trim()) {
+          // List active watchers
+          const result = await el.watch.list()
+          if (result.watches.length === 0) {
+            lines.push('No active file watchers.')
+          } else {
+            lines.push('**Active file watchers:**')
+            for (let i = 0; i < result.watches.length; i++) {
+              lines.push(`${i + 1}. ${result.watches[i].filePath}`)
+            }
+          }
+          const watchMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (watchMsg) store.appendMessage(parseMessage(watchMsg))
+          return
+        }
+
+        if (!workspacePath) {
+          lines.push('No workspace folder is open.')
+          const watchMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+          if (watchMsg) store.appendMessage(parseMessage(watchMsg))
+          return
+        }
+
+        const filePath = args.trim()
+        const result = await el.watch.start(workspacePath, filePath, sess.id)
+        if (!result.ok) {
+          lines.push(`❌ ${result.error}`)
+        } else {
+          lines.push(`👁️ ${result.message}`)
+        }
+        const watchMsg = await el.db.addMessage(sess.id, 'system', lines.join('\n'))
+        if (watchMsg) store.appendMessage(parseMessage(watchMsg))
+        return
       }
       case 'ports': {
         const lines: string[] = ['**Listening Ports**\n']
@@ -4717,6 +4772,7 @@ function usePaletteCommands(
     { id: 'cmd-agents', label: '/agents', description: 'Show running sub-agents', category: 'Slash Commands', action: () => handleCommand('agents', '') },
     { id: 'cmd-kill', label: '/kill', description: 'Stop a running sub-agent', category: 'Slash Commands', action: () => handleCommand('kill', '') },
     { id: 'cmd-sessions', label: '/sessions', description: 'List all sessions with metadata', category: 'Slash Commands', action: () => handleCommand('sessions', '') },
+    { id: 'cmd-watch', label: '/watch', description: 'Live file change monitoring', category: 'Slash Commands', action: () => handleCommand('watch', '') },
   ]
 
   return [...general, ...slashCommands]
