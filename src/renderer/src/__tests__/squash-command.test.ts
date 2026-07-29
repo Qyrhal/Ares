@@ -15,7 +15,7 @@ describe('/squash slash command', () => {
   })
 
   it('has correct total count', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(79)
+    expect(BUILTIN_COMMANDS.length).toBe(80)
   })
 
   it('squash appears after stash in BUILTIN_COMMANDS order', () => {

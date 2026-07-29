@@ -1170,6 +1170,45 @@ export default function App(): React.ReactElement {
         })
         break
       }
+      case 'reset': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        const argsStr = args.trim()
+        if (!argsStr || argsStr === '--help') {
+          const msg = await el.db.addMessage(sess.id, 'system', 'Usage:\n• `/reset --soft [HEAD~N]` — undo last commit, keep changes staged\n• `/reset --mixed [HEAD~N]` — undo last commit, keep changes unstaged (default)\n• `/reset --hard [HEAD~N]` — discard ALL changes and undo last commit\n\n⚠️ `--hard` permanently discards uncommitted changes. Use with caution.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        // Parse mode and optional ref
+        let mode: 'soft' | 'mixed' | 'hard' = 'mixed'
+        let ref = 'HEAD~1'
+        const parts = argsStr.split(/\s+/)
+        for (const part of parts) {
+          if (part === '--soft') mode = 'soft'
+          else if (part === '--mixed') mode = 'mixed'
+          else if (part === '--hard') mode = 'hard'
+          else if (part.startsWith('HEAD') || /^[0-9a-f]+$/i.test(part)) ref = part
+        }
+        try {
+          const status = await el.git.status(wsPath)
+          if (!status.hasRepo) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+            if (msg) store.appendMessage(parseMessage(msg))
+            break
+          }
+          const result = await el.git.reset(wsPath, mode, ref)
+          const msg = await el.db.addMessage(sess.id, 'system', `**Reset ${mode}:** ${result || `moved HEAD back to ${ref}`}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Reset failed:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'summarize': {
         const msgs = await el.db.getMessages(sess.id)
         if (!msgs || msgs.length === 0) {
@@ -1692,7 +1731,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /open-pr - open current PR in browser, /focus <file> - navigate to file in editor, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /squash [n] - squash last N commits into one, /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /open-pr - open current PR in browser, /focus <file> - navigate to file in editor, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /squash [n] - squash last N commits into one, /reset [mode] - git reset (soft/mixed/hard), /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break

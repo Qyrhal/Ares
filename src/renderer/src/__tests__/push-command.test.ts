@@ -9,7 +9,7 @@ describe('/push slash command', () => {
   })
 
   it('has correct total count', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(79)
+    expect(BUILTIN_COMMANDS.length).toBe(80)
   })
 
   it('formats push success message', () => {

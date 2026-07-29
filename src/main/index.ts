@@ -27,6 +27,7 @@ import {
   getLog, initRepo, blameFile,
   stashList, stashPush, stashPop, stashDrop, stashClear,
   squashCommits,
+  resetBranch,
 } from './git'
 import {
   createCheckpoint, listCheckpoints, restoreCheckpoint,
@@ -469,6 +470,11 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:stashDrop',  (_, cwd: string, idx: number) => { validatePath(cwd); return stashDrop(cwd, idx) })
   ipcMain.handle('git:stashClear', (_, cwd: string) => { validatePath(cwd); return stashClear(cwd) })
   ipcMain.handle('git:squash',     (_, cwd: string, count: number, message: string) => { validatePath(cwd); return squashCommits(cwd, count, message) })
+
+  ipcMain.handle('git:reset', (_, cwd: string, mode: string, ref: string) => {
+    validatePath(cwd)
+    return resetBranch(cwd, mode as 'soft' | 'mixed' | 'hard', ref)
+  })
 
   // Recent files — recently modified files in workspace
   ipcMain.handle('recent:files', async (_, cwd: string, limit = 20) => {

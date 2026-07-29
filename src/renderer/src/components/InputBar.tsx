@@ -116,6 +116,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'ci',            description: 'Check GitHub Actions CI status' },
   { kind: 'builtin', name: 'open-pr',       description: 'Open current branch PR in the browser' },
   { kind: 'builtin', name: 'watch',         description: 'Watch files for changes with live notifications' },
+  { kind: 'builtin', name: 'reset',          description: 'Git reset (soft/mixed/hard)' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 

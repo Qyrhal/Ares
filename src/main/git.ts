@@ -420,3 +420,14 @@ export async function squashCommits(cwd: string, count: number, message: string)
 
   return `Squashed ${count} commit(s) into one: "${message}"`
 }
+
+// ── Reset ───────────────────────────────────────────────────────────────────
+
+export async function resetBranch(cwd: string, mode: 'soft' | 'mixed' | 'hard', ref: string): Promise<string> {
+  const args = ['reset', `--${mode}`, ref]
+  const { stdout, stderr } = await run('git', args, {
+    cwd,
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+  })
+  return (stdout + stderr).trim() || `Reset ${mode} to ${ref}`
+}
