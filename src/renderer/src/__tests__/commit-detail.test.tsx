@@ -197,3 +197,118 @@ describe('CommitDetail — layout structure', () => {
     expect(screen.getByText('Parents:')).toBeInTheDocument()
   })
 })
+
+describe('CommitDetail — parent hash truncation', () => {
+  it('truncates parent hashes to 7 characters', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'abc', shortHash: 'abc',
+        parents: ['1234567890abcdef1234567890abcdef12345678'],
+        author: 'Alice', date: '2024-01-01', message: 'Merge',
+      }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    expect(screen.getByText('1234567')).toBeInTheDocument()
+    expect(screen.queryByText('1234567890abcdef1234567890abcdef12345678')).not.toBeInTheDocument()
+  })
+
+  it('renders parent hashes as code elements with font-mono', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'abc', shortHash: 'abc',
+        parents: ['aabbccdd'],
+        author: 'Alice', date: '2024-01-01', message: 'Merge',
+      }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    const code = screen.getByText('aabbccd')
+    expect(code.tagName).toBe('CODE')
+    expect(code.className).toContain('font-mono')
+  })
+})
+
+describe('CommitDetail — multiple parents separator', () => {
+  it('separates multiple parents with commas', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'abc', shortHash: 'abc',
+        parents: ['aaaaaaa', 'bbbbbbb', 'ccccccc'],
+        author: 'Alice', date: '2024-01-01', message: 'Merge',
+      }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    expect(screen.getByText('aaaaaaa')).toBeInTheDocument()
+    expect(screen.getByText('bbbbbbb')).toBeInTheDocument()
+    expect(screen.getByText('ccccccc')).toBeInTheDocument()
+    // Commas should be present between parent hashes
+    const parentsSection = screen.getByText('Parents:').parentElement!
+    expect(parentsSection.textContent).toContain(',')
+  })
+})
+
+describe('CommitDetail — git commit icon', () => {
+  it('renders a git commit icon in the header', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'abc', shortHash: 'abc', parents: [],
+        author: 'Alice', date: '2024-01-01', message: 'Test',
+      }],
+      activeCommit: 'abc',
+    })
+    const { container } = render(<CommitDetail />)
+    const svgIcons = container.querySelectorAll('svg')
+    expect(svgIcons.length).toBeGreaterThanOrEqual(1)
+  })
+})
+
+describe('CommitDetail — empty commit message', () => {
+  it('renders with an empty commit message', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'abc', shortHash: 'abc', parents: [],
+        author: 'Alice', date: '2024-01-01', message: '',
+      }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    // Should still render without crashing
+    expect(screen.getByText('Alice')).toBeInTheDocument()
+    expect(screen.getByText('abc')).toBeInTheDocument()
+  })
+})
+
+describe('CommitDetail — shortHash vs hash', () => {
+  it('displays shortHash in the Commit label, not the full hash', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'fullhash1234567890',
+        shortHash: 'abc1234',
+        parents: [],
+        author: 'Alice', date: '2024-01-01', message: 'Test',
+      }],
+      activeCommit: 'fullhash1234567890',
+    })
+    render(<CommitDetail />)
+    expect(screen.getByText('abc1234')).toBeInTheDocument()
+    expect(screen.queryByText('fullhash1234567890')).not.toBeInTheDocument()
+  })
+})
+
+describe('CommitDetail — body message styling', () => {
+  it('renders full message in body with whitespace-pre-wrap', () => {
+    useAppStore.setState({
+      commits: [{
+        hash: 'abc', shortHash: 'abc', parents: [],
+        author: 'Alice', date: '2024-01-01', message: 'Line one\nLine two',
+      }],
+      activeCommit: 'abc',
+    })
+    render(<CommitDetail />)
+    const bodyMsg = screen.getAllByText(/Line one/)[1] // second occurrence is in body
+    expect(bodyMsg.className).toContain('whitespace-pre-wrap')
+    expect(bodyMsg.className).toContain('font-mono')
+  })
+})

@@ -1,5 +1,5 @@
 import React from 'react'
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { ContextMenuOverlay } from '../components/ContextMenuOverlay'
 
@@ -121,5 +121,77 @@ describe('ContextMenuOverlay', () => {
       <ContextMenuOverlay x={0} y={0} items={[]} open={true} onClose={vi.fn()} />
     )
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+})
+
+describe('ContextMenuOverlay — action and interaction edge cases', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
+  it('does not call action when disabled item is clicked', () => {
+    const action = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <ContextMenuOverlay
+        x={0} y={0}
+        items={[{ id: 'disabled', label: 'Disabled', action, disabled: true }]}
+        open={true}
+        onClose={onClose}
+      />
+    )
+    const btn = screen.getByRole('button', { name: 'Disabled' })
+    fireEvent.click(btn)
+    // Disabled button doesn't fire onClick, so neither action nor onClose is called
+    expect(action).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('each item calls only its own action', () => {
+    const action1 = vi.fn()
+    const action2 = vi.fn()
+    const action3 = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <ContextMenuOverlay
+        x={0} y={0}
+        items={[
+          { id: 'a', label: 'First', action: action1 },
+          { id: 'b', label: 'Second', action: action2 },
+          { id: 'c', label: 'Third', action: action3 },
+        ]}
+        open={true}
+        onClose={onClose}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Second' }))
+    expect(action1).not.toHaveBeenCalled()
+    expect(action2).toHaveBeenCalledOnce()
+    expect(action3).not.toHaveBeenCalled()
+    expect(onClose).toHaveBeenCalledOnce()
+  })
+
+  it('repositions when coordinates change via rerender', () => {
+    const { rerender } = render(
+      <ContextMenuOverlay x={10} y={20} items={defaultItems} open={true} onClose={vi.fn()} />
+    )
+    const menuRoot = screen.getByText('Rename').closest('.fixed') as HTMLElement
+    expect(menuRoot.style.left).toBe('10px')
+    expect(menuRoot.style.top).toBe('20px')
+
+    rerender(
+      <ContextMenuOverlay x={200} y={300} items={defaultItems} open={true} onClose={vi.fn()} />
+    )
+    expect(menuRoot.style.left).toBe('200px')
+    expect(menuRoot.style.top).toBe('300px')
+  })
+
+  it('closes on any keydown, not just Escape', () => {
+    const onClose = vi.fn()
+    render(
+      <ContextMenuOverlay x={0} y={0} items={defaultItems} open={true} onClose={onClose} />
+    )
+    fireEvent.keyDown(document, { key: 'a' })
+    expect(onClose).toHaveBeenCalledOnce()
   })
 })

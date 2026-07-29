@@ -335,3 +335,111 @@ describe('QuickFileOpen — file icons', () => {
     })
   })
 })
+
+describe('QuickFileOpen — keyboard boundary edge cases', () => {
+  it('clamps ArrowDown at last file', async () => {
+    const onOpenFile = vi.fn()
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/a.ts', '/b.ts'])
+    render(
+      <QuickFileOpen {...defaultProps} onOpenFile={onOpenFile} />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('a.ts')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    for (let i = 0; i < 10; i++) {
+      fireEvent.keyDown(input, { key: 'ArrowDown' })
+    }
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onOpenFile).toHaveBeenCalledWith('/b.ts')
+  })
+
+  it('stays at index 0 when pressing ArrowUp from start', async () => {
+    const onOpenFile = vi.fn()
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/a.ts', '/b.ts'])
+    render(
+      <QuickFileOpen {...defaultProps} onOpenFile={onOpenFile} />,
+    )
+    await waitFor(() => {
+      expect(screen.getByText('a.ts')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onOpenFile).toHaveBeenCalledWith('/a.ts')
+  })
+})
+
+describe('QuickFileOpen — filtering edge cases', () => {
+  it('filters by directory path', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/src/components/App.tsx',
+      '/src/utils/helpers.ts',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('App.tsx')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.change(input, { target: { value: 'components' } })
+    expect(screen.getByText('App.tsx')).toBeDefined()
+    expect(screen.queryByText('helpers.ts')).toBeNull()
+  })
+
+  it('fuzzy match finds files with matching characters in order', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/src/AppComponent.tsx',
+      '/src/Other.tsx',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('AppComponent.tsx')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.change(input, { target: { value: 'appt' } })
+    await waitFor(() => {
+      expect(screen.getByText('AppComponent.tsx')).toBeDefined()
+    })
+  })
+
+  it('clearing query shows all files again', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/a.ts', '/b.ts'])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('a.ts')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.change(input, { target: { value: 'a' } })
+    expect(screen.queryByText('b.ts')).toBeNull()
+    fireEvent.change(input, { target: { value: '' } })
+    expect(screen.getByText('a.ts')).toBeDefined()
+    expect(screen.getByText('b.ts')).toBeDefined()
+  })
+})
+
+describe('QuickFileOpen — file count edge cases', () => {
+  it('shows file count updates when filtering', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue([
+      '/a.ts', '/b.ts', '/c.ts',
+    ])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('3 files')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.change(input, { target: { value: 'a' } })
+    expect(screen.getByText('1 file')).toBeDefined()
+  })
+
+  it('shows no file count when zero results after filter', async () => {
+    window.electron.fs.findFiles = vi.fn().mockResolvedValue(['/a.ts'])
+    render(<QuickFileOpen {...defaultProps} />)
+    await waitFor(() => {
+      expect(screen.getByText('1 file')).toBeDefined()
+    })
+    const input = screen.getByPlaceholderText('Search files by name…')
+    fireEvent.change(input, { target: { value: 'zzz' } })
+    expect(screen.queryByText('1 file')).toBeNull()
+  })
+})

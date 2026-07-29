@@ -275,3 +275,104 @@ describe('TabSwitcher — Tab icon selection', () => {
     expect(screen.getByText('d.xyz')).toBeDefined()
   })
 })
+
+describe('TabSwitcher — keyboard boundary edge cases', () => {
+  it('clamps ArrowDown at last item and Enter selects it', () => {
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'Chat 1'),
+      mkSessionTab('s2', 'Chat 2'),
+    ]
+    const onSelectTab = vi.fn()
+    const onClose = vi.fn()
+    render(
+      <TabSwitcher
+        {...defaultProps}
+        tabs={tabs}
+        onSelectTab={onSelectTab}
+        onClose={onClose}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    // Press ArrowDown more times than there are tabs
+    for (let i = 0; i < 5; i++) {
+      fireEvent.keyDown(input, { key: 'ArrowDown' })
+    }
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelectTab).toHaveBeenCalledWith('s2')
+    expect(onClose).toHaveBeenCalled()
+  })
+
+  it('stays at index 0 when pressing ArrowUp repeatedly', () => {
+    const onSelectTab = vi.fn()
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'Chat 1'),
+      mkSessionTab('s2', 'Chat 2'),
+    ]
+    render(
+      <TabSwitcher
+        {...defaultProps}
+        tabs={tabs}
+        onSelectTab={onSelectTab}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelectTab).toHaveBeenCalledWith('s1')
+  })
+})
+
+describe('TabSwitcher — filter and interaction edge cases', () => {
+  it('clearing filter shows all tabs again', () => {
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'React chat'),
+      mkSessionTab('s2', 'Vue chat'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.change(input, { target: { value: 'React' } })
+    expect(screen.queryByText('Vue chat')).toBeNull()
+    // Clear the filter
+    fireEvent.change(input, { target: { value: '' } })
+    expect(screen.getByText('React chat')).toBeDefined()
+    expect(screen.getByText('Vue chat')).toBeDefined()
+  })
+
+  it('shows updated count when filtering', () => {
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'React chat'),
+      mkSessionTab('s2', 'Vue chat'),
+      mkSessionTab('s3', 'Angular chat'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    expect(screen.getByText('3 tabs')).toBeDefined()
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.change(input, { target: { value: 'React' } })
+    expect(screen.getByText('1 tab')).toBeDefined()
+  })
+
+  it('filters by file path and shows matching file', () => {
+    const tabs: Tab[] = [
+      mkFileTab('/src/deep/nested/file.ts', 'file.ts'),
+      mkFileTab('/other/simple.ts', 'simple.ts'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.change(input, { target: { value: 'nested' } })
+    expect(screen.getByText('file.ts')).toBeDefined()
+    expect(screen.queryByText('simple.ts')).toBeNull()
+  })
+
+  it('highlighted item has accent background class', () => {
+    const tabs: Tab[] = [
+      mkSessionTab('s1', 'Chat 1'),
+      mkSessionTab('s2', 'Chat 2'),
+    ]
+    render(<TabSwitcher {...defaultProps} tabs={tabs} />)
+    const input = screen.getByPlaceholderText('Search open tabs…')
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    const chat2Btn = screen.getByText('Chat 2').closest('button')!
+    expect(chat2Btn.className).toContain('bg-accent')
+  })
+})
