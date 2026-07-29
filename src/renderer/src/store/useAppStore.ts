@@ -55,28 +55,34 @@ interface AppStore {
   // ── Deleted messages (for undo) ─────────────────────────────────────────────
   lastDeletedMessage: Message | null
 
-  // ── Exec history ──────────────────────────────────────────────────────────
+  // ── Exec history ──────────────────────────────────────────────────
   lastExecCommand: string | null
 
-  // ── Session filter ──────────────────────────────────────────────────
+  // ── Preview panel ──────────────────────────────────────────────
+  previewOpen: boolean
+  previewUrl: string | null
+
+  // ── Session filter ──────────────────────────────────────────────
   sessionFilter: { type: 'model' | 'status' | 'keyword' | 'tag'; value: string } | null
 
-  // ── Session sort ────────────────────────────────────────────────────
+  // ── Session sort ────────────────────────────────────────────────
   sessionSort: { by: 'recent' | 'name' | 'duration' | 'messages'; asc: boolean }
 
   // ── Prompt history ────────────────────────────────────────────────
   promptHistory: string[]
   promptHistoryIdx: number  // -1 = not navigating, 0..N = navigating
 
-  // ── Settings ────────────────────────────────────────────────────────────────
+  // ── Settings ────────────────────────────────────────────────────────
   settings: AppSettings
 
-  // ── Actions ─────────────────────────────────────────────────────────────────
+  // ── Actions ─────────────────────────────────────────────────────────
 
   setActiveView: (v: ActivityView) => void
   toggleTerminal: () => void
   toggleZenMode: () => void
   setTerminalHeight: (h: string) => void
+  togglePreview: () => void
+  setPreviewUrl: (url: string | null) => void
 
   // Adds the tab if not already open, activates it, and syncs sidebar view.
   openSessionTab: (session: Session) => void
@@ -178,6 +184,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   lastDeletedMessage: null,
   lastExecCommand: null,
 
+  previewOpen: false,
+  previewUrl: null,
+
   sessionFilter: null,
   sessionSort: { by: 'recent', asc: false },
 
@@ -197,6 +206,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   toggleZenMode: () => set((s) => ({ zenMode: !s.zenMode })),
 
   setTerminalHeight: (h) => set({ terminalHeight: h }),
+
+  togglePreview: () => set((s) => ({ previewOpen: !s.previewOpen })),
+  setPreviewUrl: (url) => set({ previewUrl: url, previewOpen: true }),
 
   // ── Tab actions ──────────────────────────────────────────────────────────────
   openSessionTab: (session) => set((s) => {
