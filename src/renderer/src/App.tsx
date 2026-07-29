@@ -15,6 +15,7 @@ const SettingsPanel = React.lazy(() => import('@/components/SettingsPanel').then
 const ExtensionsPanel = React.lazy(() => import('@/components/ExtensionsPanel').then(m => ({ default: m.ExtensionsPanel })))
 const TerminalView = React.lazy(() => import('@/components/TerminalView').then(m => ({ default: m.TerminalView })))
 const CommitDetail = React.lazy(() => import('@/components/CommitDetail').then(m => ({ default: m.CommitDetail })))
+const PreviewPanel = React.lazy(() => import('@/components/PreviewPanel').then(m => ({ default: m.PreviewPanel })))
 import { StatusBar } from '@/components/StatusBar'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { PermissionPrompt } from '@/components/PermissionPrompt'
@@ -3963,6 +3964,25 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'preview': {
+        if (args === '--close' || args === 'close') {
+          store.togglePreview()
+          const m2 = await el.db.addMessage(sess.id, 'system', 'Preview panel closed.')
+          if (m2) store.appendMessage(parseMessage(m2))
+          break
+        }
+        if (!args) {
+          const m2 = await el.db.addMessage(sess.id, 'system', '**Usage:**\n· `/preview <url>` — Open URL in preview panel\n· `/preview --close` — Close the preview panel\n\nThe preview panel shows a live web view with navigation controls.')
+          if (m2) store.appendMessage(parseMessage(m2))
+          break
+        }
+        let url = args.trim()
+        if (!/^https?:\/\//i.test(url)) url = 'https://' + url
+        store.setPreviewUrl(url)
+        const m2 = await el.db.addMessage(sess.id, 'system', `🌐 Opening **${url}** in preview panel.`)
+        if (m2) store.appendMessage(parseMessage(m2))
+        break
+      }
     }
   }, [activeSession, store])
 
@@ -4618,7 +4638,8 @@ export default function App(): React.ReactElement {
           )}
         </>)}
 
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className={`flex flex-1 overflow-hidden ${store.previewOpen ? 'flex-row' : 'flex-col'}`}>
+          <div className={`flex ${store.previewOpen ? 'flex-1 flex-col' : 'flex-1 flex-col'} overflow-hidden`}>
           {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
             <TabBar
               tabs={store.tabs}
@@ -4818,6 +4839,15 @@ export default function App(): React.ReactElement {
               </Suspense>
             </div>
           )}
+          </div>
+
+          {store.previewOpen && (
+            <div className="w-[400px] shrink-0 border-l border-border">
+              <Suspense fallback={<PanelFallback />}>
+                <PreviewPanel />
+              </Suspense>
+            </div>
+          )}
         </div>
       </div>
       <StatusBar
@@ -4933,6 +4963,7 @@ function usePaletteCommands(
     { id: 'cmd-kill', label: '/kill', description: 'Stop a running sub-agent', category: 'Slash Commands', action: () => handleCommand('kill', '') },
     { id: 'cmd-sessions', label: '/sessions', description: 'List all sessions with metadata', category: 'Slash Commands', action: () => handleCommand('sessions', '') },
     { id: 'cmd-watch', label: '/watch', description: 'Live file change monitoring', category: 'Slash Commands', action: () => handleCommand('watch', '') },
+    { id: 'cmd-preview', label: '/preview', description: 'Open URL in web preview panel', category: 'Slash Commands', action: () => handleCommand('preview', '') },
   ]
 
   return [...general, ...slashCommands]
