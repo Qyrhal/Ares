@@ -3486,6 +3486,48 @@ export default function App(): React.ReactElement {
         }
         break
       }
+      case 'diagnostics': {
+        const diagWs = store.workspacePath
+        if (!diagWs) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const diagCheck = await el.lsp.hasSupport()
+        if (!diagCheck) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No language server support detected. Ensure Node.js and npx are available.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+        const diagMsg = await el.db.addMessage(sess.id, 'system', '**Running diagnostics...**')
+        if (diagMsg) store.appendMessage(parseMessage(diagMsg))
+        try {
+          const diagnostics = await el.lsp.allDiagnostics(diagWs)
+          if (diagnostics.length === 0) {
+            const msg = await el.db.addMessage(sess.id, 'system', '**Diagnostics clean** — no errors or warnings found.')
+            if (msg) store.appendMessage(parseMessage(msg))
+          } else {
+            const errors = diagnostics.filter(d => d.severity === 'error')
+            const warnings = diagnostics.filter(d => d.severity === 'warning')
+            const lines: string[] = [`**Diagnostics:** ${errors.length} error${errors.length === 1 ? '' : 's'}, ${warnings.length} warning${warnings.length === 1 ? '' : 's'}\n`]
+            for (const d of diagnostics.slice(0, 50)) {
+              const icon = d.severity === 'error' ? '❌' : '⚠️'
+              const relFile = d.file.replace(diagWs + '/', '')
+              lines.push(`${icon} \`${relFile}:${d.line}:${d.column}\` — ${d.message}`)
+            }
+            if (diagnostics.length > 50) {
+              lines.push(`\n_...and ${diagnostics.length - 50} more_`)
+            }
+            const output = lines.join('\n')
+            const msg = await el.db.addMessage(sess.id, 'system', output)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } catch (err) {
+          const msg = await el.db.addMessage(sess.id, 'system', `**Diagnostics error:** ${(err as Error).message}`)
+          if (msg) store.appendMessage(parseMessage(msg))
+        }
+        break
+      }
       case 'lint': {
         const wsPath = store.workspacePath
         if (!wsPath) {

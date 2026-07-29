@@ -82,6 +82,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'filter',       description: 'Filter sessions by model or status' },
   { kind: 'builtin', name: 'sessions',     description: 'List all sessions with metadata and filters' },
   { kind: 'builtin', name: 'sort',         description: 'Sort sessions by date, title, or activity' },
+  { kind: 'builtin', name: 'diagnostics',  description: 'Show LSP diagnostics (errors/warnings) for the workspace' },
   { kind: 'builtin', name: 'lint',         description: 'Run TypeScript type checking on the workspace' },
   { kind: 'builtin', name: 'fix',          description: 'Auto-fix type errors with AI suggestions' },
   { kind: 'builtin', name: 'task',         description: 'Add, list, or manage session tasks' },

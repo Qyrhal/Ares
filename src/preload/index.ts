@@ -217,6 +217,7 @@ const mcpProfilesApi = {
 const lspApi = {
   diagnostics: (filePath: string) => ipcRenderer.invoke('lsp:diagnostics', filePath),
   hasSupport:  () => ipcRenderer.invoke('lsp:hasSupport'),
+  allDiagnostics: (workspacePath: string) => ipcRenderer.invoke('lsp:allDiagnostics', workspacePath),
 }
 
 // ── Hooks ──────────────────────────────────────────────────────────────────
