@@ -9,7 +9,7 @@ describe('/merge slash command', () => {
   })
 
   it('has correct total count', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(82)
+    expect(BUILTIN_COMMANDS.length).toBe(83)
   })
 
   it('formats merge success message', () => {

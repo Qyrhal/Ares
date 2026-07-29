@@ -195,6 +195,43 @@ export function cleanupLsp(): void {
 }
 
 /**
+ * Get all diagnostics for the workspace (not filtered to a single file).
+ * Runs tsc --noEmit and returns structured results.
+ */
+export async function allDiagnostics(workspacePath: string): Promise<Diagnostic[]> {
+  const results: Diagnostic[] = []
+  const tscPath = findExecutable('npx')
+  if (!tscPath) return results
+
+  const projectDir = findProjectDir(path.join(workspacePath, 'dummy.ts'))
+  if (!projectDir || !fs.existsSync(path.join(projectDir, 'tsconfig.json'))) return results
+
+  try {
+    const out = execFileSync('npx', ['-s', 'tsc', '--noEmit', '--pretty', 'false'], {
+      cwd: projectDir, encoding: 'utf-8', maxBuffer: 1024 * 1024, timeout: 30_000,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    })
+    const lines = out.split('\n').filter(Boolean)
+    for (const line of lines) {
+      const m = line.match(/^(.+)\((\d+),(\d+)\):\s+(error|warning)\s+(.+)$/)
+      if (m) {
+        results.push({
+          file: path.resolve(projectDir, m[1].trim()),
+          line: parseInt(m[2], 10),
+          column: parseInt(m[3], 10),
+          message: m[5].trim(),
+          severity: m[4] === 'error' ? 'error' : 'warning',
+        })
+      }
+    }
+  } catch {
+    // tsc failed — may have errors (exit code 2) but stdout is empty or partial
+  }
+
+  return results
+}
+
+/**
  * Check if any language server is available on this system.
  */
 export function hasLspSupport(): boolean {

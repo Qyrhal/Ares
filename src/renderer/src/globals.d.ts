@@ -127,6 +127,7 @@ declare global {
       lsp: {
         diagnostics(filePath: string): Promise<{ file: string; line: number; column: number; message: string; severity: string; code?: string }[]>
         hasSupport(): Promise<boolean>
+        allDiagnostics(workspacePath: string): Promise<{ file: string; line: number; column: number; message: string; severity: string; code?: string }[]>
       }
       hooks: { get(): Promise<Hook[]>; set(hooks: Hook[]): Promise<void> }
       session: {

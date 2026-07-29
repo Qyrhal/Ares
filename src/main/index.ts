@@ -36,7 +36,7 @@ import {
   createCheckpoint, listCheckpoints, restoreCheckpoint,
   dropCheckpoint, diffCheckpoint,
 } from './checkpoints'
-import { getDiagnostics, hasLspSupport } from './lsp'
+import { getDiagnostics, hasLspSupport, allDiagnostics } from './lsp'
 import { getHooks, setHooks } from './hooks'
 import { exportSession, importSession } from './session-store'
 
@@ -596,6 +596,7 @@ function registerIpcHandlers(): void {
   // LSP — language server diagnostics (inspired by OpenCode + Claude Code)
   ipcMain.handle('lsp:diagnostics', async (_, filePath: string) => { validatePath(filePath); return getDiagnostics(filePath) })
   ipcMain.handle('lsp:hasSupport', () => hasLspSupport())
+  ipcMain.handle('lsp:allDiagnostics', async (_, workspacePath: string) => { validatePath(workspacePath); return allDiagnostics(workspacePath) })
 
   // Hooks — lifecycle events (inspired by Claude Code)
   ipcMain.handle('hooks:get', () => getHooks())
