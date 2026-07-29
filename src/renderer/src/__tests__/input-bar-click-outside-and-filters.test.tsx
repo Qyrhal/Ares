@@ -137,7 +137,7 @@ describe('InputBar — send button state', () => {
 
 describe('InputBar — BUILTIN_COMMANDS count', () => {
   it('BUILTIN_COMMANDS has 71 entries', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(83)
+    expect(BUILTIN_COMMANDS.length).toBe(84)
   })
 
   it('all builtin commands have unique names', () => {

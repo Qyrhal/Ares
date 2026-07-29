@@ -1796,7 +1796,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /open-pr - open current PR in browser, /focus <file> - navigate to file in editor, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /gitignore [pattern] - manage .gitignore patterns, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /squash [n] - squash last N commits into one, /reset [mode] - git reset (soft/mixed/hard), /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /open-pr - open current PR in browser, /focus <file> - navigate to file in editor, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /gitignore [pattern] - manage .gitignore patterns, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /squash [n] - squash last N commits into one, /reset [mode] - git reset (soft/mixed/hard), /pipe <cmd1> | <cmd2> - chain commands sequentially, /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break
@@ -4167,6 +4167,80 @@ export default function App(): React.ReactElement {
         store.setPreviewUrl(url)
         const m2 = await el.db.addMessage(sess.id, 'system', `🌐 Opening **${url}** in preview panel.`)
         if (m2) store.appendMessage(parseMessage(m2))
+        break
+      }
+      case 'pipe': {
+        const raw = args.trim()
+        if (!raw) {
+          const msg = await el.db.addMessage(sess.id, 'system', '**Usage:** `/pipe <cmd1> | <cmd2> | <cmd3>`\n\nChains multiple slash commands sequentially. Use `|` to separate commands.\n\n**Flags:**\n· `--on-error stop` — Stop on first error (default)\n· `--on-error continue` — Continue even if a command fails\n\n**Examples:**\n· `/pipe lint | test | build` — Run all three quality checks\n· `/pipe changes | diff --on-error continue` — Show status then diff, ignore errors')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        // Parse --on-error flag
+        let onError: 'stop' | 'continue' = 'stop'
+        let pipeline = raw
+        const flagMatch = pipeline.match(/--on-error\s+(stop|continue)/i)
+        if (flagMatch) {
+          onError = flagMatch[1].toLowerCase() as 'stop' | 'continue'
+          pipeline = pipeline.replace(flagMatch[0], '').trim()
+        }
+
+        // Split on |
+        const commands = pipeline.split('|').map((c) => c.trim()).filter(Boolean)
+        if (commands.length === 0) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No commands provided. Use `/pipe cmd1 | cmd2`.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          break
+        }
+
+        if (commands.length === 1) {
+          // Single command — just run it directly
+          const parts = commands[0].split(/\s+/)
+          const cmdName = parts[0].replace(/^\//, '').toLowerCase()
+          const cmdArgs = parts.slice(1).join(' ')
+          await handleCommand(cmdName, cmdArgs)
+          break
+        }
+
+        // Multi-command pipeline
+        const header = await el.db.addMessage(sess.id, 'system', `**Pipeline:** ${commands.map((c) => `\`${c}\``).join(' → ')}\n**On error:** ${onError}`)
+        if (header) store.appendMessage(parseMessage(header))
+
+        let failed = false
+        for (let i = 0; i < commands.length; i++) {
+          const full = commands[i]
+          const parts = full.split(/\s+/)
+          const cmdName = parts[0].replace(/^\//, '').toLowerCase()
+          const cmdArgs = parts.slice(1).join(' ')
+
+          // Add separator before each command (except the first)
+          if (i > 0) {
+            const sep = await el.db.addMessage(sess.id, 'system', `---\n**Step ${i + 1}/${commands.length}:** \`${full}\``)
+            if (sep) store.appendMessage(parseMessage(sep))
+          } else {
+            const sep = await el.db.addMessage(sess.id, 'system', `**Step 1/${commands.length}:** \`${full}\``)
+            if (sep) store.appendMessage(parseMessage(sep))
+          }
+
+          try {
+            await handleCommand(cmdName, cmdArgs)
+          } catch (err) {
+            failed = true
+            const errMsg = await el.db.addMessage(sess.id, 'system', `❌ Step ${i + 1} failed: ${(err as Error).message}`)
+            if (errMsg) store.appendMessage(parseMessage(errMsg))
+            if (onError === 'stop') {
+              const abortMsg = await el.db.addMessage(sess.id, 'system', `Pipeline aborted at step ${i + 1}/${commands.length}.`)
+              if (abortMsg) store.appendMessage(parseMessage(abortMsg))
+              break
+            }
+          }
+        }
+
+        if (!failed) {
+          const done = await el.db.addMessage(sess.id, 'system', `✅ Pipeline completed: ${commands.length} command(s) executed.`)
+          if (done) store.appendMessage(parseMessage(done))
+        }
         break
       }
     }

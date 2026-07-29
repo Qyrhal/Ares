@@ -120,6 +120,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'open-pr',       description: 'Open current branch PR in the browser' },
   { kind: 'builtin', name: 'watch',         description: 'Watch files for changes with live notifications' },
   { kind: 'builtin', name: 'reset',          description: 'Git reset (soft/mixed/hard)' },
+  { kind: 'builtin', name: 'pipe',          description: 'Chain multiple slash commands sequentially' },
   { kind: 'builtin', name: 'help',         description: 'Show available slash commands' },
 ]
 
