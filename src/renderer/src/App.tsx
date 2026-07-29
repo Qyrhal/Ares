@@ -525,6 +525,22 @@ export default function App(): React.ReactElement {
         if (msg) store.appendMessage(parseMessage(msg))
         break
       }
+      case 'new': {
+        const title = args.trim() || 'New session'
+        const currentWp = useAppStore.getState().workspacePath
+        const raw = await el.db.createSession(title, useAppStore.getState().settings.defaultModel)
+        const newSess = parseSession(raw)
+        if (currentWp) {
+          await el.db.updateSession(newSess.id, { workspace_path: currentWp })
+          newSess.workspacePath = currentWp
+        }
+        store.addSession(newSess)
+        store.openSessionTab(newSess)
+        store.setMessages([])
+        const msg = await el.db.addMessage(newSess.id, 'system', `**New session created:** "${title}"`)
+        if (msg) store.appendMessage(parseMessage(msg))
+        break
+      }
       case 'clear': {
         const msgs = useAppStore.getState().messages
         for (const m of msgs) {

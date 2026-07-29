@@ -9,7 +9,7 @@ describe('/discard slash command', () => {
   })
 
   it('has correct total count', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(81)
+    expect(BUILTIN_COMMANDS.length).toBe(82)
   })
 
   it('formats discard success message', () => {

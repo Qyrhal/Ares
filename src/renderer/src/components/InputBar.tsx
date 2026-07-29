@@ -44,6 +44,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'clear',        description: 'Clear messages (--hard: full session reset)' },
   { kind: 'builtin', name: 'pr',           description: 'Generate a pull request from the current session context' },
   { kind: 'builtin', name: 'fork',         description: 'Clone this session as a new working session' },
+  { kind: 'builtin', name: 'new',          description: 'Create a new session (optionally with a title)' },
   { kind: 'builtin', name: 'helpful',      description: 'Mark the last assistant response as helpful' },
   { kind: 'builtin', name: 'not-helpful',  description: 'Mark the last assistant response as not helpful' },
   { kind: 'builtin', name: 'compact',      description: 'Manually compact the conversation context window' },
