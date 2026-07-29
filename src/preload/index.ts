@@ -72,6 +72,11 @@ const nativeGit = {
   reset:         (cwd: string, mode: string, ref: string) => ipcRenderer.invoke('git:reset', cwd, mode, ref),
   blame:         (cwd: string, p: string) => ipcRenderer.invoke('git:blame', cwd, p),
   changelog:     (cwd: string, limit?: number) => ipcRenderer.invoke('git:changelog', cwd, limit),
+  gitignore: {
+    content: (cwd: string) => ipcRenderer.invoke('git:gitignore:content', cwd),
+    add: (cwd: string, pattern: string) => ipcRenderer.invoke('git:gitignore:add', cwd, pattern),
+    check: (cwd: string, filePath: string) => ipcRenderer.invoke('git:gitignore:check', cwd, filePath),
+  },
 }
 
 const checkpoint = {

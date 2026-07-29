@@ -108,6 +108,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'ports',         description: 'Show listening TCP/UDP ports' },
   { kind: 'builtin', name: 'env',           description: 'Show environment variables' },
   { kind: 'builtin', name: 'grep',         description: 'Search workspace file contents' },
+  { kind: 'builtin', name: 'gitignore',    description: 'Manage .gitignore patterns' },
   { kind: 'builtin', name: 'cat',           description: 'Display file contents in chat' },
   { kind: 'builtin', name: 'wc',            description: 'Count lines, words, and bytes in files' },
   { kind: 'builtin', name: 'init',          description: 'Initialize a git repository in the workspace' },
@@ -515,6 +516,7 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
         case 'fix':
         case 'tag':
         case 'workspace':
+        case 'gitignore':
           setText(''); if (textareaRef.current) textareaRef.current.style.height = 'auto'
           onCommand?.(item.name, '')
           return

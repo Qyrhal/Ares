@@ -1572,6 +1572,55 @@ export default function App(): React.ReactElement {
         if (grepMsg) store.appendMessage(parseMessage(grepMsg))
         break
       }
+      case 'gitignore': {
+        const wsPath = store.workspacePath
+        if (!wsPath) {
+          const msg = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+          if (msg) store.appendMessage(parseMessage(msg))
+          return
+        }
+        const argsStr = args.trim()
+        if (argsStr.startsWith('--check ')) {
+          // Check if a file is ignored
+          const filePath = argsStr.slice(8).trim()
+          if (!filePath) {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Usage: /gitignore --check <file-path>')
+            if (msg) store.appendMessage(parseMessage(msg))
+            return
+          }
+          try {
+            const result = await el.git.gitignore.check(wsPath, filePath)
+            const icon = result.ignored ? '🚫' : '✅'
+            const msg = await el.db.addMessage(sess.id, 'system', `${icon} \`${filePath}\`: ${result.reason}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } else if (!argsStr) {
+          // Show current .gitignore content
+          try {
+            const content = await el.git.gitignore.content(wsPath)
+            const lines = content.split('\n')
+            const msg = await el.db.addMessage(sess.id, 'system', `**.gitignore** (${lines.length} lines)\n\n\`\`\`\n${content}\n\`\`\``)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        } else {
+          // Add pattern to .gitignore
+          try {
+            const result = await el.git.gitignore.add(wsPath, argsStr)
+            const msg = await el.db.addMessage(sess.id, 'system', result)
+            if (msg) store.appendMessage(parseMessage(msg))
+          } catch (err) {
+            const msg = await el.db.addMessage(sess.id, 'system', `**Error:** ${(err as Error).message}`)
+            if (msg) store.appendMessage(parseMessage(msg))
+          }
+        }
+        break
+      }
       case 'cat': {
         const { workspacePath } = useAppStore.getState()
         const raw = args.trim()
@@ -1731,7 +1780,7 @@ export default function App(): React.ReactElement {
         break
       }
       case 'help': {
-        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /open-pr - open current PR in browser, /focus <file> - navigate to file in editor, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /squash [n] - squash last N commits into one, /reset [mode] - git reset (soft/mixed/hard), /help - this help'
+        const helpText = 'Commands: /model <name> - change model, /clear - clear messages, /compact - compact conversation context, /usage - show session token usage and cost, /cost - workspace-wide cost summary, /overview - project summary, /status - system health check, /doctor - run environment diagnostics, /undo - remove last exchange, /summary - session summary, /fork - duplicate this session as a new session, /pr - generate a PR from session context, /changes - show workspace git status, /ci - check GitHub Actions CI status, /open-pr - open current PR in browser, /focus <file> - navigate to file in editor, /diff - show git diff of all changes, /log - show recent git commits, /export - export session as Markdown, /shortcuts - show keyboard shortcuts, /note <text> - add notes to session, /review - AI-powered review of session code and patterns, /summarize - AI summary of the conversation, /rename <title> - rename current session, /pin - pin or unpin session, /branches - git branch management, /stage - stage or unstage files, /commit <message> - commit staged changes, /debug - show diagnostic and debug info, /history <n> - show recent prompt history, /theme - switch color mode or accent, /context - show context window utilization, /agents - show sub-agent sessions, /kill <name> - stop a running sub-agent, /config - view or change settings, /rewind - rewind conversation to an earlier point, /search <query> - search messages in current session, /export-all - export all sessions as Markdown, /stats - show detailed session statistics, /helpful - mark last response helpful, /not-helpful - mark last response not helpful, /filter <model:X|status:X|keyword> - filter sessions, /sort <recent|name|duration|messages> - sort sessions, /grep <pattern> [--ext ts] - search workspace file contents, /gitignore [pattern] - manage .gitignore patterns, /cat <file> [--head N] [--tail N] - display file contents in chat, /wc <file> [--all] - count lines, words, and bytes, /squash [n] - squash last N commits into one, /reset [mode] - git reset (soft/mixed/hard), /help - this help'
         const msg = await el.db.addMessage(sess.id, 'system', helpText)
         if (msg) store.appendMessage(parseMessage(msg))
         break

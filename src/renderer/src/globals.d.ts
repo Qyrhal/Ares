@@ -111,6 +111,11 @@ declare global {
         reset(cwd: string, mode: string, ref: string): Promise<string>
         blame(cwd: string, path: string): Promise<{ line: number; hash: string; author: string; date: string; content: string }[]>
         changelog(cwd: string, limit?: number): Promise<{ ok: boolean; commits?: { hash: string; shortHash: string; author: string; date: string; message: string }[]; output?: string }>
+        gitignore: {
+          content(cwd: string): Promise<string>
+          add(cwd: string, pattern: string): Promise<string>
+          check(cwd: string, filePath: string): Promise<{ ignored: boolean; reason: string }>
+        }
       }
       checkpoint: {
         create(cwd: string, msg: string): Promise<Checkpoint | null>

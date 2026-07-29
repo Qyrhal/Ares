@@ -1,5 +1,7 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
+import { readFile, appendFile } from 'fs/promises'
+import nodePath from 'path'
 
 const run = promisify(execFile)
 
@@ -430,4 +432,53 @@ export async function resetBranch(cwd: string, mode: 'soft' | 'mixed' | 'hard', 
     env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
   })
   return (stdout + stderr).trim() || `Reset ${mode} to ${ref}`
+}
+
+// ── Gitignore ───────────────────────────────────────────────────────────────
+
+export async function getGitignoreContent(cwd: string): Promise<string> {
+  try {
+    const content = await readFile(nodePath.join(cwd, '.gitignore'), 'utf-8')
+    return content.trim() || '(empty .gitignore)'
+  } catch {
+    return '(no .gitignore file)'
+  }
+}
+
+export async function addGitignorePattern(cwd: string, pattern: string): Promise<string> {
+  const filePath = nodePath.join(cwd, '.gitignore')
+  let existing = ''
+  try {
+    existing = (await readFile(filePath, 'utf-8')).trimEnd()
+  } catch {
+    // File doesn't exist yet
+  }
+
+  // Check for duplicate patterns
+  const lines = existing ? existing.split('\n') : []
+  if (lines.includes(pattern)) {
+    return `Pattern already exists: \`${pattern}\``
+  }
+
+  const separator = existing && !existing.endsWith('\n') ? '\n' : ''
+  await appendFile(filePath, `${separator}${pattern}\n`)
+  return `Added \`${pattern}\` to .gitignore`
+}
+
+export async function checkGitignore(cwd: string, filePath: string): Promise<{ ignored: boolean; reason: string }> {
+  try {
+    const { stdout } = await run('git', ['check-ignore', '-v', filePath], {
+      cwd,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    })
+    const lines = stdout.trim().split('\n')
+    const rule = lines[0] || ''
+    const parts = rule.split('\t')
+    return {
+      ignored: true,
+      reason: parts.length >= 2 ? `Ignored by rule: \`${parts[1]}\` (line ${parts[0]})` : `Ignored: ${rule}`,
+    }
+  } catch {
+    return { ignored: false, reason: 'Not ignored' }
+  }
 }
