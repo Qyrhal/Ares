@@ -80,3 +80,80 @@ describe('TokenBadge', () => {
     expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
   })
 })
+
+describe('TokenBadge — cost formatting', () => {
+  it('formats cost with exactly 4 decimal places', () => {
+    render(<TokenBadge tokens={1000} cost={0.5} />)
+    // Cost is rendered as "$" + toFixed(4), text may be split by whitespace nodes
+    expect(screen.getByText(/0\.5000/)).toBeInTheDocument()
+    expect(screen.getByText(/\$/)).toBeInTheDocument()
+  })
+
+  it('formats small cost values correctly', () => {
+    render(<TokenBadge tokens={1000} cost={0.0001} />)
+    expect(screen.getByText(/0\.0001/)).toBeInTheDocument()
+  })
+
+  it('hides cost when negative', () => {
+    render(<TokenBadge tokens={1000} cost={-1} />)
+    expect(screen.queryByText(/\$/)).not.toBeInTheDocument()
+  })
+})
+
+describe('TokenBadge — negative tokensPerSecond', () => {
+  it('hides tokens per second when negative', () => {
+    render(<TokenBadge tokens={1000} tokensPerSecond={-5} />)
+    expect(screen.queryByText(/tok\/s/)).not.toBeInTheDocument()
+  })
+})
+
+describe('TokenBadge — CSS classes', () => {
+  it('has correct container classes', () => {
+    const { container } = render(<TokenBadge tokens={100} />)
+    const span = container.firstElementChild!
+    expect(span.tagName).toBe('SPAN')
+    expect(span.className).toContain('inline-flex')
+    expect(span.className).toContain('rounded-full')
+    expect(span.className).toContain('bg-muted')
+    expect(span.className).toContain('px-2')
+  })
+})
+
+describe('TokenBadge — duration formatting', () => {
+  it('formats duration with one decimal place', () => {
+    render(<TokenBadge tokens={1000} duration={12345} />)
+    expect(screen.getByText('· 12.3s')).toBeInTheDocument()
+  })
+
+  it('formats very short duration', () => {
+    render(<TokenBadge tokens={1000} duration={100} />)
+    expect(screen.getByText('· 0.1s')).toBeInTheDocument()
+  })
+
+  it('formats long duration', () => {
+    render(<TokenBadge tokens={1000} duration={120000} />)
+    expect(screen.getByText('· 120.0s')).toBeInTheDocument()
+  })
+})
+
+describe('TokenBadge — edge cases', () => {
+  it('renders with tokens=1 (minimum non-zero)', () => {
+    render(<TokenBadge tokens={1} />)
+    expect(screen.getByText('1 tok')).toBeInTheDocument()
+  })
+
+  it('renders with tokensPerSecond of 1', () => {
+    render(<TokenBadge tokens={1000} tokensPerSecond={1} />)
+    expect(screen.getByText(/1 tok\/s/)).toBeInTheDocument()
+  })
+
+  it('renders with very high tokensPerSecond', () => {
+    render(<TokenBadge tokens={1000} tokensPerSecond={9999} />)
+    expect(screen.getByText(/9999 tok\/s/)).toBeInTheDocument()
+  })
+
+  it('handles tokensPerSecond with decimal value', () => {
+    render(<TokenBadge tokens={1000} tokensPerSecond={42.5} />)
+    expect(screen.getByText(/42.5 tok\/s/)).toBeInTheDocument()
+  })
+})

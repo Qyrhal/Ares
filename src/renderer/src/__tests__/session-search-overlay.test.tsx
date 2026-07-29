@@ -449,3 +449,142 @@ describe('SessionSearchOverlay — result listbox role', () => {
     expect(screen.getByRole('listbox')).toBeDefined()
   })
 })
+
+describe('SessionSearchOverlay — keyboard boundary edge cases', () => {
+  it('clamps ArrowDown at last result', async () => {
+    const onSelectSession = vi.fn()
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={onSelectSession}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search across all sessions…')
+    fireEvent.change(input, { target: { value: 'the' } })
+
+    await waitFor(() => {
+      expect(screen.getByText('How do I implement this feature?')).toBeDefined()
+    })
+
+    // Press ArrowDown many times — should clamp at last result
+    for (let i = 0; i < 20; i++) {
+      fireEvent.keyDown(input, { key: 'ArrowDown' })
+    }
+    fireEvent.keyDown(input, { key: 'Enter' })
+    // Should select the last session (s3 — Code review)
+    expect(onSelectSession).toHaveBeenCalledWith('s3')
+  })
+
+  it('stays at index 0 when pressing ArrowUp from start', async () => {
+    const onSelectSession = vi.fn()
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={onSelectSession}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search across all sessions…')
+    fireEvent.change(input, { target: { value: 'feature' } })
+
+    await waitFor(() => {
+      expect(screen.getByText('How do I implement this feature?')).toBeDefined()
+    })
+
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelectSession).toHaveBeenCalledWith('s1')
+  })
+})
+
+describe('SessionSearchOverlay — search edge cases', () => {
+  it('handles search error gracefully', async () => {
+    const mock = getElectronMock()
+    ;(mock.db.searchMessages as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('DB error'))
+
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search across all sessions…')
+    fireEvent.change(input, { target: { value: 'hook' } })
+
+    await waitFor(() => {
+      expect(mock.db.searchMessages).toHaveBeenCalled()
+    })
+
+    // Should not crash — results should be empty after error
+  })
+
+  it('Enter does nothing while loading', async () => {
+    let resolvePromise: (value: SearchResult[]) => void
+    const mock = getElectronMock()
+    ;(mock.db.searchMessages as ReturnType<typeof vi.fn>).mockReturnValue(
+      new Promise<SearchResult[]>((resolve) => { resolvePromise = resolve }),
+    )
+
+    const onSelectSession = vi.fn()
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={onSelectSession}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search across all sessions…')
+    fireEvent.change(input, { target: { value: 'hook' } })
+
+    await waitFor(() => {
+      expect(screen.getByText('Searching…')).toBeDefined()
+    })
+
+    // Press Enter while loading — should not call onSelectSession
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(onSelectSession).not.toHaveBeenCalled()
+
+    resolvePromise!([])
+  })
+
+  it('singular result count for one result', async () => {
+    const mock = getElectronMock()
+    ;(mock.db.searchMessages as ReturnType<typeof vi.fn>).mockResolvedValue([mockResults[0]])
+
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search across all sessions…')
+    fireEvent.change(input, { target: { value: 'feature' } })
+
+    await waitFor(() => {
+      expect(screen.getByText('1 result')).toBeDefined()
+    })
+  })
+
+  it('result items have aria-selected attribute', async () => {
+    render(
+      <SessionSearchOverlay
+        open={true}
+        onClose={vi.fn()}
+        onSelectSession={vi.fn()}
+      />,
+    )
+    const input = screen.getByPlaceholderText('Search across all sessions…')
+    fireEvent.change(input, { target: { value: 'feature' } })
+
+    await waitFor(() => {
+      const options = screen.getAllByRole('option')
+      expect(options.length).toBeGreaterThan(0)
+      // First result should be selected by default
+      expect(options[0]).toHaveAttribute('aria-selected', 'true')
+    })
+  })
+})

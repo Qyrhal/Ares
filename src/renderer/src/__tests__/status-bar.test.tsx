@@ -258,3 +258,159 @@ describe('StatusBar — class and structure', () => {
     expect(root.className).toContain('h-6')
   })
 })
+
+describe('StatusBar — MCP green color when all connected', () => {
+  it('applies green color when all MCP servers are connected', async () => {
+    const mock = getElectronMock()
+    ;(mock.mcp.status as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { name: 'server1', connected: true, toolCount: 3 },
+      { name: 'server2', connected: true, toolCount: 1 },
+    ])
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    await vi.waitFor(() => {
+      const mcpSpan = screen.getByText('2/2').closest('span')!
+      expect(mcpSpan.className).toContain('text-green-500')
+    })
+  })
+})
+
+describe('StatusBar — MCP all disconnected', () => {
+  it('shows 0/N when all servers are disconnected', async () => {
+    const mock = getElectronMock()
+    ;(mock.mcp.status as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { name: 'server1', connected: false, error: 'refused', toolCount: 0 },
+      { name: 'server2', connected: false, error: 'timeout', toolCount: 0 },
+    ])
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    await vi.waitFor(() => {
+      expect(screen.getByText('0/2')).toBeDefined()
+    })
+    const mcpSpan = screen.getByText('0/2').closest('span')!
+    expect(mcpSpan.className).toContain('text-amber-400')
+  })
+})
+
+describe('StatusBar — workspace path tooltip', () => {
+  it('sets title attribute on workspace path for tooltip', () => {
+    render(
+      <StatusBar
+        workspacePath="/very/long/project/path"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    // The title attribute is on the outer span wrapping FolderOpen + path text
+    const pathText = screen.getByText('/very/long/project/path')
+    const outerSpan = pathText.parentElement!
+    expect(outerSpan).toHaveAttribute('title', '/very/long/project/path')
+  })
+})
+
+describe('StatusBar — MCP status tooltip', () => {
+  it('shows server details in MCP tooltip', async () => {
+    const mock = getElectronMock()
+    ;(mock.mcp.status as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { name: 'myserver', connected: true, toolCount: 5 },
+    ])
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    await vi.waitFor(() => {
+      const mcpSpan = screen.getByText('1/1').closest('span')!
+      expect(mcpSpan).toHaveAttribute('title', expect.stringContaining('myserver'))
+    })
+  })
+})
+
+describe('StatusBar — session count edge cases', () => {
+  it('shows "0 sessions" when sessionCount is 0', () => {
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    expect(screen.getByText('0 sessions')).toBeDefined()
+  })
+
+  it('shows "5 sessions" for plural count', () => {
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={5}
+      />,
+    )
+    expect(screen.getByText('5 sessions')).toBeDefined()
+  })
+})
+
+describe('StatusBar — MCP background indicator', () => {
+  it('does not show MCP background indicator when no tools running', () => {
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    expect(screen.queryByText('bg')).toBeNull()
+  })
+})
+
+describe('StatusBar — checkpoints tooltip', () => {
+  it('shows singular "checkpoint" in title when count is 1', async () => {
+    const mock = getElectronMock()
+    ;(mock.checkpoint.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'c1', index: 0, message: 'test', date: '', branch: 'main' },
+    ])
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    await vi.waitFor(() => {
+      const cpSpan = screen.getByText('1').closest('span')!
+      expect(cpSpan).toHaveAttribute('title', '1 checkpoint')
+    })
+  })
+
+  it('shows plural "checkpoints" in title when count > 1', async () => {
+    const mock = getElectronMock()
+    ;(mock.checkpoint.list as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 'c1', index: 0, message: 'test', date: '', branch: 'main' },
+      { id: 'c2', index: 1, message: 'test2', date: '', branch: 'main' },
+      { id: 'c3', index: 2, message: 'test3', date: '', branch: 'main' },
+    ])
+    render(
+      <StatusBar
+        workspacePath="/project"
+        currentModel="gpt-4o"
+        sessionCount={0}
+      />,
+    )
+    await vi.waitFor(() => {
+      const cpSpan = screen.getByText('3').closest('span')!
+      expect(cpSpan).toHaveAttribute('title', '3 checkpoints')
+    })
+  })
+})

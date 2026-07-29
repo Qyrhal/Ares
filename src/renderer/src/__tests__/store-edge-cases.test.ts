@@ -26,6 +26,13 @@ function mkFileNode(overrides: Partial<FileNode> = {}): FileNode {
   return { name: 'test.ts', path: '/test.ts', type: 'file', ...overrides }
 }
 
+function mkTodo(overrides: Partial<Todo> = {}): Todo {
+  return {
+    id: 't1', sessionId: 's1', text: 'Do something',
+    completed: false, createdAt: 0, ...overrides,
+  }
+}
+
 beforeEach(() => {
   useAppStore.setState({
     sessions: [],
@@ -45,6 +52,12 @@ beforeEach(() => {
     fileNodes: [],
     recentProjects: [],
     lastDeletedMessage: null,
+    promptHistory: [],
+    promptHistoryIdx: -1,
+    sessionFilter: null,
+    sessionSort: { by: 'recent', asc: false },
+    lastExecCommand: null,
+    isLoading: false,
   })
 })
 
@@ -1281,5 +1294,698 @@ describe('store — multiple session operations', () => {
     useAppStore.setState({ sessions: [] })
     useAppStore.getState().removeSession('nonexistent')
     expect(useAppStore.getState().sessions).toHaveLength(0)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Prompt history tests
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — addPromptToHistory', () => {
+  it('adds a prompt to history', () => {
+    useAppStore.getState().addPromptToHistory('hello world')
+    expect(useAppStore.getState().promptHistory).toEqual(['hello world'])
+  })
+
+  it('prepends new prompt to the front', () => {
+    useAppStore.getState().addPromptToHistory('first')
+    useAppStore.getState().addPromptToHistory('second')
+    expect(useAppStore.getState().promptHistory).toEqual(['second', 'first'])
+  })
+
+  it('deduplicates consecutive identical prompts', () => {
+    useAppStore.getState().addPromptToHistory('same')
+    useAppStore.getState().addPromptToHistory('same')
+    // The second 'same' is a duplicate of the last entry, so it's rejected
+    expect(useAppStore.getState().promptHistory).toEqual(['same'])
+  })
+
+  it('allows non-consecutive duplicates', () => {
+    useAppStore.getState().addPromptToHistory('abc')
+    useAppStore.getState().addPromptToHistory('def')
+    useAppStore.getState().addPromptToHistory('abc')
+    expect(useAppStore.getState().promptHistory).toEqual(['abc', 'def', 'abc'])
+  })
+
+  it('rejects empty prompts', () => {
+    useAppStore.getState().addPromptToHistory('')
+    expect(useAppStore.getState().promptHistory).toEqual([])
+  })
+
+  it('rejects whitespace-only prompts', () => {
+    useAppStore.getState().addPromptToHistory('   ')
+    expect(useAppStore.getState().promptHistory).toEqual([])
+  })
+
+  it('caps history at 100 entries', () => {
+    for (let i = 0; i < 110; i++) {
+      useAppStore.getState().addPromptToHistory(`prompt-${i}`)
+    }
+    expect(useAppStore.getState().promptHistory).toHaveLength(100)
+    // Most recent should be first
+    expect(useAppStore.getState().promptHistory[0]).toBe('prompt-109')
+    // Oldest should be prompt-10 (110 - 100 = 10)
+    expect(useAppStore.getState().promptHistory[99]).toBe('prompt-10')
+  })
+
+  it('resets promptHistoryIdx to -1 on add', () => {
+    useAppStore.setState({ promptHistoryIdx: 5 })
+    useAppStore.getState().addPromptToHistory('new')
+    expect(useAppStore.getState().promptHistoryIdx).toBe(-1)
+  })
+
+  it('rejects duplicate of last entry even when historyIdx is not -1', () => {
+    useAppStore.getState().addPromptToHistory('abc')
+    useAppStore.setState({ promptHistoryIdx: 0 })
+    useAppStore.getState().addPromptToHistory('abc')
+    // Same as last entry, rejected; idx reset
+    expect(useAppStore.getState().promptHistoryIdx).toBe(-1)
+    expect(useAppStore.getState().promptHistory).toEqual(['abc'])
+  })
+})
+
+describe('store — navigatePromptHistory', () => {
+  it('returns null on empty history', () => {
+    const result = useAppStore.getState().navigatePromptHistory('up')
+    expect(result).toBeNull()
+  })
+
+  it('navigates up through history entries', () => {
+    useAppStore.getState().addPromptToHistory('first')
+    useAppStore.getState().addPromptToHistory('second')
+    useAppStore.getState().addPromptToHistory('third')
+
+    // idx was -1 after addPromptToHistory, up goes to 0
+    const r1 = useAppStore.getState().navigatePromptHistory('up')
+    expect(r1).toBe('third')
+    expect(useAppStore.getState().promptHistoryIdx).toBe(0)
+
+    // up goes to 1
+    const r2 = useAppStore.getState().navigatePromptHistory('up')
+    expect(r2).toBe('second')
+    expect(useAppStore.getState().promptHistoryIdx).toBe(1)
+
+    // up goes to 2
+    const r3 = useAppStore.getState().navigatePromptHistory('up')
+    expect(r3).toBe('first')
+    expect(useAppStore.getState().promptHistoryIdx).toBe(2)
+  })
+
+  it('caps navigation at the end of history (no overflow)', () => {
+    useAppStore.getState().addPromptToHistory('only-one')
+
+    useAppStore.getState().navigatePromptHistory('up')
+    useAppStore.getState().navigatePromptHistory('up') // should cap
+    useAppStore.getState().navigatePromptHistory('up') // should still cap
+
+    expect(useAppStore.getState().promptHistoryIdx).toBe(0) // only 1 entry
+    expect(useAppStore.getState().navigatePromptHistory('up')).toBe('only-one')
+  })
+
+  it('navigates down back toward empty string', () => {
+    useAppStore.getState().addPromptToHistory('first')
+    useAppStore.getState().addPromptToHistory('second')
+    // promptHistory = ['second', 'first'] (most recent at idx 0)
+
+    // Navigate up twice to reach idx=1
+    useAppStore.getState().navigatePromptHistory('up') // idx 0 → 'second'
+    useAppStore.getState().navigatePromptHistory('up') // idx 1 → 'first'
+
+    // Navigate down
+    const r1 = useAppStore.getState().navigatePromptHistory('down')
+    expect(r1).toBe('second') // idx 0
+    expect(useAppStore.getState().promptHistoryIdx).toBe(0)
+
+    const r2 = useAppStore.getState().navigatePromptHistory('down')
+    expect(r2).toBe('') // idx -1 = empty
+    expect(useAppStore.getState().promptHistoryIdx).toBe(-1)
+  })
+
+  it('down from -1 stays at -1 and returns empty string', () => {
+    useAppStore.getState().addPromptToHistory('something')
+    // promptHistoryIdx is already -1
+    const r = useAppStore.getState().navigatePromptHistory('down')
+    expect(r).toBe('')
+    expect(useAppStore.getState().promptHistoryIdx).toBe(-1)
+  })
+
+  it('returns correct text for each position', () => {
+    useAppStore.getState().addPromptToHistory('alpha')
+    useAppStore.getState().addPromptToHistory('beta')
+    useAppStore.getState().addPromptToHistory('gamma')
+    // promptHistory = ['gamma', 'beta', 'alpha'] (most recent at idx 0)
+
+    // Up: idx 0→'gamma', idx 1→'beta', idx 2→'alpha'
+    expect(useAppStore.getState().navigatePromptHistory('up')).toBe('gamma')
+    expect(useAppStore.getState().navigatePromptHistory('up')).toBe('beta')
+    expect(useAppStore.getState().navigatePromptHistory('up')).toBe('alpha')
+
+    // Down: idx 1→'beta', idx 0→'gamma', idx -1→''
+    expect(useAppStore.getState().navigatePromptHistory('down')).toBe('beta')
+    expect(useAppStore.getState().navigatePromptHistory('down')).toBe('gamma')
+    expect(useAppStore.getState().navigatePromptHistory('down')).toBe('')
+  })
+})
+
+describe('store — resetPromptHistoryIdx', () => {
+  it('resets idx to -1', () => {
+    useAppStore.getState().addPromptToHistory('test')
+    useAppStore.getState().navigatePromptHistory('up')
+    expect(useAppStore.getState().promptHistoryIdx).toBe(0)
+    useAppStore.getState().resetPromptHistoryIdx()
+    expect(useAppStore.getState().promptHistoryIdx).toBe(-1)
+  })
+
+  it('is a no-op when already -1', () => {
+    expect(useAppStore.getState().promptHistoryIdx).toBe(-1)
+    useAppStore.getState().resetPromptHistoryIdx()
+    expect(useAppStore.getState().promptHistoryIdx).toBe(-1)
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Session filter and sort
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — setSessionFilter', () => {
+  it('sets a model filter', () => {
+    useAppStore.getState().setSessionFilter({ type: 'model', value: 'gpt-4o' })
+    expect(useAppStore.getState().sessionFilter).toEqual({ type: 'model', value: 'gpt-4o' })
+  })
+
+  it('sets a status filter', () => {
+    useAppStore.getState().setSessionFilter({ type: 'status', value: 'running' })
+    expect(useAppStore.getState().sessionFilter).toEqual({ type: 'status', value: 'running' })
+  })
+
+  it('sets a keyword filter', () => {
+    useAppStore.getState().setSessionFilter({ type: 'keyword', value: 'search term' })
+    expect(useAppStore.getState().sessionFilter).toEqual({ type: 'keyword', value: 'search term' })
+  })
+
+  it('sets a tag filter', () => {
+    useAppStore.getState().setSessionFilter({ type: 'tag', value: 'important' })
+    expect(useAppStore.getState().sessionFilter).toEqual({ type: 'tag', value: 'important' })
+  })
+
+  it('clears filter when set to null', () => {
+    useAppStore.getState().setSessionFilter({ type: 'model', value: 'gpt-4o' })
+    useAppStore.getState().setSessionFilter(null)
+    expect(useAppStore.getState().sessionFilter).toBeNull()
+  })
+
+  it('replaces previous filter', () => {
+    useAppStore.getState().setSessionFilter({ type: 'model', value: 'gpt-4o' })
+    useAppStore.getState().setSessionFilter({ type: 'keyword', value: 'test' })
+    expect(useAppStore.getState().sessionFilter).toEqual({ type: 'keyword', value: 'test' })
+  })
+})
+
+describe('store — setSessionSort', () => {
+  it('sets sort by recent ascending', () => {
+    useAppStore.getState().setSessionSort({ by: 'recent', asc: true })
+    expect(useAppStore.getState().sessionSort).toEqual({ by: 'recent', asc: true })
+  })
+
+  it('sets sort by name descending', () => {
+    useAppStore.getState().setSessionSort({ by: 'name', asc: false })
+    expect(useAppStore.getState().sessionSort).toEqual({ by: 'name', asc: false })
+  })
+
+  it('sets sort by duration', () => {
+    useAppStore.getState().setSessionSort({ by: 'duration', asc: true })
+    expect(useAppStore.getState().sessionSort).toEqual({ by: 'duration', asc: true })
+  })
+
+  it('sets sort by messages count', () => {
+    useAppStore.getState().setSessionSort({ by: 'messages', asc: false })
+    expect(useAppStore.getState().sessionSort).toEqual({ by: 'messages', asc: false })
+  })
+
+  it('replaces previous sort', () => {
+    useAppStore.getState().setSessionSort({ by: 'recent', asc: true })
+    useAppStore.getState().setSessionSort({ by: 'name', asc: false })
+    expect(useAppStore.getState().sessionSort).toEqual({ by: 'name', asc: false })
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Exec history
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — setLastExecCommand', () => {
+  it('sets the last exec command', () => {
+    useAppStore.getState().setLastExecCommand('npm test')
+    expect(useAppStore.getState().lastExecCommand).toBe('npm test')
+  })
+
+  it('replaces previous command', () => {
+    useAppStore.getState().setLastExecCommand('ls -la')
+    useAppStore.getState().setLastExecCommand('git status')
+    expect(useAppStore.getState().lastExecCommand).toBe('git status')
+  })
+
+  it('handles empty string', () => {
+    useAppStore.getState().setLastExecCommand('something')
+    useAppStore.getState().setLastExecCommand('')
+    expect(useAppStore.getState().lastExecCommand).toBe('')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  upsertMessage streaming patterns
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — upsertMessage streaming', () => {
+  it('simulates streaming response by progressive content updates', () => {
+    // Initial assistant message placeholder
+    useAppStore.getState().upsertMessage('m1', mkMessage({
+      id: 'm1', sessionId: 's1', role: 'assistant', content: '', createdAt: 0,
+    }))
+    expect(useAppStore.getState().messages[0].content).toBe('')
+
+    // Stream chunk 1
+    useAppStore.getState().upsertMessage('m1', mkMessage({
+      id: 'm1', sessionId: 's1', role: 'assistant', content: 'Hello', createdAt: 0,
+    }))
+    expect(useAppStore.getState().messages[0].content).toBe('Hello')
+
+    // Stream chunk 2
+    useAppStore.getState().upsertMessage('m1', mkMessage({
+      id: 'm1', sessionId: 's1', role: 'assistant', content: 'Hello, world!', createdAt: 0,
+    }))
+    expect(useAppStore.getState().messages[0].content).toBe('Hello, world!')
+
+    // Stream chunk 3
+    useAppStore.getState().upsertMessage('m1', mkMessage({
+      id: 'm1', sessionId: 's1', role: 'assistant', content: 'Hello, world! How can I help?', createdAt: 0,
+    }))
+
+    // Only one message, content grew each time
+    expect(useAppStore.getState().messages).toHaveLength(1)
+    expect(useAppStore.getState().messages[0].content).toBe('Hello, world! How can I help?')
+  })
+
+  it('streaming does not disturb adjacent messages', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm0', sessionId: 's1', role: 'user', content: 'Question' }),
+        mkMessage({ id: 'm1', sessionId: 's1', role: 'assistant', content: '' }),
+      ],
+    })
+
+    // Update assistant message multiple times (streaming)
+    for (let i = 1; i <= 5; i++) {
+      useAppStore.getState().upsertMessage('m1', mkMessage({
+        id: 'm1', sessionId: 's1', role: 'assistant', content: `chunk-${i} `,
+      }))
+    }
+
+    expect(useAppStore.getState().messages).toHaveLength(2)
+    expect(useAppStore.getState().messages[0].content).toBe('Question')
+    expect(useAppStore.getState().messages[1].content).toBe('chunk-5 ')
+  })
+
+  it('streaming with tool messages interleaved', () => {
+    useAppStore.setState({
+      messages: [
+        mkMessage({ id: 'm1', sessionId: 's1', role: 'assistant', content: 'Let me check...' }),
+        mkMessage({ id: 'm2', sessionId: 's1', role: 'tool', toolName: 'read', toolStatus: 'running', content: '' }),
+        mkMessage({ id: 'm3', sessionId: 's1', role: 'assistant', content: '' }),
+      ],
+    })
+
+    // Tool completes
+    useAppStore.getState().upsertMessage('m2', mkMessage({
+      id: 'm2', sessionId: 's1', role: 'tool', toolName: 'read', toolStatus: 'done', content: 'file contents',
+    }))
+
+    // Assistant streams final response
+    useAppStore.getState().upsertMessage('m3', mkMessage({
+      id: 'm3', sessionId: 's1', role: 'assistant', content: 'Here is what I found',
+    }))
+
+    expect(useAppStore.getState().messages[1].toolStatus).toBe('done')
+    expect(useAppStore.getState().messages[1].content).toBe('file contents')
+    expect(useAppStore.getState().messages[2].content).toBe('Here is what I found')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  removeTabsByPath: deeper nesting and mixed types
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — removeTabsByPath deep nesting', () => {
+  it('removes tabs at multiple nesting levels under a directory', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/src/a.ts', name: 'a.ts', isDirty: false },
+        { type: 'file', path: '/src/sub/b.ts', name: 'b.ts', isDirty: false },
+        { type: 'file', path: '/src/sub/deep/c.ts', name: 'c.ts', isDirty: false },
+        { type: 'file', path: '/other/d.ts', name: 'd.ts', isDirty: false },
+        { type: 'session', id: 's1', title: 'Chat' },
+      ],
+      activeTabId: '/src/a.ts',
+    })
+    useAppStore.getState().removeTabsByPath('/src', true)
+    const tabs = useAppStore.getState().tabs
+    expect(tabs).toHaveLength(2)
+    expect((tabs[0] as any).path).toBe('/other/d.ts')
+    expect(tabs[1].type).toBe('session')
+  })
+
+  it('does not remove directory path itself when isDir=false', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/src/components/Button.tsx', name: 'Button.tsx', isDirty: false },
+        { type: 'file', path: '/src/components/Input.tsx', name: 'Input.tsx', isDirty: false },
+      ],
+    })
+    useAppStore.getState().removeTabsByPath('/src/components', false)
+    // Exact match only — neither tab has path === '/src/components'
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+  })
+
+  it('removes matching directory tabs while session tabs survive', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/lib/util.ts', name: 'util.ts', isDirty: false },
+        { type: 'file', path: '/lib/format.ts', name: 'format.ts', isDirty: false },
+        { type: 'session', id: 's1', title: 'Chat' },
+        { type: 'file', path: '/lib/types.ts', name: 'types.ts', isDirty: false },
+      ],
+      activeTabId: 's1',
+    })
+    useAppStore.getState().removeTabsByPath('/lib', true)
+    const tabs = useAppStore.getState().tabs
+    expect(tabs).toHaveLength(1)
+    expect(tabs[0].type).toBe('session')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  renameTabPaths: deeper nesting edge cases
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — renameTabPaths deep nesting', () => {
+  it('renames nested directories and updates activeTabId for deep child', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/src/pkg/deep/file.ts', name: 'file.ts', isDirty: false },
+        { type: 'file', path: '/src/other.ts', name: 'other.ts', isDirty: false },
+      ],
+      activeTabId: '/src/pkg/deep/file.ts',
+    })
+    useAppStore.getState().renameTabPaths('/src/pkg', '/src/lib', 'lib')
+    const tabs = useAppStore.getState().tabs as Extract<Tab, { type: 'file' }>[]
+    expect(tabs[0].path).toBe('/src/lib/deep/file.ts')
+    expect(tabs[1].path).toBe('/src/other.ts') // unaffected
+    expect(useAppStore.getState().activeTabId).toBe('/src/lib/deep/file.ts')
+  })
+
+  it('does not rename partial prefix matches', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'file', path: '/src/componentsX/Button.tsx', name: 'Button.tsx', isDirty: false },
+      ],
+      activeTabId: '/src/componentsX/Button.tsx',
+    })
+    useAppStore.getState().renameTabPaths('/src/components', '/src/ui', 'ui')
+    const tab = useAppStore.getState().tabs[0] as Extract<Tab, { type: 'file' }>
+    // 'componentsX' should not match 'components' (needs / separator)
+    expect(tab.path).toBe('/src/componentsX/Button.tsx')
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  updateSession with non-existent ID
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — updateSession non-existent ID', () => {
+  it('does not modify existing sessions', () => {
+    useAppStore.setState({
+      sessions: [mkSession({ id: 's1', title: 'Real' }), mkSession({ id: 's2', title: 'Also Real' })],
+    })
+    useAppStore.getState().updateSession('ghost', { title: 'Hacked' })
+    expect(useAppStore.getState().sessions[0].title).toBe('Real')
+    expect(useAppStore.getState().sessions[1].title).toBe('Also Real')
+  })
+
+  it('does not throw', () => {
+    expect(() => useAppStore.getState().updateSession('nonexistent', { model: 'new' })).not.toThrow()
+  })
+
+  it('does not modify tabs when session id not found', () => {
+    useAppStore.setState({
+      sessions: [mkSession({ id: 's1' })],
+      tabs: [{ type: 'session', id: 's1', title: 'Chat' }],
+    })
+    useAppStore.getState().updateSession('ghost', { title: 'Changed' })
+    expect(useAppStore.getState().tabs[0]).toMatchObject({ type: 'session', title: 'Chat' })
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  togglePinSession: position preservation
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('store — togglePinSession position preservation', () => {
+  it('pin then unpin returns to original position in array', () => {
+    useAppStore.setState({
+      sessions: [
+        mkSession({ id: 's1', title: 'A', pinned: false }),
+        mkSession({ id: 's2', title: 'B', pinned: false }),
+        mkSession({ id: 's3', title: 'C', pinned: false }),
+      ],
+    })
+
+    // Pin s2
+    useAppStore.getState().togglePinSession('s2')
+    const pinnedSessions = useAppStore.getState().sessions.filter((s) => s.pinned)
+    const unpinnedSessions = useAppStore.getState().sessions.filter((s) => !s.pinned)
+    expect(pinnedSessions).toHaveLength(1)
+    expect(pinnedSessions[0].id).toBe('s2')
+    expect(unpinnedSessions).toHaveLength(2)
+
+    // Unpin s2
+    useAppStore.getState().togglePinSession('s2')
+    const afterUnpin = useAppStore.getState().sessions
+    expect(afterUnpin.filter((s) => s.pinned)).toHaveLength(0)
+    // Order preserved: s1, s2, s3
+    expect(afterUnpin.map((s) => s.id)).toEqual(['s1', 's2', 's3'])
+  })
+
+  it('multiple pins do not change relative unpinned order', () => {
+    useAppStore.setState({
+      sessions: [
+        mkSession({ id: 's1', title: 'A', pinned: false }),
+        mkSession({ id: 's2', title: 'B', pinned: false }),
+        mkSession({ id: 's3', title: 'C', pinned: false }),
+        mkSession({ id: 's4', title: 'D', pinned: false }),
+      ],
+    })
+
+    useAppStore.getState().togglePinSession('s1')
+    useAppStore.getState().togglePinSession('s3')
+
+    // Unpin all
+    useAppStore.getState().togglePinSession('s1')
+    useAppStore.getState().togglePinSession('s3')
+
+    expect(useAppStore.getState().sessions.map((s) => s.id)).toEqual(['s1', 's2', 's3', 's4'])
+  })
+})
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  Integration flows
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe('Integration — send message → receive response → reply → edit', () => {
+  it('full conversation lifecycle', () => {
+    // Create session and open tab
+    const session = mkSession({ id: 's1', title: 'Chat' })
+    useAppStore.getState().addSession(session)
+    useAppStore.getState().openSessionTab(session)
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+
+    // User sends message
+    useAppStore.getState().appendMessage(mkMessage({
+      id: 'u1', sessionId: 's1', role: 'user', content: 'What is 2+2?', createdAt: 100,
+    }))
+    expect(useAppStore.getState().messages).toHaveLength(1)
+
+    // Assistant responds (streaming)
+    useAppStore.getState().upsertMessage('a1', mkMessage({
+      id: 'a1', sessionId: 's1', role: 'assistant', content: '', createdAt: 200,
+    }))
+    expect(useAppStore.getState().messages).toHaveLength(2)
+
+    // Stream update
+    useAppStore.getState().upsertMessage('a1', mkMessage({
+      id: 'a1', sessionId: 's1', role: 'assistant', content: 'The answer is 4.', createdAt: 200,
+    }))
+    expect(useAppStore.getState().messages[1].content).toBe('The answer is 4.')
+
+    // User replies
+    useAppStore.getState().appendMessage(mkMessage({
+      id: 'u2', sessionId: 's1', role: 'user', content: 'And 3+3?', createdAt: 300,
+    }))
+    expect(useAppStore.getState().messages).toHaveLength(3)
+
+    // User edits their first message
+    useAppStore.getState().upsertMessage('u1', mkMessage({
+      id: 'u1', sessionId: 's1', role: 'user', content: 'What is 2+2? (edited)', createdAt: 100,
+    }))
+    expect(useAppStore.getState().messages[0].content).toBe('What is 2+2? (edited)')
+    expect(useAppStore.getState().messages).toHaveLength(3) // no new messages added
+
+    // Update session title based on first message
+    useAppStore.getState().updateSession('s1', { title: 'Math Question' })
+    expect(useAppStore.getState().sessions[0].title).toBe('Math Question')
+    // Tab title should also be updated
+    expect(useAppStore.getState().tabs[0]).toMatchObject({ type: 'session', title: 'Math Question' })
+  })
+})
+
+describe('Integration — session creation → switch → verify state isolation', () => {
+  it('two sessions have independent message lists', () => {
+    // Create two sessions
+    useAppStore.getState().addSession(mkSession({ id: 's1', title: 'Session 1' }))
+    useAppStore.getState().addSession(mkSession({ id: 's2', title: 'Session 2' }))
+
+    // Open both tabs
+    useAppStore.getState().openSessionTab(mkSession({ id: 's1', title: 'Session 1' }))
+    useAppStore.getState().openSessionTab(mkSession({ id: 's2', title: 'Session 2' }))
+
+    // Add messages to session 1 (simulated via sessionId filter)
+    useAppStore.getState().appendMessage(mkMessage({
+      id: 'u1', sessionId: 's1', role: 'user', content: 'Hi from s1', createdAt: 100,
+    }))
+    useAppStore.getState().appendMessage(mkMessage({
+      id: 'a1', sessionId: 's1', role: 'assistant', content: 'Hello s1', createdAt: 200,
+    }))
+
+    // Add messages to session 2
+    useAppStore.getState().appendMessage(mkMessage({
+      id: 'u2', sessionId: 's2', role: 'user', content: 'Hi from s2', createdAt: 300,
+    }))
+
+    // Verify all messages exist (store is flat, filter by sessionId in components)
+    const allMessages = useAppStore.getState().messages
+    expect(allMessages).toHaveLength(3)
+
+    const s1Messages = allMessages.filter((m) => m.sessionId === 's1')
+    const s2Messages = allMessages.filter((m) => m.sessionId === 's2')
+    expect(s1Messages).toHaveLength(2)
+    expect(s2Messages).toHaveLength(1)
+
+    // Switch active tab
+    useAppStore.getState().selectTab('s1')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+
+    useAppStore.getState().selectTab('s2')
+    expect(useAppStore.getState().activeTabId).toBe('s2')
+
+    // Remove s2 session — messages remain (store doesn't cascade)
+    useAppStore.getState().removeSession('s2')
+    expect(useAppStore.getState().sessions).toHaveLength(1)
+    // Messages still present — app handles filtering
+    expect(useAppStore.getState().messages).toHaveLength(3)
+  })
+
+  it('each session has independent todo lists', () => {
+    useAppStore.getState().addTodo(mkTodo({
+      id: 't1', sessionId: 's1', text: 'Task for s1', completed: false,
+    }))
+    useAppStore.getState().addTodo(mkTodo({
+      id: 't2', sessionId: 's2', text: 'Task for s2', completed: false,
+    }))
+    useAppStore.getState().addTodo(mkTodo({
+      id: 't3', sessionId: 's1', text: 'Another s1', completed: true,
+    }))
+
+    // Filter by sessionId
+    const s1Todos = useAppStore.getState().todos.filter((t) => t.sessionId === 's1')
+    const s2Todos = useAppStore.getState().todos.filter((t) => t.sessionId === 's2')
+    expect(s1Todos).toHaveLength(2)
+    expect(s2Todos).toHaveLength(1)
+
+    // Remove s1 todos
+    useAppStore.getState().removeTodo('t1')
+    useAppStore.getState().removeTodo('t3')
+    expect(useAppStore.getState().todos.filter((t) => t.sessionId === 's1')).toHaveLength(0)
+    expect(useAppStore.getState().todos.filter((t) => t.sessionId === 's2')).toHaveLength(1)
+  })
+})
+
+describe('Integration — multiple tabs open → close active → verify fallback', () => {
+  it('close active session tab falls back to next tab', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Chat 1' },
+        { type: 'session', id: 's2', title: 'Chat 2' },
+        { type: 'session', id: 's3', title: 'Chat 3' },
+      ],
+      activeTabId: 's2',
+    })
+
+    useAppStore.getState().closeTab('s2')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect(useAppStore.getState().activeTabId).toBe('s3')
+    // Remaining tabs are s1 and s3
+    expect(useAppStore.getState().tabs.map((t) => t.type === 'session' ? t.id : (t as any).path)).toEqual(['s1', 's3'])
+  })
+
+  it('close active file tab falls back to session tab', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Chat' },
+        { type: 'file', path: '/src/main.ts', name: 'main.ts', isDirty: false },
+        { type: 'file', path: '/src/app.ts', name: 'app.ts', isDirty: false },
+      ],
+      activeTabId: '/src/main.ts',
+    })
+
+    useAppStore.getState().closeTab('/src/main.ts')
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    expect(useAppStore.getState().activeTabId).toBe('/src/app.ts')
+  })
+
+  it('close all file tabs leaves session tabs intact', () => {
+    useAppStore.setState({
+      tabs: [
+        { type: 'session', id: 's1', title: 'Chat' },
+        { type: 'file', path: '/a.ts', name: 'a.ts', isDirty: false },
+        { type: 'file', path: '/b.ts', name: 'b.ts', isDirty: false },
+      ],
+      activeTabId: '/a.ts',
+    })
+
+    useAppStore.getState().removeTabsByPath('/a.ts', false)
+    useAppStore.getState().removeTabsByPath('/b.ts', false)
+
+    expect(useAppStore.getState().tabs).toHaveLength(1)
+    expect(useAppStore.getState().tabs[0].type).toBe('session')
+    expect(useAppStore.getState().activeTabId).toBe('s1')
+  })
+
+  it('rapid open-close cycles maintain consistent state', () => {
+    // Open 5 tabs
+    for (let i = 0; i < 5; i++) {
+      useAppStore.getState().openSessionTab(mkSession({ id: `s${i}`, title: `Tab ${i}` }))
+    }
+    expect(useAppStore.getState().tabs).toHaveLength(5)
+
+    // Close tabs 0, 2, 4 (odd indices remain)
+    useAppStore.getState().closeTab('s0')
+    useAppStore.getState().closeTab('s2')
+    useAppStore.getState().closeTab('s4')
+
+    expect(useAppStore.getState().tabs).toHaveLength(2)
+    const remainingIds = useAppStore.getState().tabs
+      .filter((t): t is Extract<Tab, { type: 'session' }> => t.type === 'session')
+      .map((t) => t.id)
+    expect(remainingIds).toEqual(['s1', 's3'])
   })
 })

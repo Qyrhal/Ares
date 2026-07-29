@@ -200,3 +200,104 @@ describe('CommandPalette', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('CommandPalette — filtering edge cases', () => {
+  it('filters by description', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+    fireEvent.change(input, { target: { value: 'chat' } })
+    expect(screen.getByText('New session')).toBeDefined()
+    expect(screen.queryByText('Toggle terminal')).toBeNull()
+  })
+
+  it('filters by category', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+    fireEvent.change(input, { target: { value: 'view' } })
+    expect(screen.queryByText('New session')).toBeNull()
+    expect(screen.getByText('Toggle terminal')).toBeDefined()
+    expect(screen.getByText('Toggle zen mode')).toBeDefined()
+  })
+
+  it('singular result count for one matching command', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+    fireEvent.change(input, { target: { value: 'terminal' } })
+    expect(screen.getByText('1 result')).toBeDefined()
+  })
+
+  it('is case-insensitive for filtering', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+    fireEvent.change(input, { target: { value: 'TERMINAL' } })
+    expect(screen.getByText('Toggle terminal')).toBeDefined()
+  })
+})
+
+describe('CommandPalette — keyboard edge cases', () => {
+  it('Escape still closes when filtered to no results', () => {
+    const onClose = vi.fn()
+    render(<CommandPalette open={true} onClose={onClose} commands={sampleCommands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+    fireEvent.change(input, { target: { value: 'zzzzz' } })
+    expect(screen.getByText('No matching commands')).toBeDefined()
+    fireEvent.keyDown(input, { key: 'Escape' })
+    expect(onClose).toHaveBeenCalledTimes(1)
+  })
+
+  it('Enter does nothing when no commands match filter', () => {
+    const onClose = vi.fn()
+    const action = vi.fn()
+    const commands: CommandEntry[] = [
+      { id: '1', label: 'Test', category: 'Test', action },
+    ]
+    render(<CommandPalette open={true} onClose={onClose} commands={commands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+    fireEvent.change(input, { target: { value: 'zzzzz' } })
+    fireEvent.keyDown(input, { key: 'Enter' })
+    expect(action).not.toHaveBeenCalled()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('does not crash on ArrowUp with empty filter results', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    const input = screen.getByPlaceholderText('Search commands…')
+    fireEvent.change(input, { target: { value: 'zzzzz' } })
+    // Should not crash
+    fireEvent.keyDown(input, { key: 'ArrowUp' })
+    fireEvent.keyDown(input, { key: 'ArrowDown' })
+    expect(screen.getByText('No matching commands')).toBeDefined()
+  })
+})
+
+describe('CommandPalette — description and rendering', () => {
+  it('does not render description div when description is absent', () => {
+    const commands: CommandEntry[] = [
+      { id: '1', label: 'No desc', category: 'Test', action: vi.fn() },
+    ]
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={commands} />)
+    const option = screen.getByRole('option')
+    expect(option.querySelector('.text-\\[11px\\]')).toBeNull()
+  })
+
+  it('renders description when provided', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    expect(screen.getByText('Create a new chat')).toBeDefined()
+    expect(screen.getByText('Open/close terminal')).toBeDefined()
+  })
+
+  it('does not render shortcut kbd when shortcut is absent', () => {
+    const commands: CommandEntry[] = [
+      { id: '1', label: 'No shortcut', category: 'Test', action: vi.fn() },
+    ]
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={commands} />)
+    expect(screen.queryByRole('option')).toBeDefined()
+    // No kbd element should be present
+    expect(screen.queryByText('No shortcut')!.closest('button')!.querySelector('kbd')).toBeNull()
+  })
+
+  it('renders listbox role on results container', () => {
+    render(<CommandPalette open={true} onClose={vi.fn()} commands={sampleCommands} />)
+    expect(screen.getByRole('listbox')).toBeDefined()
+  })
+})

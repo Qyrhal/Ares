@@ -151,6 +151,117 @@ describe('ActivityBar — badges', () => {
   })
 })
 
+describe('ActivityBar — active view highlighting (all views)', () => {
+  it('highlights explorer when activeView is explorer', () => {
+    render(<ActivityBar {...defaultProps} activeView="explorer" />)
+    const explorerBtn = screen.getByTitle('Explorer')
+    expect(explorerBtn.className).toContain('bg-primary/15')
+    expect(explorerBtn.className).toContain('text-primary')
+  })
+
+  it('highlights git when activeView is git', () => {
+    render(<ActivityBar {...defaultProps} activeView="git" />)
+    const gitBtn = screen.getByTitle('Source Control')
+    expect(gitBtn.className).toContain('bg-primary/15')
+    expect(gitBtn.className).toContain('text-primary')
+  })
+
+  it('highlights extensions when activeView is extensions', () => {
+    render(<ActivityBar {...defaultProps} activeView="extensions" />)
+    const extBtn = screen.getByTitle('Extensions')
+    expect(extBtn.className).toContain('bg-primary/15')
+    expect(extBtn.className).toContain('text-primary')
+  })
+
+  it('does not highlight inactive views when explorer is active', () => {
+    render(<ActivityBar {...defaultProps} activeView="explorer" />)
+    expect(screen.getByTitle('Chat').className).toContain('text-muted-foreground')
+    expect(screen.getByTitle('Source Control').className).toContain('text-muted-foreground')
+    expect(screen.getByTitle('Extensions').className).toContain('text-muted-foreground')
+    expect(screen.getByTitle('Settings').className).toContain('text-muted-foreground')
+  })
+})
+
+describe('ActivityBar — clicking active view still fires callback', () => {
+  it('calls onChangeView when clicking the already-active view', () => {
+    const onChangeView = vi.fn()
+    render(<ActivityBar {...defaultProps} activeView="chat" onChangeView={onChangeView} />)
+    fireEvent.click(screen.getByTitle('Chat'))
+    expect(onChangeView).toHaveBeenCalledWith('chat')
+  })
+})
+
+describe('ActivityBar — hover CSS classes', () => {
+  it('applies hover classes on inactive buttons', () => {
+    render(<ActivityBar {...defaultProps} activeView="chat" />)
+    const explorerBtn = screen.getByTitle('Explorer')
+    expect(explorerBtn.className).toContain('hover:bg-accent')
+    expect(explorerBtn.className).toContain('hover:text-foreground')
+  })
+
+  it('does not apply hover:bg-accent on active button (has bg-primary/15 instead)', () => {
+    render(<ActivityBar {...defaultProps} activeView="chat" />)
+    const chatBtn = screen.getByTitle('Chat')
+    expect(chatBtn.className).toContain('bg-primary/15')
+    // Active buttons don't get the hover accent class
+    expect(chatBtn.className).not.toContain('hover:bg-accent')
+  })
+})
+
+describe('ActivityBar — icon rendering', () => {
+  it('renders SVG icons inside each button', () => {
+    const { container } = render(<ActivityBar {...defaultProps} />)
+    const svgElements = container.querySelectorAll('svg')
+    // 4 main icons + terminal icon + settings icon = 6
+    expect(svgElements.length).toBe(6)
+  })
+})
+
+describe('ActivityBar — keyboard accessibility', () => {
+  it('all buttons are focusable (have implicit tabIndex)', () => {
+    const { container } = render(<ActivityBar {...defaultProps} />)
+    const buttons = container.querySelectorAll('button')
+    for (const btn of Array.from(buttons)) {
+      // Buttons are natively focusable
+      expect(btn.tagName).toBe('BUTTON')
+    }
+  })
+
+  it('each button has a title attribute for screen readers', () => {
+    const { container } = render(<ActivityBar {...defaultProps} />)
+    const buttons = container.querySelectorAll('button')
+    for (const btn of Array.from(buttons)) {
+      expect(btn).toHaveAttribute('title')
+    }
+  })
+})
+
+describe('ActivityBar — badge edge cases', () => {
+  it('shows "99+" for git badge exceeding 99', () => {
+    render(<ActivityBar {...defaultProps} gitBadge={200} />)
+    expect(screen.getByText('99+')).toBeDefined()
+  })
+
+  it('shows exact number for git badge under 100', () => {
+    render(<ActivityBar {...defaultProps} gitBadge={42} />)
+    expect(screen.getByText('42')).toBeDefined()
+  })
+
+  it('shows agent badge and git badge simultaneously', () => {
+    render(<ActivityBar {...defaultProps} agentBadge={3} gitBadge={7} />)
+    expect(screen.getByText('3')).toBeDefined()
+    expect(screen.getByText('7')).toBeDefined()
+  })
+
+  it('does not render badge span for explorer or extensions (always 0)', () => {
+    render(<ActivityBar {...defaultProps} agentBadge={5} gitBadge={5} />)
+    const explorerBtn = screen.getByTitle('Explorer')
+    const extBtn = screen.getByTitle('Extensions')
+    expect(explorerBtn.querySelector('span')).toBeNull()
+    expect(extBtn.querySelector('span')).toBeNull()
+  })
+})
+
 describe('ActivityBar — layout structure', () => {
   it('has proper container classes', () => {
     const { container } = render(<ActivityBar {...defaultProps} />)
