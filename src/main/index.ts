@@ -28,6 +28,9 @@ import {
   stashList, stashPush, stashPop, stashDrop, stashClear,
   squashCommits,
   resetBranch,
+  getGitignoreContent,
+  addGitignorePattern,
+  checkGitignore,
 } from './git'
 import {
   createCheckpoint, listCheckpoints, restoreCheckpoint,
@@ -474,6 +477,20 @@ function registerIpcHandlers(): void {
   ipcMain.handle('git:reset', (_, cwd: string, mode: string, ref: string) => {
     validatePath(cwd)
     return resetBranch(cwd, mode as 'soft' | 'mixed' | 'hard', ref)
+  })
+
+  // Git ignore
+  ipcMain.handle('git:gitignore:content', (_, cwd: string) => {
+    validatePath(cwd)
+    return getGitignoreContent(cwd)
+  })
+  ipcMain.handle('git:gitignore:add', (_, cwd: string, pattern: string) => {
+    validatePath(cwd)
+    return addGitignorePattern(cwd, pattern)
+  })
+  ipcMain.handle('git:gitignore:check', (_, cwd: string, filePath: string) => {
+    validatePath(cwd)
+    return checkGitignore(cwd, filePath)
   })
 
   // Recent files — recently modified files in workspace

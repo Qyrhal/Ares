@@ -15,7 +15,7 @@ describe('/rebase command', () => {
   })
 
   it('BUILTIN_COMMANDS count matches expected', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(80)
+    expect(BUILTIN_COMMANDS.length).toBe(81)
   })
 
   it('rebase appears after pull in BUILTIN_COMMANDS order', () => {
