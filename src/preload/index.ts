@@ -69,6 +69,7 @@ const nativeGit = {
   stashDrop:     (cwd: string, idx: number) => ipcRenderer.invoke('git:stashDrop', cwd, idx),
   stashClear:    (cwd: string) => ipcRenderer.invoke('git:stashClear', cwd),
   squash:        (cwd: string, count: number, message: string) => ipcRenderer.invoke('git:squash', cwd, count, message),
+  reset:         (cwd: string, mode: string, ref: string) => ipcRenderer.invoke('git:reset', cwd, mode, ref),
   blame:         (cwd: string, p: string) => ipcRenderer.invoke('git:blame', cwd, p),
   changelog:     (cwd: string, limit?: number) => ipcRenderer.invoke('git:changelog', cwd, limit),
 }

@@ -499,7 +499,7 @@ describe('InputBar — arrow key navigation in command picker', () => {
     renderInputBar({ pluginSkills: [], pluginCommands: [] })
     const textarea = screen.getByPlaceholderText(PLACEHOLDER)
     fireEvent.change(textarea, { target: { value: '/' } })
-    // Navigate to /tree (index 53 in 79-item array)
+    // Navigate to /tree (index 53 in 80-item array)
     for (let i = 0; i < 53; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
@@ -514,7 +514,7 @@ describe('InputBar — arrow key navigation in command picker', () => {
     // Press ArrowDown — goes to /agents (index 56)
     fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     // Continue navigating to /help (index 78)
-    for (let i = 0; i < 22; i++) {
+    for (let i = 0; i < 23; i++) {
       fireEvent.keyDown(textarea, { key: 'ArrowDown' })
     }
     const helpBtn = screen.getByText('/help').closest('button')!
