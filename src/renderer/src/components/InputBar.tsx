@@ -72,6 +72,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'blame',        description: 'Show line-by-line git annotations for a file' },
   { kind: 'builtin', name: 'diff',         description: 'Show git diff for changed files' },
   { kind: 'builtin', name: 'stash',        description: 'Manage git stashes (push/pop/drop/clear)' },
+  { kind: 'builtin', name: 'squash',       description: 'Squash last N commits into one' },
   { kind: 'builtin', name: 'checkpoint',    description: 'Save and restore git checkpoints' },
   { kind: 'builtin', name: 'recent',       description: 'Show recently modified files in workspace' },
   { kind: 'builtin', name: 'exec',         description: 'Run a shell command in the workspace' },

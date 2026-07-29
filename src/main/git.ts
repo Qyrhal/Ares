@@ -385,3 +385,38 @@ export async function stashClear(cwd: string): Promise<{ ok: boolean; message: s
     return { ok: false, message: (e as Error).message }
   }
 }
+
+// ── Squash ──────────────────────────────────────────────────────────────────
+
+export async function squashCommits(cwd: string, count: number, message: string): Promise<string> {
+  const branch = (await git(['branch', '--show-current'], cwd)).trim()
+  if (!branch || branch === 'main' || branch === 'master') {
+    throw new Error('Cannot squash on main/master branch')
+  }
+
+  let baseRef = 'main'
+  try {
+    await git(['rev-parse', '--verify', 'main'], cwd)
+  } catch {
+    try {
+      await git(['rev-parse', '--verify', 'master'], cwd)
+      baseRef = 'master'
+    } catch {
+      throw new Error('No main or master branch found to determine base')
+    }
+  }
+
+  const commitCount = parseInt((await git(['rev-list', '--count', `${baseRef}..HEAD`], cwd)).trim())
+  if (isNaN(commitCount) || commitCount === 0) {
+    throw new Error('No commits to squash on this branch')
+  }
+
+  if (count > commitCount) {
+    throw new Error(`Only ${commitCount} commit(s) on this branch, cannot squash ${count}`)
+  }
+
+  await git(['reset', '--soft', `HEAD~${count}`], cwd)
+  await git(['commit', '-m', message], cwd)
+
+  return `Squashed ${count} commit(s) into one: "${message}"`
+}
