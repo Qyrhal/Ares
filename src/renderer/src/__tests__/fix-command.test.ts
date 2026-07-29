@@ -80,6 +80,6 @@ describe('/fix slash command', () => {
   })
 
   it('has correct number of BUILTIN_COMMANDS', () => {
-    expect(BUILTIN_COMMANDS.length).toBe(78)
+    expect(BUILTIN_COMMANDS.length).toBe(79)
   })
 })
