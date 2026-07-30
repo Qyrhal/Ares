@@ -21,6 +21,10 @@ const PRICING: Record<string, { input: number; output: number }> = {
   'kimi-k2.7': { input: 0.00035, output: 0.0014 },
 }
 
+export function getModelPricing(model: string): { input: number; output: number } | null {
+  return PRICING[model] ?? null
+}
+
 export function estimateCost(model: string, inputTokens: number, outputTokens: number): number {
   const pricing = PRICING[model]
   if (!pricing) return 0
