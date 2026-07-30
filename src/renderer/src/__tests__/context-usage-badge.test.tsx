@@ -101,4 +101,38 @@ describe('ContextUsageBadge', () => {
     const bar = document.querySelector('[style*="width"]') as HTMLElement
     expect(bar.className).toContain('bg-red-500')
   })
+
+  it('shows streaming indicator when isLoading is true', () => {
+    mockEstimateTokens.mockReturnValue(12800)
+    render(<ContextUsageBadge messages={[makeMsg()]} model="gpt-4o" isLoading />)
+    expect(screen.getByText('Ctx 10%…')).toBeInTheDocument()
+  })
+
+  it('hides streaming indicator when isLoading is false', () => {
+    mockEstimateTokens.mockReturnValue(12800)
+    render(<ContextUsageBadge messages={[makeMsg()]} model="gpt-4o" isLoading={false} />)
+    expect(screen.getByText('Ctx 10%')).toBeInTheDocument()
+    expect(screen.queryByText('Ctx 10%…')).not.toBeInTheDocument()
+  })
+
+  it('shows spinning Loader2 icon when isLoading is true', () => {
+    mockEstimateTokens.mockReturnValue(12800)
+    const { container } = render(<ContextUsageBadge messages={[makeMsg()]} model="gpt-4o" isLoading />)
+    const spinner = container.querySelector('.animate-spin')
+    expect(spinner).toBeInTheDocument()
+  })
+
+  it('applies pulse animation to bar when isLoading is true', () => {
+    mockEstimateTokens.mockReturnValue(12800)
+    render(<ContextUsageBadge messages={[makeMsg()]} model="gpt-4o" isLoading />)
+    const bar = document.querySelector('[style*="width"]') as HTMLElement
+    expect(bar.className).toContain('animate-pulse')
+  })
+
+  it('does not show pulse animation on bar when isLoading is false and not red', () => {
+    mockEstimateTokens.mockReturnValue(12800)
+    render(<ContextUsageBadge messages={[makeMsg()]} model="gpt-4o" isLoading={false} />)
+    const bar = document.querySelector('[style*="width"]') as HTMLElement
+    expect(bar.className).not.toContain('animate-pulse')
+  })
 })

@@ -23,9 +23,10 @@ interface StatusBarProps {
   sessionCount: number
   messages?: Message[]
   className?: string
+  isLoading?: boolean
 }
 
-export const StatusBar = React.memo(function StatusBar({ workspacePath, currentModel, sessionCount, messages, className }: StatusBarProps): React.ReactElement {
+export const StatusBar = React.memo(function StatusBar({ workspacePath, currentModel, sessionCount, messages, className, isLoading = false }: StatusBarProps): React.ReactElement {
   const [cpCount, setCpCount] = useState(0)
   const [mcpStatus, setMcpStatus] = useState<McpStatus[]>([])
   const [mcpBgTools, setMcpBgTools] = useState<string[]>([])
@@ -87,7 +88,7 @@ export const StatusBar = React.memo(function StatusBar({ workspacePath, currentM
       )}
 
       {messages && messages.length > 0 && (
-        <ContextUsageBadge messages={messages} model={currentModel} />
+        <ContextUsageBadge messages={messages} model={currentModel} isLoading={isLoading} />
       )}
 
       {/* MCP status */}

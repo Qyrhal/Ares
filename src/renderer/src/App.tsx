@@ -5121,6 +5121,7 @@ export default function App(): React.ReactElement {
         currentModel={displayModel(activeSession?.model ?? store.settings.defaultModel)}
         sessionCount={store.sessions.length}
         messages={store.messages}
+        isLoading={store.isLoading}
       />
       <Toaster />
 
