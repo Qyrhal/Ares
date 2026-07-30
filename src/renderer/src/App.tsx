@@ -424,6 +424,17 @@ export default function App(): React.ReactElement {
       }
       if (e.key === '`' || e.key === 'j') { e.preventDefault(); useAppStore.getState().toggleTerminal(); return }
       if (e.key === 'b') { e.preventDefault(); useAppStore.getState().toggleSidebar(); return }
+      if (e.shiftKey && e.key === 'C') {
+        e.preventDefault()
+        const msgs = useAppStore.getState().messages
+        const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
+        if (lastAssistant) {
+          navigator.clipboard.writeText(lastAssistant.content).then(() => {
+            toast.success('Last response copied to clipboard', { duration: 1500 })
+          })
+        }
+        return
+      }
       if (e.key === 'Z' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); useAppStore.getState().toggleZenMode(); return }
       if (e.key === '[') {
         e.preventDefault()
@@ -5172,6 +5183,15 @@ function usePaletteCommands(
     { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => _store.setActiveView('explorer') },
     { id: 'git', label: 'Open git panel', description: 'View git status, history, and checkpoints', category: 'View', action: () => _store.setActiveView('git') },
     { id: 'extensions', label: 'Open extensions panel', description: 'View and manage skills, plugins, and hooks', category: 'View', action: () => _store.setActiveView('extensions') },
+    { id: 'copy-last-response', label: 'Copy last response', description: 'Copy the last assistant response to clipboard', shortcut: 'Ctrl+Shift+C', category: 'General', action: () => {
+      const msgs = _store.messages
+      const lastAssistant = [...msgs].reverse().find((m) => m.role === 'assistant')
+      if (lastAssistant) {
+        navigator.clipboard.writeText(lastAssistant.content).then(() => {
+          toast.success('Last response copied to clipboard', { duration: 1500 })
+        })
+      }
+    } },
   ]
 
   if (!hasActiveSession) return general
