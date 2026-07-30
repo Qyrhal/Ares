@@ -217,6 +217,7 @@ export default function App(): React.ReactElement {
         toast('Context compacted', {
           description: 'Older agent conversation was summarized to stay within the context window',
         })
+        el.notify.send('Ares', 'Context compacted — conversation summarized').catch(() => {})
       }
     })
 
@@ -226,6 +227,7 @@ export default function App(): React.ReactElement {
         useAppStore.getState().removeSession(id)
       }
       toast.success(title, { description: summary, duration: 10_000 })
+      el.notify.send(title, summary).catch(() => {})
     })
 
     const offFlushError = el.dbEvents.onFlushError((msg) => {

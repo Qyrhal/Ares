@@ -909,4 +909,14 @@ function registerIpcHandlers(): void {
     const { shell } = await import('electron')
     shell.openExternal(url)
   })
+
+  // Notifications
+  ipcMain.handle('notify:send', (_event, title: string, body: string) => {
+    const { Notification } = require('electron')
+    if (Notification.isSupported()) {
+      const n = new Notification({ title, body })
+      n.show()
+    }
+    return { success: true }
+  })
 }
