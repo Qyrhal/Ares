@@ -1,5 +1,5 @@
 import React, { Suspense, useState, useCallback, useRef, useEffect } from 'react'
-import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock, ChevronDown, ChevronRight, Folder, Plus, Pencil, Trash2, Archive } from 'lucide-react'
+import { MessageSquare, Pin, Download, Upload, Search, X, Bot, Loader2, LayoutList, Clock, ChevronDown, ChevronRight, Folder, Plus, Pencil, Trash2, Archive, PanelLeftClose } from 'lucide-react'
 import { Trash2Icon } from '@animateicons/react/lucide'
 import { cn, timeAgo, truncate, formatDuration } from '@/lib/utils'
 import { Session, SessionGroup, FileNode, ActivityView } from '@/types'
@@ -112,6 +112,9 @@ function SessionsPane({
   const sessionFilter = useAppStore((s) => s.sessionFilter)
   const setSessionFilter = useAppStore((s) => s.setSessionFilter)
   const sessionSort = useAppStore((s) => s.sessionSort)
+
+  const compactSidebar = useAppStore((s) => s.compactSidebar)
+  const toggleCompactSidebar = useAppStore((s) => s.toggleCompactSidebar)
 
   // ── Session group state ────────────────────────────────────────────────────
   const sessionGroups = useAppStore((s) => s.sessionGroups)
@@ -297,7 +300,8 @@ function SessionsPane({
         setContextMenu({ session: s, x: e.clientX, y: e.clientY })
       }}
       className={cn(
-        'group flex w-full items-center gap-1.5 rounded-md py-1.5 pr-2 text-left text-sm transition-all',
+        'group flex w-full items-center gap-1.5 rounded-md pr-2 text-left text-sm transition-all',
+        compactSidebar ? 'py-0.5' : 'py-1.5',
         isSubAgent ? 'pl-5' : 'pl-2',
         activeSessionId === s.id
           ? 'bg-accent text-foreground shadow-xs'
@@ -326,16 +330,16 @@ function SessionsPane({
             autoFocus
           />
         ) : (
-          <p className="truncate text-xs font-medium leading-snug">
-            {truncate(s.title, isSubAgent ? 26 : 32)}
-          </p>
+        <p className={cn('truncate font-medium leading-snug', compactSidebar ? 'text-[10px]' : 'text-xs')}>
+          {truncate(s.title, isSubAgent ? 26 : 32)}
+        </p>
         )}
-        {s.model && (
+        {!compactSidebar && s.model && (
           <span className="text-[9px] font-mono px-1 py-0.5 rounded bg-muted/50 text-muted-foreground/70 mt-0.5 inline-block max-w-[120px] truncate">
             {s.model}
           </span>
         )}
-        {s.tags && s.tags.length > 0 && (
+        {!compactSidebar && s.tags && s.tags.length > 0 && (
           <div className="flex gap-1 mt-0.5 flex-wrap">
             {s.tags.slice(0, 3).map((tag) => (
               <span key={tag} className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-medium text-primary">
@@ -347,12 +351,12 @@ function SessionsPane({
             )}
           </div>
         )}
-        {s.notes && (
+        {!compactSidebar && s.notes && (
           <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground/50 italic" title={s.notes}>
             📝 {truncate(s.notes, 40)}
           </p>
         )}
-        <p className="mt-0.5 flex items-center gap-1 text-[10px] leading-tight text-muted-foreground/60 whitespace-nowrap">
+        <p className={cn('mt-0.5 flex items-center gap-1 leading-tight text-muted-foreground/60 whitespace-nowrap', compactSidebar ? 'text-[9px]' : 'text-[10px]')}>
           {s.agentStatus === 'running' && (
             <span className="inline-flex items-center gap-0.5 text-primary">
               <Loader2 className="size-2.5 animate-spin" /> running
@@ -505,6 +509,18 @@ function SessionsPane({
           >
             <Upload className="size-3.5" />
           </button>
+          <button
+            onClick={toggleCompactSidebar}
+            className={cn(
+              'rounded p-1 transition-colors',
+              compactSidebar
+                ? 'text-primary hover:bg-primary/10'
+                : 'text-muted-foreground hover:text-foreground hover:bg-accent'
+            )}
+            title={compactSidebar ? 'Expand sidebar' : 'Compact sidebar'}
+          >
+            <PanelLeftClose className="size-3.5" />
+          </button>
         </div>
       </div>
 
@@ -552,9 +568,11 @@ function SessionsPane({
         {/* ── Pinned section ─────────────────────────────────────────────── */}
         {pinned.length > 0 && (
           <>
-            <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
-              Pinned
-            </p>
+            {!compactSidebar && (
+              <p className="px-2 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/50">
+                Pinned
+              </p>
+            )}
             {pinned.map(renderSession)}
             {(orderedGroups.length > 0 || orderedUngrouped.length > 0) && (
               <div className="my-1 border-t border-border" />

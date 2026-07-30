@@ -68,7 +68,10 @@ interface AppStore {
   // ── Session sort ────────────────────────────────────────────────
   sessionSort: { by: 'recent' | 'name' | 'duration' | 'messages'; asc: boolean }
 
-  // ── Prompt history ────────────────────────────────────────────────
+  // ── Sidebar ────────────────────────────────────────────────
+  compactSidebar: boolean
+
+  // ── Prompt history ────────────────────────────────────────
   promptHistory: string[]
   promptHistoryIdx: number  // -1 = not navigating, 0..N = navigating
 
@@ -83,6 +86,9 @@ interface AppStore {
   setTerminalHeight: (h: string) => void
   togglePreview: () => void
   setPreviewUrl: (url: string | null) => void
+
+  // ── Sidebar actions ────────────────────────────────────────
+  toggleCompactSidebar: () => void
 
   // Adds the tab if not already open, activates it, and syncs sidebar view.
   openSessionTab: (session: Session) => void
@@ -193,6 +199,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   promptHistory: [],
   promptHistoryIdx: -1,
 
+  // ── Sidebar initial state ──────────────────────────────────────────────
+  compactSidebar: false,
+
   // ── Side Chat initial state ─────────────────────────────────────────────────
   sideChatSessionId: null,
   sideChatMessages: [],
@@ -209,6 +218,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   togglePreview: () => set((s) => ({ previewOpen: !s.previewOpen })),
   setPreviewUrl: (url) => set({ previewUrl: url, previewOpen: true }),
+
+  // ── Sidebar actions ──────────────────────────────────────────────────────
+  toggleCompactSidebar: () => set((s) => ({ compactSidebar: !s.compactSidebar })),
 
   // ── Tab actions ──────────────────────────────────────────────────────────────
   openSessionTab: (session) => set((s) => {
