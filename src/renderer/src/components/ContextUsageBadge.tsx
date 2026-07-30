@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Gauge } from 'lucide-react'
+import { Gauge, Loader2 } from 'lucide-react'
 import type { Message } from '@/types'
 import { estimateTokens, contextWindow } from '@/lib/context'
 import { cn } from '@/lib/utils'
@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils'
 interface ContextUsageBadgeProps {
   messages: Message[]
   model: string
+  isLoading?: boolean
 }
 
-export function ContextUsageBadge({ messages, model }: ContextUsageBadgeProps): React.ReactElement {
+export function ContextUsageBadge({ messages, model, isLoading = false }: ContextUsageBadgeProps): React.ReactElement {
   const { pct, used, total } = useMemo(() => {
     const used = estimateTokens(messages)
     const total = contextWindow(model)
@@ -52,11 +53,12 @@ export function ContextUsageBadge({ messages, model }: ContextUsageBadgeProps): 
       <Gauge className="size-3" />
       <span className="relative h-[6px] w-10 overflow-hidden rounded-sm bg-muted">
         <span
-          className={cn('absolute inset-y-0 left-0 rounded-sm', barColor, color === 'red' && 'animate-pulse')}
+          className={cn('absolute inset-y-0 left-0 rounded-sm', barColor, (color === 'red' || isLoading) && 'animate-pulse')}
           style={{ width: `${pct}%` }}
         />
       </span>
-      <span className="font-mono text-[9.5px]">Ctx {pct}%</span>
+      {isLoading && <Loader2 className="size-2.5 animate-spin" />}
+      <span className="font-mono text-[9.5px]">Ctx {pct}%{isLoading ? '…' : ''}</span>
     </span>
   )
 }
