@@ -110,6 +110,17 @@ export interface AppSettings {
   safeMode?: boolean
   /** Model used for context compaction (falls back to session/default model if unset) */
   compactionModel?: string
+  /** Agent sandbox: restrict exec and fetch to safe boundaries */
+  sandbox?: SandboxSettings
+}
+
+export interface SandboxSettings {
+  /** Master switch — when true, sandbox restrictions are enforced on exec:run and fetch:url */
+  enabled: boolean
+  network?: {
+    /** When set, fetch:url only allows requests to these domains (empty/undefined = block all external) */
+    strictAllowlist: string[]
+  }
 }
 
 export interface FileNode {

@@ -122,6 +122,7 @@ export interface DbSettings {
   mcpAutoBackgroundMs?: number
   safeMode?: boolean
   compactionModel?: string
+  sandbox?: { enabled: boolean; network?: { strictAllowlist: string[] } }
 }
 
 export interface DbPiSkill {

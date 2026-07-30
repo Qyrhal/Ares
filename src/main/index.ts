@@ -517,6 +517,25 @@ function registerIpcHandlers(): void {
   // Exec — run arbitrary shell command
   ipcMain.handle('exec:run', async (_, cwd: string, command: string) => {
     validatePath(cwd)
+    // Sandbox: restrict cwd to workspace only (not home)
+    const { getSettings } = await import('./db')
+    const settings = getSettings()
+    const sandboxEnabled = settings.sandbox?.enabled ?? false
+    if (sandboxEnabled) {
+      const workspace = getWorkspacePath()
+      if (!workspace) {
+        return { ok: false, output: 'Sandbox: no workspace set — open a project folder first' }
+      }
+      const resolvedCwd = nodePath.resolve(cwd)
+      if (!resolvedCwd.startsWith(workspace + nodePath.sep) && resolvedCwd !== workspace) {
+        return { ok: false, output: `Sandbox: cwd outside workspace (${resolvedCwd})` }
+      }
+      // Block destructive commands when sandbox is on
+      const blocked = /^(rm\s+-rf\s+\/|mkfs|dd\s+if=|:(){ :|shutdown|reboot|halt|init\s+[06])/i
+      if (blocked.test(command.trim())) {
+        return { ok: false, output: 'Sandbox: command blocked by sandbox policy' }
+      }
+    }
     const execAsync = promisify(execCb)
     try {
       const { stdout, stderr } = await execAsync(command, { cwd, timeout: 60_000 })
@@ -623,6 +642,27 @@ function registerIpcHandlers(): void {
   ipcMain.handle('fetch:url', async (_, url: string) => {
     if (isInternalUrl(url)) {
       return { ok: false, error: 'Access denied: URL points to an internal or restricted network' }
+    }
+    // Sandbox: enforce network strictAllowlist
+    const { getSettings } = await import('./db')
+    const settings = getSettings()
+    const sandbox = settings.sandbox
+    if (sandbox?.enabled && sandbox.network?.strictAllowlist?.length) {
+      try {
+        const parsed = new URL(url)
+        const host = parsed.hostname.toLowerCase()
+        const allowed = sandbox.network.strictAllowlist.some(d =>
+          host === d.toLowerCase() || host.endsWith('.' + d.toLowerCase())
+        )
+        if (!allowed) {
+          return { ok: false, error: `Sandbox: domain "${host}" not in network allowlist` }
+        }
+      } catch {
+        return { ok: false, error: 'Sandbox: invalid URL' }
+      }
+    } else if (sandbox?.enabled) {
+      // Sandbox on but no allowlist = block all external fetches
+      return { ok: false, error: 'Sandbox: external fetch blocked (no network allowlist configured)' }
     }
     try {
       validateFetchUrl(url)
