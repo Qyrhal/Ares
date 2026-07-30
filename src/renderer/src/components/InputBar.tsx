@@ -1148,6 +1148,13 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
           </button>
         </div>
 
+        {/* Center: character + token counter */}
+        {text.length > 0 && (
+          <span className="text-[9px] text-muted-foreground/60 font-mono select-none">
+            {text.length} chars · ~{Math.ceil(text.length / 4)} tok
+          </span>
+        )}
+
         {/* Right: model · effort · context */}
         <div className="flex items-center gap-0.5">
           {/* Model chip — opens existing model picker */}
