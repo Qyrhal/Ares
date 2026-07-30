@@ -108,6 +108,8 @@ export interface AppSettings {
   mcpAutoBackgroundMs?: number
   /** When true, disables system prompt customization, MCP servers, and plugins */
   safeMode?: boolean
+  /** Model used for context compaction (falls back to session/default model if unset) */
+  compactionModel?: string
 }
 
 export interface FileNode {

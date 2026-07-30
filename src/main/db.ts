@@ -121,6 +121,7 @@ export interface DbSettings {
   planPreviewEnabled?: boolean
   mcpAutoBackgroundMs?: number
   safeMode?: boolean
+  compactionModel?: string
 }
 
 export interface DbPiSkill {
