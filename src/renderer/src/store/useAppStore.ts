@@ -70,6 +70,7 @@ interface AppStore {
 
   // ── Sidebar ────────────────────────────────────────────────
   compactSidebar: boolean
+  sidebarVisible: boolean
 
   // ── Prompt history ────────────────────────────────────────
   promptHistory: string[]
@@ -89,6 +90,7 @@ interface AppStore {
 
   // ── Sidebar actions ────────────────────────────────────────
   toggleCompactSidebar: () => void
+  toggleSidebar: () => void
 
   // Adds the tab if not already open, activates it, and syncs sidebar view.
   openSessionTab: (session: Session) => void
@@ -201,6 +203,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Sidebar initial state ──────────────────────────────────────────────
   compactSidebar: false,
+  sidebarVisible: true,
 
   // ── Side Chat initial state ─────────────────────────────────────────────────
   sideChatSessionId: null,
@@ -221,6 +224,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   // ── Sidebar actions ──────────────────────────────────────────────────────
   toggleCompactSidebar: () => set((s) => ({ compactSidebar: !s.compactSidebar })),
+  toggleSidebar: () => set((s) => ({ sidebarVisible: !s.sidebarVisible })),
 
   // ── Tab actions ──────────────────────────────────────────────────────────────
   openSessionTab: (session) => set((s) => {

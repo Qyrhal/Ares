@@ -423,6 +423,7 @@ export default function App(): React.ReactElement {
         return
       }
       if (e.key === '`' || e.key === 'j') { e.preventDefault(); useAppStore.getState().toggleTerminal(); return }
+      if (e.key === 'b') { e.preventDefault(); useAppStore.getState().toggleSidebar(); return }
       if (e.key === 'Z' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); useAppStore.getState().toggleZenMode(); return }
       if (e.key === '[') {
         e.preventDefault()
@@ -4881,7 +4882,7 @@ export default function App(): React.ReactElement {
             agentBadge={store.sessions.filter((s) => s.agentStatus === 'running').length}
           />
 
-          {store.activeView !== 'settings' && store.activeView !== 'extensions' && (
+          {store.activeView !== 'settings' && store.activeView !== 'extensions' && store.sidebarVisible && (
             <Sidebar
               mode={store.activeView}
               sessions={store.sessions}
@@ -5165,6 +5166,7 @@ function usePaletteCommands(
   const general: CommandEntry[] = [
     { id: 'new-session', label: 'New session', description: 'Create a new chat session', category: 'General', action: () => _store.openSessionTab({ id: crypto.randomUUID(), title: 'New session', model: _store.settings.defaultModel, createdAt: Date.now(), updatedAt: Date.now(), messageCount: 0 }) },
     { id: 'toggle-terminal', label: 'Toggle terminal', description: 'Open or close the terminal panel', shortcut: 'Ctrl+`', category: 'View', action: () => _store.toggleTerminal() },
+    { id: 'toggle-sidebar', label: 'Toggle sidebar', description: 'Show or hide the sidebar panel', shortcut: 'Ctrl+B', category: 'View', action: () => _store.toggleSidebar() },
     { id: 'toggle-zen', label: 'Toggle zen mode', description: 'Hide UI chrome for focused work', shortcut: 'Ctrl+Shift+Z', category: 'View', action: () => _store.toggleZenMode() },
     { id: 'settings', label: 'Open settings', description: 'Configure app settings', shortcut: 'Ctrl+,', category: 'View', action: () => _store.setActiveView('settings') },
     { id: 'explorer', label: 'Open file explorer', description: 'Browse workspace files', category: 'View', action: () => _store.setActiveView('explorer') },
