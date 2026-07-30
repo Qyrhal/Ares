@@ -184,6 +184,9 @@ const electronMock = {
   grep: {
     search: vi.fn().mockResolvedValue({ ok: true, output: '' }),
   },
+  notify: {
+    send: vi.fn().mockResolvedValue({ success: true }),
+  },
   watch: {
     start: vi.fn().mockResolvedValue({ ok: true, message: 'Watching file' }),
     stop: vi.fn().mockResolvedValue({ ok: true }),

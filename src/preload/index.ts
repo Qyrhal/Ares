@@ -291,6 +291,10 @@ const grepApi = {
   search: (cwd: string, pattern: string, ext?: string) => ipcRenderer.invoke('grep:search', cwd, pattern, ext),
 }
 
+const notifyApi = {
+  send: (title: string, body: string) => ipcRenderer.invoke('notify:send', title, body),
+}
+
 const watchApi = {
   start: (cwd: string, filePath: string, sessionId: string) => ipcRenderer.invoke('watch:start', cwd, filePath, sessionId),
   stop: (sessionId?: string) => ipcRenderer.invoke('watch:stop', sessionId),
@@ -302,7 +306,7 @@ const watchApi = {
   },
 }
 
-const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, recent: recentApi, exec: execApi, ports: portsApi, env: envApi, grep: grepApi, watch: watchApi, dbEvents: dbEventsApi }
+const api = { db, settings, workspace, dialog: nativeDialog, fs: nativeFs, git: nativeGit, terminal: nativeTerminal, ext: extApi, tools: nativeTools, pi: piApi, agentConfig: agentConfigApi, mcpProfiles: mcpProfilesApi, checkpoint, lsp: lspApi, hooks: hooksApi, session: sessionApi, mcp: mcpApi, shell: shellApi, inlineEdit: inlineEditApi, lint: lintApi, test: testApi, build: buildApi, recent: recentApi, exec: execApi, ports: portsApi, env: envApi, grep: grepApi, watch: watchApi, dbEvents: dbEventsApi, notify: notifyApi }
 
 if (process.contextIsolated) {
   contextBridge.exposeInMainWorld('electron', api)
