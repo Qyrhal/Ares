@@ -481,6 +481,51 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
           </Field>
         </Section>
 
+        {/* ── Sandbox ───────────────────────────────────────────── */}
+        <Section title="Sandbox" description="Restrict agent exec commands and network fetches to safe boundaries. Modeled after Zed and Claude Code sandbox features.">
+          <Field label="Enable sandbox" hint="When enabled, exec commands are restricted to the workspace directory and destructive commands are blocked.">
+            <button
+              type="button"
+              onClick={() => setForm((prev) => ({ ...prev, sandbox: { ...prev.sandbox, enabled: !(prev.sandbox?.enabled ?? false), network: prev.sandbox?.network } }))}
+              className={cn(
+                'relative inline-flex h-6 w-10 shrink-0 cursor-pointer items-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
+                form.sandbox?.enabled
+                  ? 'border-primary/50 bg-primary/20'
+                  : 'border-border bg-muted/30'
+              )}
+              role="switch"
+              aria-checked={form.sandbox?.enabled ?? false}
+            >
+              <span
+                className={cn(
+                  'inline-block size-4 rounded-full shadow-sm transition-transform',
+                  form.sandbox?.enabled
+                    ? 'translate-x-[18px] bg-primary'
+                    : 'translate-x-[2px] bg-muted-foreground'
+                )}
+              />
+            </button>
+          </Field>
+
+          {form.sandbox?.enabled && (
+            <Field label="Network allowlist" hint="Comma-separated domains the agent may fetch. Leave empty to block all external fetches.">
+              <input
+                type="text"
+                value={form.sandbox?.network?.strictAllowlist?.join(', ') ?? ''}
+                onChange={(e) => {
+                  const domains = e.target.value.split(',').map(d => d.trim()).filter(Boolean)
+                  setForm((prev) => ({
+                    ...prev,
+                    sandbox: { ...prev.sandbox, enabled: prev.sandbox?.enabled ?? false, network: { strictAllowlist: domains } }
+                  }))
+                }}
+                placeholder="e.g. api.github.com, docs.example.com"
+                className={cn(INPUT, 'text-xs')}
+              />
+            </Field>
+          )}
+        </Section>
+
         {/* ── MCP ──────────────────────────────────────────────────── */}
         <Section title="MCP Tools" description="Configure behaviour for Model Context Protocol tools.">
           <Field label="Auto-background timeout" hint="When an MCP tool call exceeds this threshold (in seconds) it is automatically moved to background so the session stays responsive. Set to 0 to disable (always wait foreground).">
