@@ -322,6 +322,19 @@ export function SettingsPanel({ settings, onSave, sessionCount, onDeleteAllSessi
               />
             </div>
           </Field>
+
+          <Field
+            label="Compaction model"
+            hint="Model used for context compaction. Leave empty to use the session or default model."
+          >
+            <input
+              type="text"
+              value={form.compactionModel ?? ''}
+              onChange={(e) => set('compactionModel', e.target.value || '')}
+              placeholder="Uses default model if empty"
+              className={cn(INPUT, 'text-xs')}
+            />
+          </Field>
         </Section>
 
         {/* ── Appearance ─────────────────────────────────────────────── */}

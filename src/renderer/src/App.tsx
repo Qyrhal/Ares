@@ -561,7 +561,7 @@ export default function App(): React.ReactElement {
       }
       case 'compact': {
         const msgs = useAppStore.getState().messages
-        const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+        const model = store.settings.compactionModel || sess.model || store.settings.defaultModel || 'gpt-4o-mini'
         if (msgs.length === 0) {
           const msg = await el.db.addMessage(sess.id, 'system', 'No messages to compact.')
           if (msg) store.appendMessage(parseMessage(msg))
@@ -4389,7 +4389,7 @@ export default function App(): React.ReactElement {
       store.updateSession(sess.id, { title })
     }
 
-    const model = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+    const model = store.settings.compactionModel || sess.model || store.settings.defaultModel || 'gpt-4o-mini'
 
     // Compact when the conversation nears the model's context limit
     let history = [...messages, userMsg]
@@ -4770,7 +4770,7 @@ export default function App(): React.ReactElement {
       store.updateSession(sideChatSessionId, { title })
     }
 
-    const sideModel = sess?.model || settings.defaultModel || 'gpt-4o-mini'
+    const sideModel = settings.compactionModel || sess?.model || settings.defaultModel || 'gpt-4o-mini'
     let sideHistory = [...sideChatMessages, userMsg]
     if (needsCompaction(sideHistory, sideModel) && hasProvider(settings)) {
       try {

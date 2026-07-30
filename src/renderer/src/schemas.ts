@@ -64,6 +64,7 @@ export const AppSettingsSchema = z.object({
   systemPrompt: z.string().default(''),
   permissionMode: z.enum(['ask', 'auto', 'yolo']).default('ask'),
   safeMode: z.boolean().optional().default(false),
+  compactionModel: z.string().nullable().optional().default(undefined),
 })
 
 // ── Parsed domain types ────────────────────────────────────────────────────────
