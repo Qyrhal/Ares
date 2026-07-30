@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/attachment'
 import { v4 as uuidv4 } from 'uuid'
 import { contextWindow, estimateTokens } from '@/lib/context'
+import { getModelPricing } from '@/lib/pricing'
 import { effectiveProviders, makeModelRef, displayModel } from '@/lib/providers'
 import type { ProviderConfig } from '@/types'
 
@@ -350,8 +351,17 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
   const filteredModels = useMemo(() => {
     if (!modelSearch) return modelOptions
     const q = modelSearch.toLowerCase()
-    return modelOptions.filter((m) =>
-      m.label.toLowerCase().includes(q) || (m.provider ?? '').toLowerCase().includes(q))
+    return modelOptions.filter((m) => {
+      if (m.label.toLowerCase().includes(q)) return true
+      if ((m.provider ?? '').toLowerCase().includes(q)) return true
+      // Match on cost range — typing a number filters models with that cost
+      const pricing = getModelPricing(m.label)
+      if (pricing && q.match(/^\$?[\d.]+$/)) {
+        const num = parseFloat(q.replace('$', ''))
+        if (!isNaN(num) && (Math.abs(pricing.input - num) < 1e-9 || Math.abs(pricing.output - num) < 1e-9)) return true
+      }
+      return false
+    })
   }, [modelOptions, modelSearch])
 
   const openMentions = useCallback((cursor: number, query: string) => {
@@ -1030,6 +1040,9 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
             )}
             {filteredModels.map((m, i) => {
               const firstOfProvider = i === 0 || filteredModels[i - 1].provider !== m.provider
+              const pricing = getModelPricing(m.label)
+              const ctx = contextWindow(m.label)
+              const formatCtx = (n: number) => n >= 1000000 ? `${n / 1000000}M` : n >= 1000 ? `${Math.round(n / 1000)}K` : `${n}`
               return (
                 <React.Fragment key={m.value}>
                   {m.provider && firstOfProvider && (
@@ -1039,11 +1052,21 @@ export function InputBar({ onSend, onCommand, onRevealInExplorer, disabled, onCa
                   )}
                   <button
                     type="button"
-                    className={cn('flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === modelHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
+                    className={cn('flex w-full items-center justify-between gap-2 rounded-md px-2 py-1.5 text-left text-xs transition-colors', i === modelHighlight ? 'bg-accent text-accent-foreground' : 'text-popover-foreground hover:bg-accent/50')}
                     onMouseDown={(e) => { e.preventDefault(); handleModelSelect(m.value) }}
                     onMouseEnter={() => setModelHighlight(i)}
                   >
                     <span className="truncate">{m.label}</span>
+                    <span className="flex shrink-0 items-center gap-1.5 text-[9px] text-muted-foreground">
+                      {pricing && (
+                        <span className="font-mono" title={`Input: $${pricing.input}/1K · Output: $${pricing.output}/1K`}>
+                          {`$${pricing.input}/$${pricing.output}`}
+                        </span>
+                      )}
+                      <span className="rounded bg-muted/50 px-1 py-0.5 font-mono" title={`Context window: ${formatCtx(ctx)} tokens`}>
+                        {formatCtx(ctx)}
+                      </span>
+                    </span>
                   </button>
                 </React.Fragment>
               )
