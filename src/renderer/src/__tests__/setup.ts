@@ -73,6 +73,8 @@ const electronMock = {
     rename: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     findFiles: vi.fn().mockResolvedValue([]),
+    undo: vi.fn().mockResolvedValue({ ok: true }),
+    redo: vi.fn().mockResolvedValue({ ok: true }),
   },
   git: {
     status: vi.fn().mockResolvedValue({ hasRepo: false, branch: '', upstream: null, ahead: 0, behind: 0, staged: [], unstaged: [], untracked: [] }),

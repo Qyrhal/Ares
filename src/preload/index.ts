@@ -41,6 +41,8 @@ const nativeFs = {
   rename: (oldPath: string, newPath: string) => ipcRenderer.invoke('fs:rename', oldPath, newPath),
   delete: (p: string) => ipcRenderer.invoke('fs:delete', p),
   findFiles: (dir: string) => ipcRenderer.invoke('fs:findFiles', dir),
+  undo: () => ipcRenderer.invoke('fs:undo'),
+  redo: () => ipcRenderer.invoke('fs:redo'),
 }
 
 const nativeGit = {

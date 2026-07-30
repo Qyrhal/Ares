@@ -399,6 +399,10 @@ export default function App(): React.ReactElement {
       if (!(e.metaKey || e.ctrlKey)) return
       const { tabs, activeTabId } = useAppStore.getState()
 
+      // File undo/redo (ported from Zed v1.14.1-pre)
+      if (!e.shiftKey && e.key === 'z') { e.preventDefault(); el.fs.undo(); return }
+      if (e.key === 'y') { e.preventDefault(); el.fs.redo(); return }
+
       if (e.shiftKey && e.key === 'P') { e.preventDefault(); setCommandPaletteOpen(true); return }
       if (e.shiftKey && e.key === 'O') { e.preventDefault(); setTabSwitcherOpen(true); return }
       if (e.shiftKey && e.key === 'F') { e.preventDefault(); setSearchOverlayOpen(true); return }

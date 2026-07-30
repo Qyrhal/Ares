@@ -66,6 +66,8 @@ declare global {
         rename(oldPath: string, newPath: string): Promise<void>
         delete(path: string): Promise<void>
         findFiles(dir: string): Promise<string[]>
+        undo(): Promise<{ ok: boolean; error?: string }>
+        redo(): Promise<{ ok: boolean; error?: string }>
       }
       terminal: {
         create(cwd: string): Promise<string>
