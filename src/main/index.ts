@@ -279,6 +279,17 @@ function validatePath(p: string): void {
   }
 }
 
+// File operation undo/redo stack (ported from Zed v1.14.1-pre Project Panel undo/redo)
+interface FileUndoEntry {
+  type: 'create' | 'delete' | 'rename'
+  path: string
+  /** For delete: stored content so we can restore. For rename: the old path. */
+  content?: string
+  oldPath?: string
+}
+const fileUndoStack: FileUndoEntry[] = []
+const fileRedoStack: FileUndoEntry[] = []
+
 // URL validation: restrict fetch-proxy IPC handlers to safe URLs
 import { isIP } from 'net'
 function validateFetchUrl(raw: string): URL {
@@ -392,6 +403,8 @@ function registerIpcHandlers(): void {
   ipcMain.handle('fs:createFile', async (_, p: string) => {
     validatePath(p)
     await fsPromises.writeFile(p, '', { flag: 'wx' })
+    fileUndoStack.push({ type: 'create', path: p })
+    fileRedoStack.length = 0
   })
   ipcMain.handle('fs:createFolder', async (_, p: string) => {
     validatePath(p)
@@ -401,10 +414,65 @@ function registerIpcHandlers(): void {
     validatePath(oldPath)
     validatePath(newPath)
     await fsPromises.rename(oldPath, newPath)
+    fileUndoStack.push({ type: 'rename', path: newPath, oldPath })
+    fileRedoStack.length = 0
   })
   ipcMain.handle('fs:delete', async (_, p: string) => {
     validatePath(p)
+    // Store content for undo (best-effort: files only, not dirs)
+    let content: string | undefined
+    try {
+      const stat = await fsPromises.stat(p)
+      if (stat.isFile()) content = await fsPromises.readFile(p, 'utf-8')
+    } catch { /* file may not exist */ }
     await fsPromises.rm(p, { recursive: true, force: true })
+    fileUndoStack.push({ type: 'delete', path: p, content })
+    fileRedoStack.length = 0
+  })
+
+  // File undo/redo
+  ipcMain.handle('fs:undo', async () => {
+    const entry = fileUndoStack.pop()
+    if (!entry) return { ok: false, error: 'Nothing to undo' }
+    try {
+      if (entry.type === 'create') {
+        // Undo create = delete the file
+        await fsPromises.rm(entry.path, { recursive: true, force: true })
+      } else if (entry.type === 'delete') {
+        // Undo delete = recreate with stored content
+        const dir = nodePath.dirname(entry.path)
+        await fsPromises.mkdir(dir, { recursive: true })
+        await fsPromises.writeFile(entry.path, entry.content ?? '', 'utf-8')
+      } else if (entry.type === 'rename') {
+        // Undo rename = rename back to old path
+        await fsPromises.rename(entry.path, entry.oldPath!)
+      }
+      fileRedoStack.push(entry)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
+  })
+
+  ipcMain.handle('fs:redo', async () => {
+    const entry = fileRedoStack.pop()
+    if (!entry) return { ok: false, error: 'Nothing to redo' }
+    try {
+      if (entry.type === 'create') {
+        // Redo create = recreate the file
+        await fsPromises.writeFile(entry.path, '', { flag: 'wx' })
+      } else if (entry.type === 'delete') {
+        // Redo delete = delete again
+        await fsPromises.rm(entry.path, { recursive: true, force: true })
+      } else if (entry.type === 'rename') {
+        // Redo rename = rename forward again
+        await fsPromises.rename(entry.oldPath!, entry.path)
+      }
+      fileUndoStack.push(entry)
+      return { ok: true }
+    } catch (e) {
+      return { ok: false, error: (e as Error).message }
+    }
   })
   ipcMain.handle('fs:findFiles', async (_, dir: string) => {
     validatePath(dir)
