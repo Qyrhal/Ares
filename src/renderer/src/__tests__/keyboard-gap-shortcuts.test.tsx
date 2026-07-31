@@ -133,6 +133,35 @@ describe('Keyboard shortcuts — Cmd/Ctrl+Shift+C copies last response', () => {
       expect(writeTextSpy).toHaveBeenCalledWith('second')
     })
   })
+
+  it('Ctrl+Shift+C copies last assistant message (Windows/Linux fallback)', async () => {
+    await renderApp()
+    const msg = createMessage({ role: 'assistant', content: 'Hello from assistant' })
+    useAppStore.setState({ messages: [msg] })
+    const writeTextSpy = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText: writeTextSpy } })
+
+    await act(async () => {
+      fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, key: 'C' })
+    })
+
+    await waitFor(() => {
+      expect(writeTextSpy).toHaveBeenCalledWith('Hello from assistant')
+    })
+  })
+
+  it('Ctrl+Shift+C does nothing when no assistant messages exist', async () => {
+    await renderApp()
+    useAppStore.setState({ messages: [] })
+    const writeTextSpy = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText: writeTextSpy } })
+
+    await act(async () => {
+      fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, key: 'C' })
+    })
+
+    expect(writeTextSpy).not.toHaveBeenCalled()
+  })
 })
 
 describe('Keyboard shortcuts — Cmd/Ctrl+Z file undo', () => {
