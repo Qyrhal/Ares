@@ -5237,6 +5237,14 @@ export default function App(): React.ReactElement {
         sessionCount={store.sessions.length}
         messages={store.messages}
         isLoading={store.isLoading}
+        thinkingText={
+          store.isLoading
+            ? (() => {
+                const lastAssistant = [...store.messages].reverse().find((m) => m.role === 'assistant' && m.isStreaming)
+                return lastAssistant?.thinking
+              })()
+            : undefined
+        }
       />
       <Toaster />
 

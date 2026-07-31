@@ -24,9 +24,31 @@ interface StatusBarProps {
   messages?: Message[]
   className?: string
   isLoading?: boolean
+  thinkingText?: string
 }
 
-export const StatusBar = React.memo(function StatusBar({ workspacePath, currentModel, sessionCount, messages, className, isLoading = false }: StatusBarProps): React.ReactElement {
+/**
+ * Estimate thinking tokens from text using chars/4 heuristic.
+ */
+export function estimateThinkingTokens(text: string | undefined): number {
+  if (!text) return 0
+  return Math.ceil(text.length / 4)
+}
+
+/**
+ * Badge showing "Thinking... ~N tok" with a spinner when the AI is actively thinking.
+ */
+export function ThinkingBadge({ text }: { text: string }): React.ReactElement {
+  const tokenCount = estimateThinkingTokens(text)
+  return (
+    <span className="flex items-center gap-1 shrink-0 text-purple-400" title={text}>
+      <Loader2 className="size-3 animate-spin" />
+      <span className="font-mono text-[9.5px]">Thinking... ~{tokenCount.toLocaleString()} tok</span>
+    </span>
+  )
+}
+
+export const StatusBar = React.memo(function StatusBar({ workspacePath, currentModel, sessionCount, messages, className, isLoading = false, thinkingText }: StatusBarProps): React.ReactElement {
   const [cpCount, setCpCount] = useState(0)
   const [mcpStatus, setMcpStatus] = useState<McpStatus[]>([])
   const [mcpBgTools, setMcpBgTools] = useState<string[]>([])
@@ -90,6 +112,8 @@ export const StatusBar = React.memo(function StatusBar({ workspacePath, currentM
       {messages && messages.length > 0 && (
         <ContextUsageBadge messages={messages} model={currentModel} isLoading={isLoading} />
       )}
+
+      {thinkingText && <ThinkingBadge text={thinkingText} />}
 
       {/* MCP status */}
       {mcpTotal > 0 && (
