@@ -54,7 +54,7 @@ export const BUILTIN_COMMANDS: PickerItem[] = [
   { kind: 'builtin', name: 'export',       description: 'Export current session as a Markdown file' },
   { kind: 'builtin', name: 'import',       description: 'Import a session from a JSON file' },
   { kind: 'builtin', name: 'shortcuts',   description: 'Show all keyboard shortcuts' },
-  { kind: 'builtin', name: 'review',       description: 'AI-powered review of session code and patterns' },
+  { kind: 'builtin', name: 'review',       description: 'AI code review: /review, /review staged, /review unstaged, /review <file>' },
   { kind: 'builtin', name: 'summarize',    description: 'Generate an AI summary of the conversation' },
   { kind: 'builtin', name: 'rename',       description: 'Rename the current session' },
   { kind: 'builtin', name: 'pin',           description: 'Pin or unpin the current session' },

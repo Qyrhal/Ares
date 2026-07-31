@@ -1152,56 +1152,159 @@ export default function App(): React.ReactElement {
         break
       }
       case 'review': {
-        const msgs = await el.db.getMessages(sess.id)
-        if (!msgs || msgs.length === 0) {
-          const noMsg = await el.db.addMessage(sess.id, 'system', 'No messages to review.')
-          if (noMsg) store.appendMessage(parseMessage(noMsg))
-          break
-        }
         if (!hasProvider(store.settings)) {
           const noProv = await el.db.addMessage(sess.id, 'system', 'No API endpoint configured.')
           if (noProv) store.appendMessage(parseMessage(noProv))
           break
         }
-        const reviewSystemPrompt = 'You are a code reviewer. Analyze the conversation below and provide: 1) A brief summary of what was discussed/accomplished. 2) Code quality observations (patterns, potential issues). 3) 2-3 specific suggestions for improvement. Be concise and actionable.'
-        const reviewMessages = msgs.slice(-20).map((m: Message) => ({
-          role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
-          content: m.content,
-        }))
-        // Show starting message immediately
-        const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Starting review...')
-        if (startMsg) store.appendMessage(parseMessage(startMsg))
-        // Fire API call in background — don't await
-        const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
-        const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
-        fetch(`${baseUrl}/chat/completions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
-          },
-          body: JSON.stringify({
-            model: modelId,
-            messages: [
-              { role: 'system', content: reviewSystemPrompt },
-              ...reviewMessages,
-            ],
-            stream: false,
-          }),
-        }).then(async (response) => {
-          if (response.ok) {
-            const json = await response.json()
-            const reviewContent = json.choices?.[0]?.message?.content ?? 'No review generated.'
-            const msg = await el.db.addMessage(sess.id, 'system', `**📝 Session Review**\n\n${reviewContent}`)
-            if (msg) store.appendMessage(parseMessage(msg))
-          } else {
-            const msg = await el.db.addMessage(sess.id, 'system', `Review failed: ${response.status}`)
-            if (msg) store.appendMessage(parseMessage(msg))
+        const reviewArg = args.trim().toLowerCase()
+        const isGitReview = reviewArg === 'staged' || reviewArg === 'unstaged' || (reviewArg.length > 0 && reviewArg !== 'staged' && reviewArg !== 'unstaged')
+
+        if (isGitReview) {
+          // ── Git diff code review ──────────────────────────────────────
+          const { workspacePath } = useAppStore.getState()
+          if (!workspacePath) {
+            const noWs = await el.db.addMessage(sess.id, 'system', 'No workspace open. Use /folder to open a project first.')
+            if (noWs) store.appendMessage(parseMessage(noWs))
+            break
           }
-        }).catch(async () => {
-          const msg = await el.db.addMessage(sess.id, 'system', 'Review failed: network error')
-          if (msg) store.appendMessage(parseMessage(msg))
-        })
+          try {
+            const status = await el.git.status(workspacePath)
+            if (!status.hasRepo) {
+              const noRepo = await el.db.addMessage(sess.id, 'system', 'Not a git repository.')
+              if (noRepo) store.appendMessage(parseMessage(noRepo))
+              break
+            }
+
+            // Collect diffs based on argument
+            const diffParts: string[] = []
+            if (reviewArg === 'staged') {
+              for (const f of status.staged.slice(0, 30)) {
+                const diff = await el.git.diff(workspacePath, f.path, true)
+                if (diff) diffParts.push(`### ${f.path} (staged)\n\`\`\`diff\n${diff}\n\`\`\``)
+              }
+              if (status.staged.length === 0) {
+                const noChanges = await el.db.addMessage(sess.id, 'system', 'No staged changes. Stage files with `/stage` first, or use `/review unstaged`.')
+                if (noChanges) store.appendMessage(parseMessage(noChanges))
+                break
+              }
+            } else if (reviewArg === 'unstaged') {
+              for (const f of status.unstaged.slice(0, 30)) {
+                const diff = await el.git.diff(workspacePath, f.path, false)
+                if (diff) diffParts.push(`### ${f.path} (unstaged)\n\`\`\`diff\n${diff}\n\`\`\``)
+              }
+              if (status.unstaged.length === 0) {
+                const noChanges = await el.db.addMessage(sess.id, 'system', 'No unstaged changes in working tree.')
+                if (noChanges) store.appendMessage(parseMessage(noChanges))
+                break
+              }
+            } else {
+              // Specific file
+              const allFiles = [...status.staged, ...status.unstaged]
+              const matched = allFiles.filter((f) => f.path.includes(reviewArg))
+              if (matched.length === 0) {
+                const noMatch = await el.db.addMessage(sess.id, 'system', `No changes found for \`${reviewArg}\`.`)
+                if (noMatch) store.appendMessage(parseMessage(noMatch))
+                break
+              }
+              for (const f of matched) {
+                const isStaged = status.staged.some((s) => s.path === f.path)
+                const diff = await el.git.diff(workspacePath, f.path, isStaged)
+                if (diff) diffParts.push(`### ${f.path} (${isStaged ? 'staged' : 'unstaged'})\n\`\`\`diff\n${diff}\n\`\`\``)
+              }
+            }
+
+            const diffText = diffParts.join('\n\n')
+            const diffSize = diffText.length
+            if (diffSize === 0) {
+              const empty = await el.db.addMessage(sess.id, 'system', 'No diff content to review.')
+              if (empty) store.appendMessage(parseMessage(empty))
+              break
+            }
+            // Truncate very large diffs to stay within context limits
+            const truncatedDiff = diffSize > 12000 ? diffText.slice(0, 12000) + '\n\n*...diff truncated*' : diffText
+
+            const codeReviewPrompt = 'You are a senior code reviewer. Review the following git diff and provide:\n1) **Summary** — What changed and why (one paragraph)\n2) **Issues** — Bugs, edge cases, or correctness problems (if any)\n3) **Suggestions** — Code quality improvements, better patterns, or simplifications\n4) **Verdict** — Approve, request changes, or note concerns\n\nBe specific: reference line numbers or code snippets. Be concise and actionable.'
+
+            const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Reviewing code changes...')
+            if (startMsg) store.appendMessage(parseMessage(startMsg))
+
+            const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+            const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+            const response = await fetch(`${baseUrl}/chat/completions`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+              },
+              body: JSON.stringify({
+                model: modelId,
+                messages: [
+                  { role: 'system', content: codeReviewPrompt },
+                  { role: 'user', content: truncatedDiff },
+                ],
+                stream: false,
+              }),
+            })
+            if (response.ok) {
+              const json = await response.json()
+              const reviewContent = json.choices?.[0]?.message?.content ?? 'No review generated.'
+              const msg = await el.db.addMessage(sess.id, 'system', `**🔍 Code Review**\n\n${reviewContent}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              const err = await el.db.addMessage(sess.id, 'system', `Review failed: HTTP ${response.status}`)
+              if (err) store.appendMessage(parseMessage(err))
+            }
+          } catch (err) {
+            const errMsg = await el.db.addMessage(sess.id, 'system', `Review error: ${(err as Error).message}`)
+            if (errMsg) store.appendMessage(parseMessage(errMsg))
+          }
+        } else {
+          // ── Session conversation review (existing behavior) ───────────
+          const msgs = await el.db.getMessages(sess.id)
+          if (!msgs || msgs.length === 0) {
+            const noMsg = await el.db.addMessage(sess.id, 'system', 'No messages to review.')
+            if (noMsg) store.appendMessage(parseMessage(noMsg))
+            break
+          }
+          const reviewSystemPrompt = 'You are a code reviewer. Analyze the conversation below and provide: 1) A brief summary of what was discussed/accomplished. 2) Code quality observations (patterns, potential issues). 3) 2-3 specific suggestions for improvement. Be concise and actionable.'
+          const reviewMessages = msgs.slice(-20).map((m: Message) => ({
+            role: m.role === 'tool' ? 'user' as const : m.role as 'user' | 'assistant' | 'system',
+            content: m.content,
+          }))
+          const startMsg = await el.db.addMessage(sess.id, 'system', '⏳ Starting review...')
+          if (startMsg) store.appendMessage(parseMessage(startMsg))
+          const baseUrl = store.settings.apiBaseUrl.replace(/\/$/, '')
+          const modelId = sess.model || store.settings.defaultModel || 'gpt-4o-mini'
+          fetch(`${baseUrl}/chat/completions`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              ...(store.settings.apiKey ? { Authorization: `Bearer ${store.settings.apiKey}` } : {}),
+            },
+            body: JSON.stringify({
+              model: modelId,
+              messages: [
+                { role: 'system', content: reviewSystemPrompt },
+                ...reviewMessages,
+              ],
+              stream: false,
+            }),
+          }).then(async (response) => {
+            if (response.ok) {
+              const json = await response.json()
+              const reviewContent = json.choices?.[0]?.message?.content ?? 'No review generated.'
+              const msg = await el.db.addMessage(sess.id, 'system', `**📝 Session Review**\n\n${reviewContent}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            } else {
+              const msg = await el.db.addMessage(sess.id, 'system', `Review failed: ${response.status}`)
+              if (msg) store.appendMessage(parseMessage(msg))
+            }
+          }).catch(async () => {
+            const msg = await el.db.addMessage(sess.id, 'system', 'Review failed: network error')
+            if (msg) store.appendMessage(parseMessage(msg))
+          })
+        }
         break
       }
       case 'reset': {
@@ -5214,7 +5317,7 @@ function usePaletteCommands(
     { id: 'cmd-export', label: '/export', description: 'Export session as Markdown', category: 'Slash Commands', action: () => handleCommand('export', '') },
     { id: 'cmd-import', label: '/import', description: 'Import session from JSON file', category: 'Slash Commands', action: () => handleCommand('import', '') },
     { id: 'cmd-shortcuts', label: '/shortcuts', description: 'Show all keyboard shortcuts', category: 'Slash Commands', action: () => handleCommand('shortcuts', '') },
-    { id: 'cmd-review', label: '/review', description: 'AI-powered code review', category: 'Slash Commands', action: () => handleCommand('review', '') },
+    { id: 'cmd-review', label: '/review', description: 'AI code review: /review, /review staged, /review unstaged, /review <file>', category: 'Slash Commands', action: () => handleCommand('review', '') },
     { id: 'cmd-summarize', label: '/summarize', description: 'Generate conversation summary', category: 'Slash Commands', action: () => handleCommand('summarize', '') },
     { id: 'cmd-rename', label: '/rename', description: 'Rename current session', category: 'Slash Commands', action: () => handleCommand('rename', '') },
     { id: 'cmd-pin', label: '/pin', description: 'Pin or unpin session', category: 'Slash Commands', action: () => handleCommand('pin', '') },
