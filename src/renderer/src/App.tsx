@@ -25,7 +25,7 @@ import { useAI } from '@/hooks/useAI'
 import { useAppStore } from '@/store/useAppStore'
 import { parseSession, parseMessage, parseSettings, parseTodo } from '@/schemas'
 import { applyTheme, applyColorMode, THEMES, type ColorMode } from '@/lib/theme'
-import { needsCompaction, compactConversation, estimateTokens, contextWindow } from '@/lib/context'
+import { needsCompaction, compactConversation, estimateTokens, contextWindow, CONTEXT_WARNING_THRESHOLD } from '@/lib/context'
 import { estimateCost } from '@/lib/pricing'
 import { hasProvider, displayModel, effectiveProviders, makeModelRef } from '@/lib/providers'
 import { SideChatInput } from '@/components/SideChatInput'
@@ -101,6 +101,7 @@ export default function App(): React.ReactElement {
   const [pendingPerm, setPendingPerm] = useState<{ toolName: string; toolArgs: string } | null>(null)
   const permResolver = useRef<((allow: boolean) => void) | null>(null)
   const regenerateRef = useRef<(msg: Message) => void>(() => {})
+  const contextWarningShownRef = useRef(false)
 
   const handlePermApprove = useCallback(() => {
     permResolver.current?.(true)
@@ -129,6 +130,31 @@ export default function App(): React.ReactElement {
     t.type === 'session' ? t.id === store.activeTabId : t.path === store.activeTabId
   )
   const activeSession = store.sessions.find((s) => s.id === activeSessionTab?.id) ?? null
+
+  // Reset context warning when switching sessions
+  useEffect(() => {
+    contextWarningShownRef.current = false
+  }, [activeSession?.id])
+
+  // ── Context threshold warning ────────────────────────────────────────────────
+  const maybeShowContextWarning = useCallback((sessionId: string, model: string) => {
+    if (contextWarningShownRef.current) return
+    const msgs = useAppStore.getState().messages
+    const tokens = estimateTokens(msgs)
+    const window = contextWindow(model)
+    if (tokens >= window * CONTEXT_WARNING_THRESHOLD) {
+      const pct = Math.round((tokens / window) * 100)
+      const sysMsg: Message = {
+        id: crypto.randomUUID(),
+        sessionId,
+        role: 'system',
+        content: `⚠️ Context at ~${pct}% — consider \`/compact\` to free up space, or start a new session with \`/new\``,
+        createdAt: Date.now(),
+      }
+      store.appendMessage(sysMsg)
+      contextWarningShownRef.current = true
+    }
+  }, [store])
 
   // ── Bootstrap ────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -4434,6 +4460,7 @@ export default function App(): React.ReactElement {
         const current = useAppStore.getState().sessions.find((s) => s.id === sessionId)
         store.updateSession(sessionId, { messageCount: (current?.messageCount ?? 0) + 1 })
         store.setLoading(false)
+        maybeShowContextWarning(sessionId, model)
         refreshTree()
       },
       async (toolName, toolInput) => {
@@ -4464,7 +4491,7 @@ export default function App(): React.ReactElement {
       },
       'agent' as 'chat' | 'plan' | 'agent',
     )
-  }, [pendingPlan, sendMessage, refreshTree, onToolPermission, store])
+  }, [pendingPlan, sendMessage, refreshTree, onToolPermission, store, maybeShowContextWarning])
 
   // ── Plan Preview: cancel ──────────────────────────────────────────────────────
   const handleCancelPlan = useCallback(async () => {
@@ -4618,6 +4645,7 @@ export default function App(): React.ReactElement {
         const current = useAppStore.getState().sessions.find((s) => s.id === sess.id)
         store.updateSession(sess.id, { messageCount: (current?.messageCount ?? 0) + 1 })
         store.setLoading(false)
+        maybeShowContextWarning(sess.id, model)
         refreshTree()
       },
       async (toolName, toolInput) => {
@@ -4648,7 +4676,7 @@ export default function App(): React.ReactElement {
       },
       agentMode,
     )
-  }, [activeSession, replyTo, sendMessage, expandMentions, onToolPermission, refreshTree])
+  }, [activeSession, replyTo, sendMessage, expandMentions, onToolPermission, refreshTree, maybeShowContextWarning])
 
   // ── Edit message ─────────────────────────────────────────────────────────────
   const handleEditMessage = useCallback(async (id: string, content: string) => {
