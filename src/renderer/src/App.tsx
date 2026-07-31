@@ -1,4 +1,4 @@
-import React, { Suspense, useCallback, useEffect, useState, useRef } from 'react'
+import React, { Suspense, useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { v4 as uuidv4 } from 'uuid'
 import { FileNode, Tab, FileAttachment, Message, PermissionMode, EffortLevel, AgentQuestion, Session } from '@/types'
 import { ActivityBar } from '@/components/ActivityBar'
@@ -5237,6 +5237,15 @@ export default function App(): React.ReactElement {
         sessionCount={store.sessions.length}
         messages={store.messages}
         isLoading={store.isLoading}
+        sessionCost={useMemo(() => {
+          if (!store.messages.length) return 0
+          const model = displayModel(activeSession?.model ?? store.settings.defaultModel)
+          const tokens = estimateTokens(store.messages)
+          // Split roughly 70/30 input/output for cost estimation
+          const inputTokens = Math.round(tokens * 0.7)
+          const outputTokens = tokens - inputTokens
+          return estimateCost(model, inputTokens, outputTokens)
+        }, [store.messages, activeSession?.model, store.settings.defaultModel])}
         thinkingText={
           store.isLoading
             ? (() => {

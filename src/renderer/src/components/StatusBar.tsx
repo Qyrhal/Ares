@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { History, FolderOpen, Cpu, Plug, PlugZap, Loader2 } from 'lucide-react'
+import { History, FolderOpen, Cpu, Plug, PlugZap, Loader2, DollarSign } from 'lucide-react'
 import { Checkpoint } from '@/types'
 import type { Message } from '@/types'
 import { ContextUsageBadge } from './ContextUsageBadge'
@@ -25,6 +25,7 @@ interface StatusBarProps {
   className?: string
   isLoading?: boolean
   thinkingText?: string
+  sessionCost?: number
 }
 
 /**
@@ -48,7 +49,40 @@ export function ThinkingBadge({ text }: { text: string }): React.ReactElement {
   )
 }
 
-export const StatusBar = React.memo(function StatusBar({ workspacePath, currentModel, sessionCount, messages, className, isLoading = false, thinkingText }: StatusBarProps): React.ReactElement {
+/**
+ * Format a cost number into a display string like "$0.05" or "$1.23".
+ */
+export function formatCost(cost: number): string {
+  if (cost < 0.01) return '$0.00'
+  return `$${cost.toFixed(2)}`
+}
+
+/**
+ * Return the color class for a cost value based on thresholds:
+ * green < $0.01, yellow < $0.10, orange < $1.00, red >= $1.00
+ */
+export function costColor(cost: number): string {
+  if (cost < 0.01) return 'text-green-500'
+  if (cost < 0.10) return 'text-yellow-500'
+  if (cost < 1.00) return 'text-orange-500'
+  return 'text-red-500'
+}
+
+/**
+ * Badge showing estimated session cost with a DollarSign icon.
+ * Color scales from green (cheap) to red (expensive).
+ */
+export function CostBadge({ cost }: { cost: number }): React.ReactElement | null {
+  if (cost <= 0) return null
+  return (
+    <span className={cn('flex items-center gap-1 shrink-0', costColor(cost))} title={`Estimated session cost: ${formatCost(cost)}`}>
+      <DollarSign className="size-3" />
+      <span className="font-mono text-[9.5px]">{formatCost(cost)}</span>
+    </span>
+  )
+}
+
+export const StatusBar = React.memo(function StatusBar({ workspacePath, currentModel, sessionCount, messages, className, isLoading = false, thinkingText, sessionCost }: StatusBarProps): React.ReactElement {
   const [cpCount, setCpCount] = useState(0)
   const [mcpStatus, setMcpStatus] = useState<McpStatus[]>([])
   const [mcpBgTools, setMcpBgTools] = useState<string[]>([])
@@ -114,6 +148,8 @@ export const StatusBar = React.memo(function StatusBar({ workspacePath, currentM
       )}
 
       {thinkingText && <ThinkingBadge text={thinkingText} />}
+
+      {sessionCost !== undefined && sessionCost > 0 && <CostBadge cost={sessionCost} />}
 
       {/* MCP status */}
       {mcpTotal > 0 && (
