@@ -13,6 +13,9 @@ export function estimateTokens(messages: Message[]): number {
 /** Compact once the conversation crosses this share of the model's window. */
 export const COMPACTION_THRESHOLD = 0.9
 
+/** Show a proactive warning when context usage crosses this threshold. */
+export const CONTEXT_WARNING_THRESHOLD = 0.8
+
 /** Share of the window the kept (un-summarized) tail may occupy. */
 const KEEP_BUDGET = 0.25
 
